@@ -1,0 +1,26 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: vertigo-ai-candidate
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: "5"
+        autoscaling.knative.dev/minScale: "1"
+    spec:
+      containerConcurrency: 1000
+      containers:
+      - image: gcr.io/YOUR_PROJECT_ID/vertigo-ai-candidate:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: BACKEND_URL
+          value: "https://vertigo-ai-backend-XXXXX-uc.a.run.app"
+        resources:
+          limits:
+            cpu: "1"
+            memory: "1Gi"
+

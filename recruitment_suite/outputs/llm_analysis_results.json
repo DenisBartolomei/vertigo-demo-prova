@@ -1,0 +1,22 @@
+[
+  {
+    "ID": 94,
+    "scartato": true,
+    "motivazione": "Esperienza IT, non analisi processi o project management organizzativo richiesti."
+  },
+  {
+    "ID": 99,
+    "scartato": true,
+    "motivazione": "Profilo data/AI, manca esperienza in analisi processi e contesto assicurativo/bancario."
+  },
+  {
+    "ID": 134,
+    "scartato": false,
+    "motivazione": "Esperienza project management, gestione processi e stakeholder, profilo coerente con la posizione."
+  },
+  {
+    "ID": 175,
+    "scartato": true,
+    "motivazione": "Strategia e analisi di mercato, non esperienza in analisi processi o project management organizzativo."
+  }
+]

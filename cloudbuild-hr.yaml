@@ -1,0 +1,7 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'gcr.io/poetic-orb-474016-q7/vertigo-ai-hr:latest', '-f', 'Dockerfile.hr', '--build-arg', 'VITE_API_BASE=${_BACKEND_URL}', '.']
+images:
+- 'gcr.io/poetic-orb-474016-q7/vertigo-ai-hr:latest'
+substitutions:
+  _BACKEND_URL: 'https://vertigo-ai-backend-tbia7kjh7a-oc.a.run.app'

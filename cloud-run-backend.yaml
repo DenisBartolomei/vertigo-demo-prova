@@ -1,0 +1,39 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: vertigo-ai-backend
+  annotations:
+    run.googleapis.com/ingress: all
+    run.googleapis.com/execution-environment: gen2
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: "10"
+        autoscaling.knative.dev/minScale: "1"
+        run.googleapis.com/cpu-throttling: "false"
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      containerConcurrency: 100
+      timeoutSeconds: 300
+      containers:
+      - image: gcr.io/YOUR_PROJECT_ID/vertigo-ai-backend:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: MONGODB_URI
+          value: "YOUR_MONGODB_CONNECTION_STRING"
+        - name: OPENAI_API_KEY
+          value: "YOUR_OPENAI_API_KEY"
+        - name: JWT_SECRET
+          value: "YOUR_JWT_SECRET"
+        - name: PYTHON_ENV
+          value: "production"
+        resources:
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+
