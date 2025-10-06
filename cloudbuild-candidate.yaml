@@ -4,4 +4,4 @@ steps:
 images:
 - 'gcr.io/poetic-orb-474016-q7/vertigo-ai-candidate:latest'
 substitutions:
-  _BACKEND_URL: 'https://vertigo-ai-backend-tbia7kjh7a-oc.a.run.app'
+  _BACKEND_URL: 'BACKEND_URL_PLACEHOLDER'
