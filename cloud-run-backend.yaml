@@ -22,11 +22,11 @@ spec:
         - containerPort: 8080
         env:
         - name: MONGODB_URI
-          value: "mongodb+srv://denisbartolomei:Mongoloide1996PazzoScAt3nAt0@clustervertigousertest.apfzk47.mongodb.net/?retryWrites=true&w=majority&appName=ClusterVertigoUserTest"
+          value: "MONGODB_URI_PLACEHOLDER"
         - name: OPENAI_API_KEY
           value: "OPENAI_API_KEY_PLACEHOLDER"
         - name: JWT_SECRET
-          value: "5e8b03820f8868497daebb2e108bfe2f"
+          value: "JWT_SECRET_PLACEHOLDER"
         - name: PYTHON_ENV
           value: "production"
         resources:
