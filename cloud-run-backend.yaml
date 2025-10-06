@@ -22,19 +22,11 @@ spec:
         - containerPort: 8080
         env:
         - name: MONGODB_URI
-<<<<<<< HEAD
           value: "MONGODB_URI_PLACEHOLDER"
         - name: OPENAI_API_KEY
           value: "OPENAI_API_KEY_PLACEHOLDER"
         - name: JWT_SECRET
           value: "JWT_SECRET_PLACEHOLDER"
-=======
-          value: "mongodb+srv://denisbartolomei:Mongoloide1996PazzoScAt3nAt0@clustervertigousertest.apfzk47.mongodb.net/?retryWrites=true&w=majority&appName=ClusterVertigoUserTest"
-        - name: OPENAI_API_KEY
-          value: "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"
-        - name: JWT_SECRET
-          value: "5e8b03820f8868497daebb2e108bfe2f"
->>>>>>> 529759e (Nuove modifiche per upload in cloud)
         - name: PYTHON_ENV
           value: "production"
         resources:
