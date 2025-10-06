@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
+import { useAntiCheat } from '../hooks/useAntiCheat'
+import { AntiCheatWarning } from '../components/AntiCheatWarning'
+import { InterviewIntro } from '../components/InterviewIntro'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://vertigo-ai-backend-tbia7kjh7a-oc.a.run.app'
 
@@ -138,7 +141,31 @@ export function Interview() {
   const [error, setError] = useState('')
   const [isStarted, setIsStarted] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
+  const [showIntro, setShowIntro] = useState(true)
+  const [termsAccepted, setTermsAccepted] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Anti-cheat system
+  const antiCheat = useAntiCheat({
+    maxTabSwitches: 3,
+    maxCopyPasteAttempts: 2,
+    maxRightClicks: 5,
+    maxWindowResizes: 10,
+    warningThreshold: 3,
+    sessionId: token || '',
+    onCheatingDetected: async (event) => {
+      // Send cheating event to backend
+      try {
+        await fetch(`${API_BASE}/interviews/${token}/security-event`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(event)
+        })
+      } catch (err) {
+        console.error('Failed to report security event:', err)
+      }
+    }
+  })
 
   useEffect(() => {
     if (!token) return
@@ -238,6 +265,9 @@ export function Interview() {
     if (!token) return
     setLoading(true)
     try {
+      // Start anti-cheat monitoring
+      antiCheat.startMonitoring()
+      
       const resp = await fetch(`${API_BASE}/interviews/${token}/start`, { method: 'POST' })
       if (resp.status === 410) {
         setError('Il colloquio è stato completato e la valutazione è terminata. L\'accesso non è più disponibile.')
@@ -256,11 +286,24 @@ export function Interview() {
         setMessages([initialMessage])
       }
       setIsStarted(true)
+      setShowIntro(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start interview')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleAcceptTerms = () => {
+    setTermsAccepted(true)
+  }
+
+  const handleWarningAccept = () => {
+    // User acknowledged the warning
+  }
+
+  const handleWarningContinue = () => {
+    // User wants to continue despite warnings
   }
 
   const formatTime = (timestamp: string) => {
@@ -296,6 +339,13 @@ export function Interview() {
 
   return (
     <div className="chat-container">
+      <AntiCheatWarning 
+        warningCount={antiCheat.warnings}
+        isBlocked={antiCheat.isBlocked}
+        onAccept={handleWarningAccept}
+        onContinue={handleWarningContinue}
+      />
+      
       <div className="chat-header">
         <div className="chat-header-icon">🎯</div>
         <div className="chat-header-content">
@@ -305,7 +355,14 @@ export function Interview() {
       </div>
 
       <div className="chat-messages">
-        {!isStarted ? (
+        {showIntro ? (
+          <InterviewIntro
+            positionName={session.position_name}
+            candidateName={session.candidate_name}
+            onStart={startInterview}
+            onAcceptTerms={handleAcceptTerms}
+          />
+        ) : !isStarted ? (
           <div className="welcome-screen">
             <div className="welcome-icon">🚀</div>
             <h1 className="welcome-title">Ready to start your interview?</h1>

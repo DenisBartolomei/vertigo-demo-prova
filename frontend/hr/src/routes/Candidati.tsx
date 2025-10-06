@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { SecurityReport } from '../components/SecurityReport'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://vertigo-ai-backend-tbia7kjh7a-oc.a.run.app'
 
@@ -318,6 +319,8 @@ export function Candidati() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'none'>('none')
   const [overallMeans, setOverallMeans] = useState<Record<string, number>>({})
   const [reportExpanded, setReportExpanded] = useState<Record<string, boolean>>({})
+  const [securityReports, setSecurityReports] = useState<Record<string, any>>({})
+  const [showSecurityReport, setShowSecurityReport] = useState<string | null>(null)
   const token = localStorage.getItem('hr_jwt')
 
   async function load() {
@@ -420,6 +423,39 @@ export function Candidati() {
     }
   }
 
+  async function loadSecurityReport(id: string) {
+    try {
+      const response = await fetch(`${API_BASE}/sessions/${id}/security-report`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setSecurityReports(prev => ({ ...prev, [id]: data }))
+      } else {
+        console.error('Failed to load security report')
+      }
+    } catch (error) {
+      console.error('Error loading security report:', error)
+    }
+  }
+
+  function getSecurityRiskLevel(securityReport: any): { level: string; color: string; icon: string } {
+    if (!securityReport) {
+      return { level: 'Unknown', color: '#6c757d', icon: '❓' }
+    }
+    
+    const riskLevel = securityReport.risk_assessment?.level || 'MINIMAL'
+    const color = securityReport.risk_assessment?.color || '#6c757d'
+    
+    let icon = '✅'
+    if (riskLevel === 'HIGH') icon = '🚨'
+    else if (riskLevel === 'MEDIUM') icon = '⚠️'
+    else if (riskLevel === 'LOW') icon = 'ℹ️'
+    
+    return { level: riskLevel, color, icon }
+  }
+
   // Get unique positions for filter dropdown
   const uniquePositions = Array.from(new Set(rows.map(r => r.position_name || r.position_id).filter(Boolean)))
   
@@ -437,7 +473,7 @@ export function Candidati() {
     <div className="container" style={{ display: 'grid', gap: 16 }}>
       <div>
         <h2>Reportistica Candidati</h2>
-        <p className="muted">Visualizza i report completi dei candidati che hanno terminato l'intero processo di selezione, inclusi colloquio, valutazione delle competenze e analisi finale.</p>
+        <p className="muted">Visualizza i report completi dei candidati che hanno terminato l'intero processo di selezione, inclusi colloquio, valutazione delle competenze, analisi finale e report di sicurezza.</p>
       </div>
       
       {/* Filter Section */}
@@ -630,6 +666,72 @@ export function Candidati() {
                         {r.status}
                       </div>
                     )}
+                    {/* Security Risk Indicator */}
+                    {(() => {
+                      const securityReport = securityReports[r.session_id]
+                      const riskInfo = getSecurityRiskLevel(securityReport)
+                      return (
+                        <div style={{
+                          display: 'inline-block',
+                          marginLeft: '8px',
+                          marginTop: '4px'
+                        }}>
+                          <button
+                            onClick={() => {
+                              if (!securityReport) {
+                                loadSecurityReport(r.session_id)
+                              }
+                              setShowSecurityReport(r.session_id)
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '4px 8px',
+                              borderRadius: '12px',
+                              fontSize: '12px',
+                              fontWeight: '500',
+                              border: `1px solid ${riskInfo.color}`,
+                              background: riskInfo.color === '#dc3545' ? '#f8d7da' :
+                                         riskInfo.color === '#ffc107' ? '#fff3cd' :
+                                         riskInfo.color === '#28a745' ? '#d1f2eb' :
+                                         '#f8f9fa',
+                              color: riskInfo.color === '#dc3545' ? '#721c24' :
+                                     riskInfo.color === '#ffc107' ? '#856404' :
+                                     riskInfo.color === '#28a745' ? '#0c5460' :
+                                     '#6c757d',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseOver={(e) => {
+                              e.currentTarget.style.transform = 'scale(1.05)'
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)'
+                            }}
+                          >
+                            <span>{riskInfo.icon}</span>
+                            <span>Security: {riskInfo.level}</span>
+                            {securityReport?.security_summary?.total_events > 0 && (
+                              <span style={{
+                                backgroundColor: riskInfo.color,
+                                color: 'white',
+                                borderRadius: '50%',
+                                width: '16px',
+                                height: '16px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '10px',
+                                fontWeight: '600'
+                              }}>
+                                {securityReport.security_summary.total_events}
+                              </span>
+                            )}
+                          </button>
+                        </div>
+                      )
+                    })()}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <select value={currentKind} onChange={e => fetchReport(r.session_id, e.target.value as 'cv' | 'case' | 'conversation')}>
@@ -922,6 +1024,14 @@ export function Candidati() {
             )
           })}
         </div>
+      )}
+      
+      {/* Security Report Modal */}
+      {showSecurityReport && (
+        <SecurityReport
+          sessionId={showSecurityReport}
+          onClose={() => setShowSecurityReport(null)}
+        />
       )}
     </div>
   )

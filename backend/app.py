@@ -920,6 +920,167 @@ def interview_state(token: str):
             raise HTTPException(status_code=500, detail=f"Interview state error: {str(e)}")
 
 
+# Security event reporting endpoint
+@app.post("/interviews/{token}/security-event")
+def report_security_event(token: str, event_data: dict):
+    result = resolve_token_global(token)
+    if not result:
+        raise HTTPException(status_code=404, detail="Invalid or expired link")
+    session_id, tenant_id = result
+    
+    # Validate event data
+    required_fields = ['type', 'timestamp', 'severity']
+    for field in required_fields:
+        if field not in event_data:
+            raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+    
+    # Store security event
+    try:
+        collections = get_tenant_collections(tenant_id)
+        security_events_collection = collections.get("security_events", {})
+        
+        # Create security event record
+        security_event = {
+            "session_id": session_id,
+            "tenant_id": tenant_id,
+            "event_type": event_data.get("type"),
+            "timestamp": event_data.get("timestamp"),
+            "severity": event_data.get("severity"),
+            "details": event_data.get("details", ""),
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        # Store in security events collection
+        if "security_events" not in collections:
+            collections["security_events"] = {}
+        
+        # Generate unique event ID
+        event_id = f"{session_id}_{int(datetime.utcnow().timestamp() * 1000)}"
+        collections["security_events"][event_id] = security_event
+        
+        # Also update session with security summary
+        sess = get_session_data_tenant(session_id, collections["sessions"]) or {}
+        if "security_summary" not in sess:
+            sess["security_summary"] = {
+                "total_events": 0,
+                "high_severity_events": 0,
+                "medium_severity_events": 0,
+                "low_severity_events": 0,
+                "cheating_score": 0,
+                "events_by_type": {},
+                "last_updated": datetime.utcnow().isoformat()
+            }
+        
+        # Update security summary
+        summary = sess["security_summary"]
+        summary["total_events"] += 1
+        summary["last_updated"] = datetime.utcnow().isoformat()
+        
+        severity = event_data.get("severity", "low")
+        if severity == "high":
+            summary["high_severity_events"] += 1
+            summary["cheating_score"] += 10
+        elif severity == "medium":
+            summary["medium_severity_events"] += 1
+            summary["cheating_score"] += 5
+        else:
+            summary["low_severity_events"] += 1
+            summary["cheating_score"] += 1
+        
+        event_type = event_data.get("type", "unknown")
+        summary["events_by_type"][event_type] = summary["events_by_type"].get(event_type, 0) + 1
+        
+        # Save updated session
+        collections["sessions"][session_id] = sess
+        
+        return {"status": "success", "event_id": event_id}
+        
+    except Exception as e:
+        print(f"Error storing security event: {e}")
+        raise HTTPException(status_code=500, detail="Failed to store security event")
+
+
+# Get security report for a session (HR only)
+@app.get("/sessions/{session_id}/security-report")
+def get_security_report(session_id: str, auth_data=Depends(hr_auth)):
+    tenant_id = auth_data.get("tenant_id")
+    
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Invalid tenant ID")
+    
+    try:
+        collections = get_tenant_collections(tenant_id)
+        
+        # Get session data
+        sess = get_session_data_tenant(session_id, collections["sessions"]) or {}
+        if not sess:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Get security summary from session
+        security_summary = sess.get("security_summary", {
+            "total_events": 0,
+            "high_severity_events": 0,
+            "medium_severity_events": 0,
+            "low_severity_events": 0,
+            "cheating_score": 0,
+            "events_by_type": {},
+            "last_updated": None
+        })
+        
+        # Get detailed security events
+        security_events = []
+        if "security_events" in collections:
+            for event_id, event in collections["security_events"].items():
+                if event.get("session_id") == session_id:
+                    security_events.append(event)
+        
+        # Sort events by timestamp
+        security_events.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        
+        # Generate risk assessment
+        cheating_score = security_summary.get("cheating_score", 0)
+        if cheating_score >= 50:
+            risk_level = "HIGH"
+            risk_color = "#dc3545"
+        elif cheating_score >= 20:
+            risk_level = "MEDIUM"
+            risk_color = "#ffc107"
+        elif cheating_score >= 5:
+            risk_level = "LOW"
+            risk_color = "#28a745"
+        else:
+            risk_level = "MINIMAL"
+            risk_color = "#6c757d"
+        
+        return {
+            "session_id": session_id,
+            "security_summary": security_summary,
+            "security_events": security_events[:50],  # Limit to last 50 events
+            "risk_assessment": {
+                "level": risk_level,
+                "color": risk_color,
+                "cheating_score": cheating_score,
+                "recommendation": get_security_recommendation(cheating_score)
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error retrieving security report: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve security report")
+
+
+def get_security_recommendation(cheating_score: int) -> str:
+    """Generate security recommendation based on cheating score"""
+    if cheating_score >= 50:
+        return "HIGH RISK: Multiple serious violations detected. Consider disqualifying candidate or requiring additional verification."
+    elif cheating_score >= 20:
+        return "MEDIUM RISK: Several violations detected. Review interview carefully and consider follow-up questions."
+    elif cheating_score >= 5:
+        return "LOW RISK: Minor violations detected. Monitor during final evaluation."
+    else:
+        return "MINIMAL RISK: No significant violations detected. Candidate appears to have followed guidelines."
+
+
 # Evaluation and feedback (HR)
 @app.post("/sessions/{session_id}/evaluate")
 def evaluate_session(session_id: str, _=Depends(hr_auth)):

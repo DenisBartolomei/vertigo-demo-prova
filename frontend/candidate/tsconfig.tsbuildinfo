@@ -1,0 +1,1 @@
+{"root":["./src/config.ts","./src/main.tsx","./src/components/anticheatwarning.tsx","./src/components/interviewintro.tsx","./src/hooks/useanticheat.ts","./src/routes/interview.tsx","./src/routes/tokenlanding.tsx","./vite-env.d.ts"],"version":"5.6.2"}
