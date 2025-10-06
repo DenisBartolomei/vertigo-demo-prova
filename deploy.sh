@@ -3,7 +3,7 @@
 set -e
 
 # Configuration
-PROJECT_ID="your-gcp-project-id"
+PROJECT_ID="poetic-orb-474016-q7"
 REGION="europe-west8"  # Milan, Italy
 SERVICE_ACCOUNT="vertigo-ai-deploy@${PROJECT_ID}.iam.gserviceaccount.com"
 
@@ -17,25 +17,9 @@ gcloud services enable cloudbuild.googleapis.com
 gcloud services enable run.googleapis.com
 gcloud services enable containerregistry.googleapis.com
 
-# Build and push images
-echo "🔨 Building Docker images..."
-
-# Backend
-echo "Building backend..."
+# 1. Build and Deploy Backend
+echo "🔨 Building and Deploying backend..."
 gcloud builds submit --tag gcr.io/${PROJECT_ID}/vertigo-ai-backend:latest .
-
-# HR Frontend
-echo "Building HR frontend..."
-gcloud builds submit --tag gcr.io/${PROJECT_ID}/vertigo-ai-hr:latest -f Dockerfile.hr .
-
-# Candidate Frontend
-echo "Building candidate frontend..."
-gcloud builds submit --tag gcr.io/${PROJECT_ID}/vertigo-ai-candidate:latest -f Dockerfile.candidate .
-
-# Deploy to Cloud Run
-echo "🚀 Deploying to Cloud Run..."
-
-# Deploy Backend
 gcloud run deploy vertigo-ai-backend \
     --image gcr.io/${PROJECT_ID}/vertigo-ai-backend:latest \
     --platform managed \
@@ -48,10 +32,19 @@ gcloud run deploy vertigo-ai-backend \
     --min-instances 1 \
     --set-env-vars MONGODB_URI="${MONGODB_URI}",OPENAI_API_KEY="${OPENAI_API_KEY}",JWT_SECRET="${JWT_SECRET}",PYTHON_ENV=production
 
-# Get backend URL
+# 2. Get backend URL
 BACKEND_URL=$(gcloud run services describe vertigo-ai-backend --region=${REGION} --format="value(status.url)")
+echo "✓ Backend deployed at: ${BACKEND_URL}"
 
-# Deploy HR Frontend
+# 3. Build HR Frontend
+echo "Building HR frontend..."
+gcloud builds submit --config cloudbuild-hr.yaml --substitutions=_BACKEND_URL=${BACKEND_URL} .
+
+# 4. Build Candidate Frontend
+echo "Building candidate frontend..."
+gcloud builds submit --config cloudbuild-candidate.yaml --substitutions=_BACKEND_URL=${BACKEND_URL} .
+
+# 5. Deploy HR Frontend
 gcloud run deploy vertigo-ai-hr \
     --image gcr.io/${PROJECT_ID}/vertigo-ai-hr:latest \
     --platform managed \
@@ -63,7 +56,7 @@ gcloud run deploy vertigo-ai-hr \
     --min-instances 1 \
     --set-env-vars BACKEND_URL="${BACKEND_URL}"
 
-# Deploy Candidate Frontend
+# 6. Deploy Candidate Frontend
 gcloud run deploy vertigo-ai-candidate \
     --image gcr.io/${PROJECT_ID}/vertigo-ai-candidate:latest \
     --platform managed \
@@ -91,4 +84,3 @@ echo "   1. Set up custom domains (optional)"
 echo "   2. Configure SSL certificates"
 echo "   3. Set up monitoring and logging"
 echo "   4. Test the application"
-
