@@ -936,9 +936,6 @@ def report_security_event(token: str, event_data: dict):
     
     # Store security event
     try:
-        collections = get_tenant_collections(tenant_id)
-        security_events_collection = collections.get("security_events", {})
-        
         # Create security event record
         security_event = {
             "session_id": session_id,
@@ -948,18 +945,21 @@ def report_security_event(token: str, event_data: dict):
             "severity": event_data.get("severity"),
             "details": event_data.get("details", ""),
             "created_at": datetime.utcnow().isoformat()
-        }
-        
-        # Store in security events collection
-        if "security_events" not in collections:
-            collections["security_events"] = {}
-        
+        }       
         # Generate unique event ID
         event_id = f"{session_id}_{int(datetime.utcnow().timestamp() * 1000)}"
-        collections["security_events"][event_id] = security_event
+        security_event["_id"] = event_id
         
-        # Also update session with security summary
+        # Save security event to database
+        if db is not None:
+            security_events_collection = db[f"security_events_{tenant_id}"]
+            security_events_collection.insert_one(security_event)
+            print(f"🔒 Security event saved: {event_id}")
+        
+        # Update session with security summary
+        collections = get_tenant_collections(tenant_id)
         sess = get_session_data_tenant(session_id, collections["sessions"]) or {}
+        
         if "security_summary" not in sess:
             sess["security_summary"] = {
                 "total_events": 0,
@@ -990,8 +990,15 @@ def report_security_event(token: str, event_data: dict):
         event_type = event_data.get("type", "unknown")
         summary["events_by_type"][event_type] = summary["events_by_type"].get(event_type, 0) + 1
         
-        # Save updated session
-        collections["sessions"][session_id] = sess
+        # Save updated session to database
+        if db is not None:
+            sessions_collection = db[f"sessions_{tenant_id}"]
+            sessions_collection.update_one(
+                {"_id": session_id}, 
+                {"$set": {"security_summary": summary}}, 
+                upsert=False
+            )
+            print(f"📊 Security summary updated for session: {session_id}")
         
         return {"status": "success", "event_id": event_id}
         
@@ -1027,12 +1034,16 @@ def get_security_report(session_id: str, auth_data=Depends(hr_auth)):
             "last_updated": None
         })
         
-        # Get detailed security events
+        # Get detailed security events from database
         security_events = []
-        if "security_events" in collections:
-            for event_id, event in collections["security_events"].items():
-                if event.get("session_id") == session_id:
-                    security_events.append(event)
+        if db is not None:
+            try:
+                security_events_collection = db[f"security_events_{tenant_id}"]
+                events_cursor = security_events_collection.find({"session_id": session_id})
+                security_events = list(events_cursor)
+                print(f"🔍 Found {len(security_events)} security events for session {session_id}")
+            except Exception as e:
+                print(f"Error retrieving security events: {e}")
         
         # Sort events by timestamp
         security_events.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
