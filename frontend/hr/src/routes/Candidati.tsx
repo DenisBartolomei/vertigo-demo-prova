@@ -319,6 +319,7 @@ export function Candidati() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'none'>('none')
   const [overallMeans, setOverallMeans] = useState<Record<string, number>>({})
   const [reportExpanded, setReportExpanded] = useState<Record<string, boolean>>({})
+  const [expandedJustifications, setExpandedJustifications] = useState<Record<string, Record<string, boolean>>>({})
   const [securityReports, setSecurityReports] = useState<Record<string, any>>({})
   const [showSecurityReport, setShowSecurityReport] = useState<string | null>(null)
   const token = localStorage.getItem('hr_jwt')
@@ -454,6 +455,18 @@ export function Candidati() {
     else if (riskLevel === 'LOW') icon = 'ℹ️'
     
     return { level: riskLevel, color, icon }
+  }
+
+  // Toggle justification visibility for a specific skill
+  function toggleJustification(sessionId: string, skillIndex: number, type: 'cv' | 'interview') {
+    const key = `${skillIndex}_${type}`
+    setExpandedJustifications(prev => ({
+      ...prev,
+      [sessionId]: {
+        ...prev[sessionId],
+        [key]: !prev[sessionId]?.[key]
+      }
+    }))
   }
 
   // Get unique positions for filter dropdown
@@ -892,7 +905,7 @@ export function Candidati() {
                             <div style={{ textAlign: 'center' }}>Colloquio</div>
                           </div>
                           <div style={{ display: 'grid', gap: '4px' }}>
-                            {(skills[r.session_id] || []).map((s: any, i: number) => (
+                          {(skills[r.session_id] || []).map((s: any, i: number) => (
                               <div key={i} style={{
                                 display: 'grid',
                                 gridTemplateColumns: '1fr 80px 80px',
@@ -914,17 +927,81 @@ export function Candidati() {
                                 </div>
                                 <div style={{ 
                                   display: 'flex', 
-                                  justifyContent: 'center',
-                                  gap: '1px'
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  gap: '4px'
                                 }}>
-                                  {renderStars(s.cv_0_4)}
+                                  <div style={{ display: 'flex', justifyContent: 'center', gap: '1px' }}>
+                                    {renderStars(s.cv_0_4)}
+                                  </div>
+                                  {s.notes_cv && (
+                                    <button
+                                      onClick={() => toggleJustification(r.session_id, i, 'cv')}
+                                      style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: 'var(--primary-purple)',
+                                        fontSize: '10px',
+                                        cursor: 'pointer',
+                                        textDecoration: 'underline'
+                                      }}
+                                    >
+                                      {expandedJustifications[r.session_id]?.[`${i}_cv`] ? 'Nascondi' : 'Dettagli'}
+                                    </button>
+                                  )}
+                                  {expandedJustifications[r.session_id]?.[`${i}_cv`] && s.notes_cv && (
+                                    <div style={{
+                                      fontSize: '10px',
+                                      color: 'var(--text-secondary)',
+                                      textAlign: 'center',
+                                      padding: '4px',
+                                      background: 'rgba(139, 92, 246, 0.1)',
+                                      borderRadius: '4px',
+                                      maxWidth: '70px',
+                                      wordBreak: 'break-word'
+                                    }}>
+                                      {s.notes_cv}
+                                    </div>
+                                  )}
                                 </div>
                                 <div style={{ 
                                   display: 'flex', 
-                                  justifyContent: 'center',
-                                  gap: '1px'
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  gap: '4px'
                                 }}>
-                                  {renderStars(s.interview_0_4)}
+                                  <div style={{ display: 'flex', justifyContent: 'center', gap: '1px' }}>
+                                    {renderStars(s.interview_0_4)}
+                                  </div>
+                                  {s.notes_interview && (
+                                    <button
+                                      onClick={() => toggleJustification(r.session_id, i, 'interview')}
+                                      style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: 'var(--primary-purple)',
+                                        fontSize: '10px',
+                                        cursor: 'pointer',
+                                        textDecoration: 'underline'
+                                      }}
+                                    >
+                                      {expandedJustifications[r.session_id]?.[`${i}_interview`] ? 'Nascondi' : 'Dettagli'}
+                                    </button>
+                                  )}
+                                  {expandedJustifications[r.session_id]?.[`${i}_interview`] && s.notes_interview && (
+                                    <div style={{
+                                      fontSize: '10px',
+                                      color: 'var(--text-secondary)',
+                                      textAlign: 'center',
+                                      padding: '4px',
+                                      background: 'rgba(139, 92, 246, 0.1)',
+                                      borderRadius: '4px',
+                                      maxWidth: '70px',
+                                      wordBreak: 'break-word'
+                                    }}>
+                                      {s.notes_interview}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             ))}

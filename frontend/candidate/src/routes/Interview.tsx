@@ -262,7 +262,7 @@ export function Interview() {
   }
 
   async function startInterview() {
-    if (!token) return
+    if (!token || loading) return // Prevent multiple starts
     setLoading(true)
     try {
       // Start anti-cheat monitoring
@@ -271,6 +271,10 @@ export function Interview() {
       const resp = await fetch(`${API_BASE}/interviews/${token}/start`, { method: 'POST' })
       if (resp.status === 410) {
         setError('Il colloquio è stato completato e la valutazione è terminata. L\'accesso non è più disponibile.')
+        return
+      }
+      if (resp.status === 409) {
+        setError('Questo colloquio è già stato avviato. Ogni token può essere utilizzato una sola volta.')
         return
       }
       if (!resp.ok) throw new Error('Failed to start interview')
@@ -355,12 +359,13 @@ export function Interview() {
       </div>
 
       <div className="chat-messages">
-        {showIntro ? (
+      {showIntro ? (
           <InterviewIntro
             positionName={session.position_name}
             candidateName={session.candidate_name}
             onStart={startInterview}
             onAcceptTerms={handleAcceptTerms}
+            loading={loading}
           />
         ) : !isStarted ? (
           <div className="welcome-screen">

@@ -5,19 +5,15 @@ interface InterviewIntroProps {
   candidateName: string
   onStart: () => void
   onAcceptTerms: () => void
+  loading?: boolean
 }
 
-export function InterviewIntro({ positionName, candidateName, onStart, onAcceptTerms }: InterviewIntroProps) {
+export function InterviewIntro({ positionName, candidateName, onStart, onAcceptTerms, loading = false }: InterviewIntroProps) {
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [showSecurityDetails, setShowSecurityDetails] = useState(false)
 
-  const handleAcceptTerms = () => {
-    setAcceptedTerms(true)
-    onAcceptTerms()
-  }
-
   const handleStart = () => {
-    if (acceptedTerms) {
+    if (acceptedTerms && !loading) {
       onStart()
     }
   }
@@ -116,12 +112,12 @@ export function InterviewIntro({ positionName, candidateName, onStart, onAcceptT
       </div>
 
       <div className="intro-actions">
-        <button 
-          className={`start-button ${!acceptedTerms ? 'disabled' : ''}`}
+      <button 
+          className={`start-button ${!acceptedTerms || loading ? 'disabled' : ''}`}
           onClick={handleStart}
-          disabled={!acceptedTerms}
+          disabled={!acceptedTerms || loading}
         >
-          {acceptedTerms ? '🚀 Start Interview' : '⚠️ Accept Terms to Continue'}
+          {loading ? '⏳ Avvio in corso...' : acceptedTerms ? '🚀 Inizia Colloquio' : '⚠️ Accetta Termini per Continuare'}
         </button>
       </div>
 

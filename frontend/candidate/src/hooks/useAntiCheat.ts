@@ -34,15 +34,9 @@ export function useAntiCheat(config: AntiCheatConfig) {
     setEvents(prev => [...prev, event])
     config.onCheatingDetected(event)
     
-    // Check if we should show warning or block
+    // Just track warnings, don't block interview
     if (event.severity === 'high') {
-      setWarnings(prev => {
-        const newWarnings = prev + 1
-        if (newWarnings >= config.warningThreshold) {
-          setIsBlocked(true)
-        }
-        return newWarnings
-      })
+      setWarnings(prev => prev + 1)
     }
   }, [config])
 

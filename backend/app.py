@@ -856,7 +856,22 @@ def start_interview(token: str):
     if skill_summary:
         raise HTTPException(status_code=410, detail="Interview completed and evaluation finished. Access no longer available.")
     
+    # Check if interview has already been started (single-use token)
+    if sess.get("interview_started"):
+        raise HTTPException(status_code=409, detail="Interview has already been started. Token can only be used once.")
+    
     message = start_interview_for_session(session_id, tenant_id)
+    
+    # Mark interview as started and save to database
+    if db is not None:
+        sessions_collection = db[f"sessions_{tenant_id}"]
+        sessions_collection.update_one(
+            {"_id": session_id}, 
+            {"$set": {"interview_started": True, "interview_started_at": datetime.utcnow().isoformat()}}, 
+            upsert=False
+        )
+        print(f"🔒 Interview started for session {session_id} - token marked as used")
+    
     return {"message": message}
 
 
