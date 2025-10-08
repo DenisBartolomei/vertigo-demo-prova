@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom'
 
 export function TokenLanding() {
   const [token, setToken] = useState('')
+  const [error, setError] = useState('')
   const navigate = useNavigate()
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setError('')
     if (token.trim()) {
       navigate(`/interview/${token.trim()}`)
     }
@@ -40,6 +42,17 @@ export function TokenLanding() {
             Enter Interview Token
           </h1>
           <p className="muted">Paste the token you received via email to start your interview</p>
+          <div style={{
+            backgroundColor: '#e3f2fd',
+            border: '1px solid #2196f3',
+            borderRadius: '8px',
+            padding: '12px',
+            marginTop: '16px',
+            fontSize: '13px',
+            color: '#1565c0'
+          }}>
+            <strong>⚠️ Importante:</strong> Il token può essere utilizzato una sola volta. Una volta iniziato il colloquio, non potrai più accedere con lo stesso token.
+          </div>
         </div>
         
         <form onSubmit={handleSubmit}>

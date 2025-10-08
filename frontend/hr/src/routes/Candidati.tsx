@@ -6,6 +6,7 @@ const API_BASE = import.meta.env.VITE_API_BASE || 'https://vertigo-ai-backend-tb
 type Row = { 
   session_id: string; 
   candidate_name: string; 
+  candidate_email?: string;
   position_id?: string; 
   position_name?: string; 
   status?: string; 
@@ -337,6 +338,9 @@ export function Candidati() {
       if (res.ok) {
         const data = await res.json()
         setRows(data.items || [])
+        
+        // Load security reports and overall means for all sessions
+        await loadSecurityReportsAndMeans(data.items || [])
       } else {
         console.error('Failed to load candidates:', res.statusText)
       }
@@ -346,6 +350,53 @@ export function Candidati() {
       setLoading(false)
     }
   }
+
+  async function loadSecurityReportsAndMeans(sessions: Row[]) {
+    const securityReports: Record<string, any> = {}
+    const overallMeans: Record<string, number> = {}
+    
+    // Load data for all sessions in parallel
+    const promises = sessions.map(async (session) => {
+      const sessionId = session.session_id
+      
+      // Load security report
+      try {
+        const securityRes = await fetch(`${API_BASE}/sessions/${sessionId}/security-report`, { 
+          headers: { Authorization: `Bearer ${token}` } 
+        })
+        if (securityRes.ok) {
+          const securityData = await securityRes.json()
+          securityReports[sessionId] = securityData
+        }
+      } catch (error) {
+        console.error(`Error loading security report for ${sessionId}:`, error)
+      }
+      
+      // Load skills and calculate overall mean
+      try {
+        const skillsRes = await fetch(`${API_BASE}/sessions/${sessionId}/skills_scaled`, { 
+          headers: { Authorization: `Bearer ${token}` } 
+        })
+        if (skillsRes.ok) {
+          const skillsData = await skillsRes.json()
+          const skillList = skillsData.items || []
+          const mean = calculateOverallMean(skillList)
+          if (mean > 0) {
+            overallMeans[sessionId] = mean
+          }
+        }
+      } catch (error) {
+        console.error(`Error loading skills for ${sessionId}:`, error)
+      }
+    })
+    
+    await Promise.all(promises)
+    
+    // Update state with loaded data
+    setSecurityReports(securityReports)
+    setOverallMeans(overallMeans)
+  }
+
 
   useEffect(() => { load() }, [])
 
@@ -636,27 +687,77 @@ export function Candidati() {
               <div key={r.session_id} className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <strong>{r.candidate_name || '—'}</strong>
-                      {overallMeans[r.session_id] !== undefined && (
-                        <div style={{ 
-                          display: 'flex', 
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '2px 6px',
-                          borderRadius: '8px',
-                          background: 'rgba(139, 92, 246, 0.1)',
-                          border: '1px solid rgba(139, 92, 246, 0.2)',
-                          fontSize: '11px',
-                          fontWeight: '600',
-                          color: 'var(--primary-purple)'
-                        }}>
-                          <span>📊</span>
-                          <span>{overallMeans[r.session_id].toFixed(1)}/4</span>
-                        </div>
-                      )}
+                      
+                      {/* Overall Average Score - Always visible */}
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '2px 6px',
+                        borderRadius: '8px',
+                        background: overallMeans[r.session_id] !== undefined ? 'rgba(139, 92, 246, 0.1)' : 'rgba(156, 163, 175, 0.1)',
+                        border: overallMeans[r.session_id] !== undefined ? '1px solid rgba(139, 92, 246, 0.2)' : '1px solid rgba(156, 163, 175, 0.2)',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        color: overallMeans[r.session_id] !== undefined ? 'var(--primary-purple)' : '#9CA3AF'
+                      }}>
+                        <span>📊</span>
+                        <span>
+                          {overallMeans[r.session_id] !== undefined 
+                            ? `${overallMeans[r.session_id].toFixed(1)}/4` 
+                            : 'N/A'
+                          }
+                        </span>
+                      </div>
+                      
+                      {/* Security Risk Indicator - Always visible */}
+                      {(() => {
+                        const securityReport = securityReports[r.session_id]
+                        const riskInfo = getSecurityRiskLevel(securityReport)
+                        return (
+                          <div style={{ 
+                            display: 'flex', 
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '2px 6px',
+                            borderRadius: '8px',
+                            background: riskInfo.color === '#dc3545' ? 'rgba(220, 53, 69, 0.1)' :
+                                       riskInfo.color === '#ffc107' ? 'rgba(255, 193, 7, 0.1)' :
+                                       riskInfo.color === '#28a745' ? 'rgba(40, 167, 69, 0.1)' :
+                                       'rgba(156, 163, 175, 0.1)',
+                            border: `1px solid ${riskInfo.color === '#dc3545' ? 'rgba(220, 53, 69, 0.2)' :
+                                           riskInfo.color === '#ffc107' ? 'rgba(255, 193, 7, 0.2)' :
+                                           riskInfo.color === '#28a745' ? 'rgba(40, 167, 69, 0.2)' :
+                                           'rgba(156, 163, 175, 0.2)'}`,
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            color: riskInfo.color === '#dc3545' ? '#DC3545' :
+                                   riskInfo.color === '#ffc107' ? '#FFC107' :
+                                   riskInfo.color === '#28a745' ? '#28A745' :
+                                   '#9CA3AF'
+                          }}>
+                            <span>{riskInfo.icon}</span>
+                            <span>{riskInfo.level}</span>
+                          </div>
+                        )
+                      })()}
                     </div>
                     <div style={{ color: '#666' }}>{r.position_name || r.position_id || '—'}</div>
+                    {r.candidate_email && (
+                      <div style={{ 
+                        color: '#666', 
+                        fontSize: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        marginTop: '2px'
+                      }}>
+                        <span>📧</span>
+                        <span>{r.candidate_email}</span>
+                      </div>
+                    )}
                     {r.status && (
                       <div style={{ 
                         display: 'inline-block',
@@ -679,72 +780,61 @@ export function Candidati() {
                         {r.status}
                       </div>
                     )}
-                    {/* Security Risk Indicator */}
-                    {(() => {
-                      const securityReport = securityReports[r.session_id]
-                      const riskInfo = getSecurityRiskLevel(securityReport)
-                      return (
-                        <div style={{
-                          display: 'inline-block',
-                          marginLeft: '8px',
-                          marginTop: '4px'
-                        }}>
-                          <button
-                            onClick={() => {
-                              if (!securityReport) {
-                                loadSecurityReport(r.session_id)
-                              }
-                              setShowSecurityReport(r.session_id)
-                            }}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              padding: '4px 8px',
-                              borderRadius: '12px',
-                              fontSize: '12px',
-                              fontWeight: '500',
-                              border: `1px solid ${riskInfo.color}`,
-                              background: riskInfo.color === '#dc3545' ? '#f8d7da' :
-                                         riskInfo.color === '#ffc107' ? '#fff3cd' :
-                                         riskInfo.color === '#28a745' ? '#d1f2eb' :
-                                         '#f8f9fa',
-                              color: riskInfo.color === '#dc3545' ? '#721c24' :
-                                     riskInfo.color === '#ffc107' ? '#856404' :
-                                     riskInfo.color === '#28a745' ? '#0c5460' :
-                                     '#6c757d',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseOver={(e) => {
-                              e.currentTarget.style.transform = 'scale(1.05)'
-                            }}
-                            onMouseOut={(e) => {
-                              e.currentTarget.style.transform = 'scale(1)'
-                            }}
-                          >
-                            <span>{riskInfo.icon}</span>
-                            <span>Security: {riskInfo.level}</span>
-                            {securityReport?.security_summary?.total_events > 0 && (
-                              <span style={{
-                                backgroundColor: riskInfo.color,
-                                color: 'white',
-                                borderRadius: '50%',
-                                width: '16px',
-                                height: '16px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '10px',
-                                fontWeight: '600'
-                              }}>
-                                {securityReport.security_summary.total_events}
-                              </span>
-                            )}
-                          </button>
-                        </div>
-                      )
-                    })()}
+                    {/* Security Report Button */}
+                    <div style={{
+                      display: 'inline-block',
+                      marginLeft: '8px',
+                      marginTop: '4px'
+                    }}>
+                      <button
+                        onClick={() => {
+                          const securityReport = securityReports[r.session_id]
+                          if (!securityReport) {
+                            loadSecurityReport(r.session_id)
+                          }
+                          setShowSecurityReport(r.session_id)
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '4px 8px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          border: '1px solid #6c757d',
+                          background: '#f8f9fa',
+                          color: '#6c757d',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.transform = 'scale(1.05)'
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.transform = 'scale(1)'
+                        }}
+                      >
+                        <span>🔒</span>
+                        <span>Report Sicurezza</span>
+                        {securityReports[r.session_id]?.security_summary?.total_events > 0 && (
+                          <span style={{
+                            backgroundColor: '#6c757d',
+                            color: 'white',
+                            borderRadius: '50%',
+                            width: '16px',
+                            height: '16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '10px',
+                            fontWeight: '600'
+                          }}>
+                            {securityReports[r.session_id].security_summary.total_events}
+                          </span>
+                        )}
+                      </button>
+                    </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <select value={currentKind} onChange={e => fetchReport(r.session_id, e.target.value as 'cv' | 'case' | 'conversation')}>

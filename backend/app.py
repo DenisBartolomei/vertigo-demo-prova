@@ -35,6 +35,7 @@ from services.token_service import (
     issue_interview_token,
     resolve_token,
     resolve_token_global,
+    mark_interview_started_global,
 )
 from services.auth_service import authenticate_hr, create_jwt, verify_jwt, get_or_create_tenant_for_email
 from services.user_service import (
@@ -588,7 +589,7 @@ def save_pdf_report_tenant(pdf_bytes: bytes, session_id: str, collection_name: s
 async def create_session(position_id: str = Form(...), candidate_name: str = Form("Candidato"), cv_file: UploadFile = File(...), candidate_email: str = Form(None), frontend_base_url: str = Form("") , auth_data=Depends(hr_auth)):
     collections = get_tenant_collections_from_auth(auth_data)
     session_id = str(uuid.uuid4())
-    created = create_new_session_tenant(session_id, position_id, candidate_name, collections["sessions"])
+    created = create_new_session_tenant(session_id, position_id, candidate_name, collections["sessions"], candidate_email)
     if not created:
         raise HTTPException(status_code=500, detail="Failed to create session")
 
@@ -872,6 +873,9 @@ def start_interview(token: str):
         )
         print(f"🔒 Interview started for session {session_id} - token marked as used")
     
+    # Mark token as started (this will make it expire for future uses)
+    mark_interview_started_global(token)
+    
     return {"message": message}
 
 
@@ -1038,6 +1042,17 @@ def get_security_report(session_id: str, auth_data=Depends(hr_auth)):
         if not sess:
             raise HTTPException(status_code=404, detail="Session not found")
         
+        # Get detailed security events from database first
+        security_events = []
+        if db is not None:
+            try:
+                security_events_collection = db[f"security_events_{tenant_id}"]
+                events_cursor = security_events_collection.find({"session_id": session_id})
+                security_events = list(events_cursor)
+                print(f"🔍 Found {len(security_events)} security events for session {session_id}")
+            except Exception as e:
+                print(f"Error retrieving security events: {e}")
+        
         # Get security summary from session
         security_summary = sess.get("security_summary", {
             "total_events": 0,
@@ -1049,16 +1064,32 @@ def get_security_report(session_id: str, auth_data=Depends(hr_auth)):
             "last_updated": None
         })
         
-        # Get detailed security events from database
-        security_events = []
-        if db is not None:
-            try:
-                security_events_collection = db[f"security_events_{tenant_id}"]
-                events_cursor = security_events_collection.find({"session_id": session_id})
-                security_events = list(events_cursor)
-                print(f"🔍 Found {len(security_events)} security events for session {session_id}")
-            except Exception as e:
-                print(f"Error retrieving security events: {e}")
+        # If we have events but no summary, calculate it from events
+        if security_events and security_summary.get("total_events", 0) == 0:
+            print(f"🔧 Recalculating security summary from {len(security_events)} events")
+            security_summary = {
+                "total_events": len(security_events),
+                "high_severity_events": sum(1 for e in security_events if e.get("severity") == "high"),
+                "medium_severity_events": sum(1 for e in security_events if e.get("severity") == "medium"),
+                "low_severity_events": sum(1 for e in security_events if e.get("severity") == "low"),
+                "cheating_score": 0,
+                "events_by_type": {},
+                "last_updated": None
+            }
+            
+            # Calculate cheating score
+            for event in security_events:
+                severity = event.get("severity", "low")
+                if severity == "high":
+                    security_summary["cheating_score"] += 10
+                elif severity == "medium":
+                    security_summary["cheating_score"] += 5
+                else:
+                    security_summary["cheating_score"] += 1
+                
+                # Count by type
+                event_type = event.get("event_type", "unknown")
+                security_summary["events_by_type"][event_type] = security_summary["events_by_type"].get(event_type, 0) + 1
         
         # Sort events by timestamp
         security_events.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
@@ -1098,13 +1129,13 @@ def get_security_report(session_id: str, auth_data=Depends(hr_auth)):
 def get_security_recommendation(cheating_score: int) -> str:
     """Generate security recommendation based on cheating score"""
     if cheating_score >= 50:
-        return "HIGH RISK: Multiple serious violations detected. Consider disqualifying candidate or requiring additional verification."
+        return "RISCHIO ALTO: Rilevate multiple violazioni gravi. Considerare la squalifica del candidato o richiedere verifiche aggiuntive."
     elif cheating_score >= 20:
-        return "MEDIUM RISK: Several violations detected. Review interview carefully and consider follow-up questions."
+        return "RISCHIO MEDIO: Rilevate diverse violazioni. Rivedere attentamente il colloquio e considerare domande di follow-up."
     elif cheating_score >= 5:
-        return "LOW RISK: Minor violations detected. Monitor during final evaluation."
+        return "RISCHIO BASSO: Rilevate violazioni minori. Monitorare durante la valutazione finale."
     else:
-        return "MINIMAL RISK: No significant violations detected. Candidate appears to have followed guidelines."
+        return "RISCHIO MINIMO: Nessuna violazione significativa rilevata. Il candidato sembra aver seguito le linee guida."
 
 
 # Evaluation and feedback (HR)

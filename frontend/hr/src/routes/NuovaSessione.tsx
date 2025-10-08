@@ -6,6 +6,7 @@ const CANDIDATE_BASE = import.meta.env.VITE_CANDIDATE_BASE || 'http://localhost:
 type Session = {
   session_id: string
   candidate_name: string
+  candidate_email?: string
   position_id?: string
   position_name?: string
   status?: string
@@ -365,6 +366,20 @@ export function NuovaSessione() {
                       }}>
                         {s.position_name || s.position_id || '—'}
                       </div>
+                      {s.candidate_email && (
+                        <div style={{ 
+                          fontSize: '14px', 
+                          color: 'var(--text-secondary)',
+                          marginBottom: '8px',
+                          fontWeight: '400',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          <span style={{ fontSize: '16px' }}>📧</span>
+                          <span>{s.candidate_email}</span>
+                        </div>
+                      )}
                       <div style={{ 
                         fontSize: '12px', 
                         color: 'var(--text-muted)',
@@ -516,6 +531,33 @@ export function NuovaSessione() {
                           <span>📋</span>
                           <span>{s.interview_token ? 'Copia Token' : 'Token N/A'}</span>
                         </button>
+
+                        {s.candidate_email && (
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(s.candidate_email!)
+                              alert('Email copiata negli appunti!')
+                            }}
+                            style={{ 
+                              fontSize: '14px', 
+                              padding: '12px 20px',
+                              background: '#3b82f6',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: 'var(--radius-md)',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              fontWeight: '600',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px'
+                            }}
+                            title="Copia email candidato"
+                          >
+                            <span>📧</span>
+                            <span>Copia Email</span>
+                          </button>
+                        )}
                         
                         {s.interview_token && !s.token_sent && (
                           <button

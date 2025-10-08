@@ -86,7 +86,40 @@ export function SecurityReport({ sessionId, onClose }: SecurityReportProps) {
   }
 
   const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString()
+    return new Date(timestamp).toLocaleString('it-IT')
+  }
+
+  const translateEventType = (eventType: string) => {
+    const translations: Record<string, string> = {
+      'tab_switch': 'Cambio Tab',
+      'focus_loss': 'Perdita Focus',
+      'window_resize': 'Ridimensionamento Finestra',
+      'copy_paste': 'Copia e Incolla',
+      'right_click': 'Click Destro',
+      'keyboard_shortcut': 'Scorciatoia Tastiera',
+      'page_refresh': 'Ricarica Pagina',
+      'dev_tools': 'Strumenti Sviluppatore'
+    }
+    return translations[eventType] || eventType.replace('_', ' ')
+  }
+
+  const translateSeverity = (severity: string) => {
+    const translations: Record<string, string> = {
+      'high': 'ALTA',
+      'medium': 'MEDIA',
+      'low': 'BASSA'
+    }
+    return translations[severity] || severity.toUpperCase()
+  }
+
+  const translateRiskLevel = (level: string) => {
+    const translations: Record<string, string> = {
+      'HIGH': 'ALTO',
+      'MEDIUM': 'MEDIO',
+      'LOW': 'BASSO',
+      'MINIMAL': 'MINIMO'
+    }
+    return translations[level] || level
   }
 
   if (loading) {
@@ -111,7 +144,7 @@ export function SecurityReport({ sessionId, onClose }: SecurityReportProps) {
           minWidth: '300px'
         }}>
           <div style={{ fontSize: '24px', marginBottom: '16px' }}>⏳</div>
-          <div>Loading security report...</div>
+          <div>Caricamento report sicurezza...</div>
         </div>
       </div>
     )
@@ -151,7 +184,7 @@ export function SecurityReport({ sessionId, onClose }: SecurityReportProps) {
               cursor: 'pointer'
             }}
           >
-            Close
+            Chiudi
           </button>
         </div>
       </div>
@@ -198,10 +231,10 @@ export function SecurityReport({ sessionId, onClose }: SecurityReportProps) {
         }}>
           <div>
             <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '600' }}>
-              🔒 Security Report
+              🔒 Report Sicurezza
             </h2>
             <p style={{ margin: '4px 0 0 0', color: '#6c757d', fontSize: '14px' }}>
-              Session ID: {sessionId}
+              ID Sessione: {sessionId}
             </p>
           </div>
           <button
@@ -247,10 +280,10 @@ export function SecurityReport({ sessionId, onClose }: SecurityReportProps) {
                   fontSize: '20px',
                   fontWeight: '600'
                 }}>
-                  Risk Level: {risk_assessment.level}
+                  Livello di Rischio: {translateRiskLevel(risk_assessment.level)}
                 </h3>
                 <p style={{ margin: '4px 0 0 0', color: '#6c757d', fontSize: '14px' }}>
-                  Cheating Score: {risk_assessment.cheating_score}/100
+                  Punteggio Cheating: {risk_assessment.cheating_score}/100
                 </p>
               </div>
             </div>
@@ -260,14 +293,14 @@ export function SecurityReport({ sessionId, onClose }: SecurityReportProps) {
               borderRadius: '6px',
               border: '1px solid #e9ecef'
             }}>
-              <strong>Recommendation:</strong> {risk_assessment.recommendation}
+              <strong>Raccomandazione:</strong> {risk_assessment.recommendation}
             </div>
           </div>
 
           {/* Security Summary */}
           <div style={{ marginBottom: '24px' }}>
             <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: '600' }}>
-              📊 Security Summary
+              📊 Riepilogo Sicurezza
             </h3>
             <div style={{
               display: 'grid',
@@ -285,7 +318,7 @@ export function SecurityReport({ sessionId, onClose }: SecurityReportProps) {
                 <div style={{ fontSize: '24px', fontWeight: '600', color: '#495057' }}>
                   {security_summary.total_events}
                 </div>
-                <div style={{ fontSize: '14px', color: '#6c757d' }}>Total Events</div>
+                <div style={{ fontSize: '14px', color: '#6c757d' }}>Eventi Totali</div>
               </div>
               <div style={{
                 backgroundColor: '#fff3cd',
@@ -297,7 +330,7 @@ export function SecurityReport({ sessionId, onClose }: SecurityReportProps) {
                 <div style={{ fontSize: '24px', fontWeight: '600', color: '#856404' }}>
                   {security_summary.high_severity_events}
                 </div>
-                <div style={{ fontSize: '14px', color: '#856404' }}>High Severity</div>
+                <div style={{ fontSize: '14px', color: '#856404' }}>Alta Gravità</div>
               </div>
               <div style={{
                 backgroundColor: '#fff3cd',
@@ -309,7 +342,7 @@ export function SecurityReport({ sessionId, onClose }: SecurityReportProps) {
                 <div style={{ fontSize: '24px', fontWeight: '600', color: '#856404' }}>
                   {security_summary.medium_severity_events}
                 </div>
-                <div style={{ fontSize: '14px', color: '#856404' }}>Medium Severity</div>
+                <div style={{ fontSize: '14px', color: '#856404' }}>Media Gravità</div>
               </div>
               <div style={{
                 backgroundColor: '#d1f2eb',
@@ -321,7 +354,7 @@ export function SecurityReport({ sessionId, onClose }: SecurityReportProps) {
                 <div style={{ fontSize: '24px', fontWeight: '600', color: '#0c5460' }}>
                   {security_summary.low_severity_events}
                 </div>
-                <div style={{ fontSize: '14px', color: '#0c5460' }}>Low Severity</div>
+                <div style={{ fontSize: '14px', color: '#0c5460' }}>Bassa Gravità</div>
               </div>
             </div>
 
@@ -334,7 +367,7 @@ export function SecurityReport({ sessionId, onClose }: SecurityReportProps) {
                 border: '1px solid #e9ecef'
               }}>
                 <h4 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600' }}>
-                  Events by Type
+                  Eventi per Tipo
                 </h4>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                   {Object.entries(security_summary.events_by_type).map(([type, count]) => (
@@ -348,7 +381,7 @@ export function SecurityReport({ sessionId, onClose }: SecurityReportProps) {
                         fontWeight: '500'
                       }}
                     >
-                      {type}: {count}
+                      {translateEventType(type)}: {count}
                     </span>
                   ))}
                 </div>
@@ -359,7 +392,7 @@ export function SecurityReport({ sessionId, onClose }: SecurityReportProps) {
           {/* Security Events */}
           <div>
             <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: '600' }}>
-              📋 Recent Security Events
+              📋 Eventi Sicurezza Recenti
             </h3>
             {security_events.length === 0 ? (
               <div style={{
@@ -371,7 +404,7 @@ export function SecurityReport({ sessionId, onClose }: SecurityReportProps) {
               }}>
                 <div style={{ fontSize: '24px', marginBottom: '8px' }}>✅</div>
                 <div style={{ color: '#0c5460', fontWeight: '500' }}>
-                  No security violations detected
+                  Nessuna violazione di sicurezza rilevata
                 </div>
               </div>
             ) : (
@@ -399,10 +432,9 @@ export function SecurityReport({ sessionId, onClose }: SecurityReportProps) {
                       <div style={{ flex: 1 }}>
                         <div style={{
                           fontWeight: '600',
-                          color: getSeverityColor(event.severity),
-                          textTransform: 'capitalize'
+                          color: getSeverityColor(event.severity)
                         }}>
-                          {event.event_type.replace('_', ' ')}
+                          {translateEventType(event.event_type)}
                         </div>
                         <div style={{ fontSize: '12px', color: '#6c757d' }}>
                           {formatTimestamp(event.timestamp)}
@@ -417,7 +449,7 @@ export function SecurityReport({ sessionId, onClose }: SecurityReportProps) {
                         fontWeight: '500',
                         textTransform: 'uppercase'
                       }}>
-                        {event.severity}
+                        {translateSeverity(event.severity)}
                       </div>
                     </div>
                     {event.details && (
@@ -456,7 +488,7 @@ export function SecurityReport({ sessionId, onClose }: SecurityReportProps) {
               fontWeight: '500'
             }}
           >
-            Close Report
+            Chiudi Report
           </button>
         </div>
       </div>

@@ -176,6 +176,23 @@ export function Interview() {
     scrollToBottom()
   }, [messages])
 
+  // Add beforeunload warning when interview is started
+  useEffect(() => {
+    if (!isStarted) return
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = 'Se chiudi la pagina, il colloquio verrà terminato e inviato per la valutazione. Sei sicuro di voler uscire?'
+      return e.returnValue
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [isStarted])
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
@@ -183,6 +200,10 @@ export function Interview() {
   async function loadSession() {
     try {
       const resp = await fetch(`${API_BASE}/interviews/${token}`)
+      if (resp.status === 404) {
+        setError('Token non valido o scaduto. Il token può essere utilizzato una sola volta. Se hai già iniziato il colloquio, non puoi più accedere.')
+        return
+      }
       if (resp.status === 410) {
         setError('Il colloquio è stato completato e la valutazione è terminata. L\'accesso non è più disponibile.')
         return
@@ -277,6 +298,10 @@ export function Interview() {
         setError('Questo colloquio è già stato avviato. Ogni token può essere utilizzato una sola volta.')
         return
       }
+      if (resp.status === 404) {
+        setError('Token non valido o scaduto. Il token può essere utilizzato una sola volta.')
+        return
+      }
       if (!resp.ok) throw new Error('Failed to start interview')
       const data = await resp.json()
       
@@ -357,6 +382,23 @@ export function Interview() {
           <p>Interview for {session.candidate_name}</p>
         </div>
       </div>
+
+      {/* Warning message when interview is started */}
+      {isStarted && (
+        <div style={{
+          backgroundColor: '#fff3cd',
+          border: '1px solid #ffc107',
+          borderRadius: '8px',
+          padding: '12px 16px',
+          margin: '16px',
+          fontSize: '14px',
+          color: '#856404',
+          textAlign: 'center',
+          fontWeight: '500'
+        }}>
+          ⚠️ <strong>ATTENZIONE:</strong> Se chiudi la pagina o esci dall'intervista, il colloquio verrà terminato e inviato per la valutazione.
+        </div>
+      )}
 
       <div className="chat-messages">
       {showIntro ? (

@@ -22,7 +22,7 @@ def create_or_update_position_tenant(position_id: str, payload: dict, collection
         return False
 
 
-def create_new_session_tenant(session_id: str, position_id: str, candidate_name: str, collection_name: str) -> bool:
+def create_new_session_tenant(session_id: str, position_id: str, candidate_name: str, collection_name: str, candidate_email: str = None) -> bool:
     """Create new session in tenant-specific collection"""
     if db is None:
         return False
@@ -32,6 +32,7 @@ def create_new_session_tenant(session_id: str, position_id: str, candidate_name:
             "_id": session_id, 
             "position_id": position_id, 
             "candidate_name": candidate_name, 
+            "candidate_email": candidate_email,
             "status": "initialized", 
             "stages": {}
         }
@@ -206,6 +207,7 @@ def list_completed_sessions_tenant(collection_name: str) -> list:
                 results.append({
                     "session_id": s.get("_id"),
                     "candidate_name": s.get("candidate_name"),
+                    "candidate_email": s.get("candidate_email"),
                     "position_id": pid,
                     "position_name": pname,
                     "status": status,
@@ -267,6 +269,7 @@ def list_incomplete_sessions_tenant(collection_name: str) -> list:
                 results.append({
                     "session_id": s.get("_id"),
                     "candidate_name": s.get("candidate_name"),
+                    "candidate_email": s.get("candidate_email"),
                     "position_id": pid,
                     "position_name": pname,
                     "status": status,
