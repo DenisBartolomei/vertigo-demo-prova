@@ -36,6 +36,7 @@ from services.token_service import (
     resolve_token,
     resolve_token_global,
     mark_interview_started_global,
+    mark_interview_completed_global,
 )
 from services.auth_service import authenticate_hr, create_jwt, verify_jwt, get_or_create_tenant_for_email
 from services.user_service import (
@@ -857,9 +858,8 @@ def start_interview(token: str):
     if skill_summary:
         raise HTTPException(status_code=410, detail="Interview completed and evaluation finished. Access no longer available.")
     
-    # Check if interview has already been started (single-use token)
-    if sess.get("interview_started"):
-        raise HTTPException(status_code=409, detail="Interview has already been started. Token can only be used once.")
+    # Note: We no longer check if interview has already been started here
+    # because we want to allow users to continue their interview
     
     message = start_interview_for_session(session_id, tenant_id)
     
@@ -899,6 +899,12 @@ def send_message(token: str, payload: MessagePayload):
     # Try to get interview state, but if chatbot is not initialized, initialize it first
     try:
         state = get_interview_state(session_id, tenant_id)
+        
+        # If interview is finished, mark token as completed to prevent future access
+        if state.get("finished"):
+            mark_interview_completed_global(token)
+            print(f"🔒 Interview completed for session {session_id} - token marked as completed")
+            
     except ValueError as e:
         if "Chatbot not initialized" in str(e):
             # Initialize the chatbot if it's not initialized yet

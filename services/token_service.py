@@ -43,10 +43,6 @@ def resolve_token(token: str, collection_name: str = COLLECTION) -> Optional[str
     if doc.get("expires_at") and datetime.utcnow() > doc["expires_at"]:
         return None
     
-    # Check if interview has started - if so, token should be expired
-    if doc.get("interview_started"):
-        return None
-    
     # increment uses (best-effort)
     try:
         db[collection_name].update_one({"_id": doc["_id"]}, {"$inc": {"uses": 1}})
@@ -69,9 +65,6 @@ def resolve_token_global(token: str) -> Optional[tuple[str, str]]:
         doc = db[coll_name].find_one({"token_hash": token_hash, "revoked": False})
         if doc:
             if doc.get("expires_at") and datetime.utcnow() > doc["expires_at"]:
-                continue
-            # Check if interview has started - if so, token should be expired
-            if doc.get("interview_started"):
                 continue
             # increment uses (best-effort)
             try:
@@ -115,6 +108,30 @@ def mark_interview_started_global(token: str) -> bool:
             result = db[coll_name].update_one(
                 {"token_hash": token_hash, "revoked": False},
                 {"$set": {"interview_started": True, "started_at": datetime.utcnow()}}
+            )
+            if result.modified_count > 0:
+                return True
+        except Exception:
+            continue
+    
+    return False
+
+
+def mark_interview_completed_global(token: str) -> bool:
+    """Mark token as interview completed, making it expire for future uses"""
+    if db is None:
+        return False
+    token_hash = _hash_token(token)
+    
+    # Search all interview_links collections
+    collections = db.list_collection_names()
+    interview_collections = [c for c in collections if c.endswith("_interview_links")]
+    
+    for coll_name in interview_collections:
+        try:
+            result = db[coll_name].update_one(
+                {"token_hash": token_hash, "revoked": False},
+                {"$set": {"interview_completed": True, "completed_at": datetime.utcnow(), "revoked": True}}
             )
             if result.modified_count > 0:
                 return True
