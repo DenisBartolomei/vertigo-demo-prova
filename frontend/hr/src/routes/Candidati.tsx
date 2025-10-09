@@ -320,7 +320,6 @@ export function Candidati() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'none'>('none')
   const [overallMeans, setOverallMeans] = useState<Record<string, number>>({})
   const [reportExpanded, setReportExpanded] = useState<Record<string, boolean>>({})
-  const [expandedJustifications, setExpandedJustifications] = useState<Record<string, Record<string, boolean>>>({})
   const [securityReports, setSecurityReports] = useState<Record<string, any>>({})
   const [showSecurityReport, setShowSecurityReport] = useState<string | null>(null)
   const token = localStorage.getItem('hr_jwt')
@@ -508,17 +507,6 @@ export function Candidati() {
     return { level: riskLevel, color, icon }
   }
 
-  // Toggle justification visibility for a specific skill
-  function toggleJustification(sessionId: string, skillIndex: number, type: 'cv' | 'interview') {
-    const key = `${skillIndex}_${type}`
-    setExpandedJustifications(prev => ({
-      ...prev,
-      [sessionId]: {
-        ...prev[sessionId],
-        [key]: !prev[sessionId]?.[key]
-      }
-    }))
-  }
 
   // Get unique positions for filter dropdown
   const uniquePositions = Array.from(new Set(rows.map(r => r.position_name || r.position_id).filter(Boolean)))
@@ -975,124 +963,175 @@ export function Candidati() {
                         <div style={{
                           background: 'rgba(255, 255, 255, 0.9)',
                           borderRadius: 'var(--radius-lg)',
-                          padding: '12px',
+                          padding: '16px',
                           overflow: 'hidden'
                         }}>
                           <div style={{
                             display: 'grid',
-                            gridTemplateColumns: '1fr 80px 80px',
-                            gap: '8px',
-                            padding: '8px 12px',
+                            gridTemplateColumns: '1fr 120px 120px',
+                            gap: '12px',
+                            padding: '12px 16px',
                             background: 'var(--primary-purple)',
                             color: 'white',
                             fontWeight: '600',
-                            fontSize: '12px',
+                            fontSize: '14px',
                             borderRadius: 'var(--radius-md)',
-                            marginBottom: '8px'
+                            marginBottom: '12px'
                           }}>
                             <div>Competenza</div>
                             <div style={{ textAlign: 'center' }}>CV</div>
                             <div style={{ textAlign: 'center' }}>Colloquio</div>
                           </div>
-                          <div style={{ display: 'grid', gap: '4px' }}>
+                          <div style={{ display: 'grid', gap: '8px' }}>
                           {(skills[r.session_id] || []).map((s: any, i: number) => (
                               <div key={i} style={{
-                                display: 'grid',
-                                gridTemplateColumns: '1fr 80px 80px',
+                                display: 'flex',
+                                flexDirection: 'column',
                                 gap: '8px',
-                                padding: '8px 12px',
-                                background: i % 2 === 0 ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 255, 255, 0.5)',
-                                borderRadius: 'var(--radius-md)',
-                                alignItems: 'center',
+                                padding: '16px',
+                                background: i % 2 === 0 ? 'rgba(255, 255, 255, 0.8)' : 'rgba(255, 255, 255, 0.6)',
+                                borderRadius: 'var(--radius-lg)',
+                                border: '1px solid rgba(139, 92, 246, 0.1)',
                                 transition: 'all 0.2s ease'
                               }}>
+                                {/* Skill Name */}
                                 <div style={{ 
-                                  fontWeight: '500', 
+                                  fontWeight: '600', 
                                   color: 'var(--text-primary)',
-                                  fontSize: '12px',
-                                  lineHeight: '1.3',
-                                  wordBreak: 'break-word'
+                                  fontSize: '14px',
+                                  lineHeight: '1.4',
+                                  marginBottom: '8px'
                                 }}>
                                   {s.skill_name}
                                 </div>
-                                <div style={{ 
-                                  display: 'flex', 
-                                  flexDirection: 'column',
-                                  alignItems: 'center',
-                                  gap: '4px'
+                                
+                                {/* Ratings Row */}
+                                <div style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: '1fr 120px 120px',
+                                  gap: '12px',
+                                  alignItems: 'center'
                                 }}>
-                                  <div style={{ display: 'flex', justifyContent: 'center', gap: '1px' }}>
-                                    {renderStars(s.cv_0_4)}
+                                  <div style={{ 
+                                    fontSize: '12px', 
+                                    color: 'var(--text-secondary)',
+                                    fontWeight: '500'
+                                  }}>
+                                    Valutazione
                                   </div>
-                                  {s.notes_cv && (
-                                    <button
-                                      onClick={() => toggleJustification(r.session_id, i, 'cv')}
-                                      style={{
-                                        background: 'none',
-                                        border: 'none',
-                                        color: 'var(--primary-purple)',
-                                        fontSize: '10px',
-                                        cursor: 'pointer',
-                                        textDecoration: 'underline'
-                                      }}
-                                    >
-                                      {expandedJustifications[r.session_id]?.[`${i}_cv`] ? 'Nascondi' : 'Dettagli'}
-                                    </button>
-                                  )}
-                                  {expandedJustifications[r.session_id]?.[`${i}_cv`] && s.notes_cv && (
-                                    <div style={{
-                                      fontSize: '10px',
-                                      color: 'var(--text-secondary)',
-                                      textAlign: 'center',
-                                      padding: '4px',
-                                      background: 'rgba(139, 92, 246, 0.1)',
-                                      borderRadius: '4px',
-                                      maxWidth: '70px',
-                                      wordBreak: 'break-word'
-                                    }}>
-                                      {s.notes_cv}
+                                  
+                                  {/* CV Rating */}
+                                  <div style={{ 
+                                    display: 'flex', 
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                  }}>
+                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '2px' }}>
+                                      {renderStars(s.cv_0_4)}
                                     </div>
-                                  )}
-                                </div>
-                                <div style={{ 
-                                  display: 'flex', 
-                                  flexDirection: 'column',
-                                  alignItems: 'center',
-                                  gap: '4px'
-                                }}>
-                                  <div style={{ display: 'flex', justifyContent: 'center', gap: '1px' }}>
-                                    {renderStars(s.interview_0_4)}
+                                    <div style={{
+                                      fontSize: '11px',
+                                      fontWeight: '600',
+                                      color: 'var(--primary-purple)',
+                                      background: 'rgba(139, 92, 246, 0.1)',
+                                      padding: '2px 6px',
+                                      borderRadius: '4px'
+                                    }}>
+                                      CV
+                                    </div>
                                   </div>
-                                  {s.notes_interview && (
-                                    <button
-                                      onClick={() => toggleJustification(r.session_id, i, 'interview')}
-                                      style={{
-                                        background: 'none',
-                                        border: 'none',
-                                        color: 'var(--primary-purple)',
-                                        fontSize: '10px',
-                                        cursor: 'pointer',
-                                        textDecoration: 'underline'
-                                      }}
-                                    >
-                                      {expandedJustifications[r.session_id]?.[`${i}_interview`] ? 'Nascondi' : 'Dettagli'}
-                                    </button>
-                                  )}
-                                  {expandedJustifications[r.session_id]?.[`${i}_interview`] && s.notes_interview && (
-                                    <div style={{
-                                      fontSize: '10px',
-                                      color: 'var(--text-secondary)',
-                                      textAlign: 'center',
-                                      padding: '4px',
-                                      background: 'rgba(139, 92, 246, 0.1)',
-                                      borderRadius: '4px',
-                                      maxWidth: '70px',
-                                      wordBreak: 'break-word'
-                                    }}>
-                                      {s.notes_interview}
+                                  
+                                  {/* Interview Rating */}
+                                  <div style={{ 
+                                    display: 'flex', 
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                  }}>
+                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '2px' }}>
+                                      {renderStars(s.interview_0_4)}
                                     </div>
-                                  )}
+                                    <div style={{
+                                      fontSize: '11px',
+                                      fontWeight: '600',
+                                      color: 'var(--primary-purple)',
+                                      background: 'rgba(139, 92, 246, 0.1)',
+                                      padding: '2px 6px',
+                                      borderRadius: '4px'
+                                    }}>
+                                      Colloquio
+                                    </div>
+                                  </div>
                                 </div>
+                                
+                                {/* Justifications */}
+                                {(s.notes_cv || s.notes_interview) && (
+                                  <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '1fr 1fr',
+                                    gap: '12px',
+                                    marginTop: '8px'
+                                  }}>
+                                    {/* CV Justification */}
+                                    {s.notes_cv && (
+                                      <div style={{
+                                        padding: '12px',
+                                        background: 'rgba(139, 92, 246, 0.05)',
+                                        borderRadius: 'var(--radius-md)',
+                                        border: '1px solid rgba(139, 92, 246, 0.1)'
+                                      }}>
+                                        <div style={{
+                                          fontSize: '12px',
+                                          fontWeight: '600',
+                                          color: 'var(--primary-purple)',
+                                          marginBottom: '6px',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '4px'
+                                        }}>
+                                          📄 CV
+                                        </div>
+                                        <div style={{
+                                          fontSize: '13px',
+                                          color: 'var(--text-secondary)',
+                                          lineHeight: '1.5'
+                                        }}>
+                                          {s.notes_cv}
+                                        </div>
+                                      </div>
+                                    )}
+                                    
+                                    {/* Interview Justification */}
+                                    {s.notes_interview && (
+                                      <div style={{
+                                        padding: '12px',
+                                        background: 'rgba(34, 197, 94, 0.05)',
+                                        borderRadius: 'var(--radius-md)',
+                                        border: '1px solid rgba(34, 197, 94, 0.1)'
+                                      }}>
+                                        <div style={{
+                                          fontSize: '12px',
+                                          fontWeight: '600',
+                                          color: '#22c55e',
+                                          marginBottom: '6px',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '4px'
+                                        }}>
+                                          💬 Colloquio
+                                        </div>
+                                        <div style={{
+                                          fontSize: '13px',
+                                          color: 'var(--text-secondary)',
+                                          lineHeight: '1.5'
+                                        }}>
+                                          {s.notes_interview}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
