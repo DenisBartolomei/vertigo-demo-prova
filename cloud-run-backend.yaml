@@ -23,8 +23,12 @@ spec:
         env:
         - name: MONGODB_URI
           value: "MONGODB_URI_PLACEHOLDER"
-        - name: OPENAI_API_KEY
-          value: "OPENAI_API_KEY_PLACEHOLDER"
+        - name: AZURE_OPENAI_ENDPOINT
+          value: "AZURE_OPENAI_ENDPOINT_PLACEHOLDER"
+        - name: AZURE_OPENAI_API_KEY
+          value: "AZURE_OPENAI_API_KEY_PLACEHOLDER"
+        - name: AZURE_OPENAI_API_VERSION
+          value: "2025-07-01-preview"
         - name: JWT_SECRET
           value: "JWT_SECRET_PLACEHOLDER"
         - name: PYTHON_ENV

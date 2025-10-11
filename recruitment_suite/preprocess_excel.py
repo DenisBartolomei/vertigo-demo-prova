@@ -38,12 +38,17 @@ INPUT_COST_PER_MILLION_TOKENS = 0.15
 OUTPUT_COST_PER_MILLION_TOKENS = 0.60
 token_tracker = {"input": 0, "output": 0, "semantic_cache_hits": 0}
 
-# --- Inizializzazione Client OpenAI ---
+# --- Inizializzazione Client Azure OpenAI ---
 try:
-    llm_client = OpenAI(api_key=settings.OPENAI_API_KEY)
-    print("Client OpenAI inizializzato.")
+    from openai import AzureOpenAI
+    llm_client = AzureOpenAI(
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+    )
+    print("✅ Client Azure OpenAI inizializzato (Europa).")
 except Exception as e:
-    print(f"ERRORE: Impossibile inizializzare il client OpenAI. Controlla la chiave API. Dettagli: {e}")
+    print(f"❌ ERRORE: Impossibile inizializzare Azure OpenAI. Controlla la configurazione. Dettagli: {e}")
     llm_client = None
 
 # --- Prompt (invariato) ---
@@ -113,8 +118,10 @@ def get_enriched_text_from_llm(title: str, description: str, token_tracker: dict
     clean_description = re.sub('<[^<]+?>', '', description)
     prompt = LLM_PROMPT_PARAGRAPH.format(title=title, description=clean_description)
     try:
+        # ✅ Mapping modello per Azure OpenAI
+        azure_model = "gpt-4.1" if settings.LLM_MODEL == "gpt-4.1-2025-04-14" else settings.LLM_MODEL
         response = llm_client.chat.completions.create(
-            model=settings.LLM_MODEL, messages=[{"role": "user", "content": prompt}],
+            model=azure_model, messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"}, temperature=0.15,
         )
         if response.usage:

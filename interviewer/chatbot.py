@@ -7,14 +7,13 @@ import os
 from datetime import datetime
 
 class SmartCaseStudyChatbot:
-    MAX_ATTEMPTS = 5
-    MAX_QUESTIONS = 10
+    MAX_QUESTIONS = 10  # FISSO - non parametrizzabile
 
     # --- CONFIGURAZIONE DEI MODELLI ---
     INTERVIEWER_MODEL = "gpt-4.1-2025-04-14"
     CLASSIFICATION_MODEL = "gpt-4o-mini" 
 
-    def __init__(self, steps: dict, case_title: str, case_text: str, case_id: str):
+    def __init__(self, steps: dict, case_title: str, case_text: str, case_id: str, max_attempts: int = 3):
         self.steps = steps
         self.case_title = case_title
         self.case_text = case_text
@@ -25,6 +24,7 @@ class SmartCaseStudyChatbot:
         self.attempts_on_current_step = 0
         self.conversation_history = []
         self.is_finished = False
+        self.MAX_ATTEMPTS = max_attempts  # PARAMETRIZZABILE
 
     def _save_conversation_history(self):
         output_dir = "output"

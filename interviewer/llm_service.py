@@ -1,48 +1,59 @@
 import os
-from openai import OpenAI
+from openai import AzureOpenAI
 from dotenv import load_dotenv
 from typing import Optional
 
 # Carica le variabili dal file .env se presente (per lo sviluppo locale)
 load_dotenv()
 
-API_KEY = None
-# --- LOGICA A CASCATA ROBUSTA ---
-# Prova con le variabili d'ambiente
-API_KEY = os.getenv("OPENAI_API_KEY")
-# --- FINE LOGICA ROBUSTA ---
+# ✅ CONFIGURAZIONE AZURE OPENAI (Europa)
+AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
+AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY") 
+AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
 
+# ✅ MAPPING MODELLI AZURE
+MODEL_MAPPING = {
+    "gpt-4.1-2025-04-14": "gpt-4.1",           # Modello principale
+    "gpt-4o-mini": "gpt-4.1-nano"              # Modello leggero
+}
 
-# Inizializza il client OpenAI solo se la chiave API è stata trovata
+# ✅ Client Azure OpenAI con residenza dati Europa
 client = None
-if not API_KEY:
-    print("❌ ERRORE CRITICO: OPENAI_API_KEY non trovata. Controlla le variabili d'ambiente.")
-    # No UI error in backend mode
-    pass 
+if not AZURE_OPENAI_ENDPOINT or not AZURE_OPENAI_API_KEY:
+    print("❌ ERRORE CRITICO: Configurazione Azure OpenAI mancante per compliance GDPR.")
 else:
-    client = OpenAI(api_key=API_KEY)
+    client = AzureOpenAI(
+        azure_endpoint=AZURE_OPENAI_ENDPOINT,
+        api_key=AZURE_OPENAI_API_KEY,
+        api_version=AZURE_OPENAI_API_VERSION
+    )
+    print("✅ Client Azure OpenAI configurato per residenza dati Europa (GDPR compliant)")
 
 def get_llm_response(prompt: str, model: str, system_prompt: str, **kwargs) -> str:
     """
     Invia un prompt per una risposta testuale semplice.
+    ✅ Dati processati esclusivamente in Europa
     """
-    # Controlla se il client è stato inizializzato correttamente
     if client is None:
-        return "Errore: Il servizio LLM non è configurato a causa di una chiave API mancante."
+        return "Errore: Il servizio LLM non è configurato per compliance GDPR."
 
+    # ✅ Mapping automatico modello
+    azure_model = MODEL_MAPPING.get(model, model)
+    
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": prompt}
     ]
+    
     try:
         response = client.chat.completions.create(
-            model=model,
+            model=azure_model,  # ✅ Usa deployment Azure
             messages=messages,
             **kwargs 
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print(f"Errore nella chiamata LLM testuale: {e}")
+        print(f"Errore nella chiamata Azure OpenAI: {e}")
         return f"Errore: {e}"
 
 def get_structured_llm_response(
@@ -62,10 +73,13 @@ def get_structured_llm_response(
 
     Restituisce gli argomenti della funzione chiamata come stringa JSON.
     """
-    # Controlla se il client è stato inizializzato correttamente
+    # ✅ Controlla se il client Azure è stato inizializzato correttamente
     if client is None:
-        print("Errore: Il servizio LLM non è configurato a causa di una chiave API mancante.")
+        print("Errore: Il servizio LLM non è configurato per compliance GDPR.")
         return None
+
+    # ✅ Mapping automatico modello
+    azure_model = MODEL_MAPPING.get(model, model)
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -85,7 +99,7 @@ def get_structured_llm_response(
     # Prepariamo gli argomenti per la chiamata API
     # Iniziamo con quelli obbligatori
     api_kwargs = {
-        "model": model,
+        "model": azure_model,  # ✅ Usa deployment Azure
         "messages": messages,
         "tools": tools,
         "tool_choice": {"type": "function", "function": {"name": tool_name}}
@@ -109,5 +123,5 @@ def get_structured_llm_response(
             return None
 
     except Exception as e:
-        print(f"Errore nella chiamata LLM strutturata: {e}")
+        print(f"Errore nella chiamata Azure OpenAI strutturata: {e}")
         return None

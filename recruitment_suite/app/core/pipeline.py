@@ -4,7 +4,7 @@
 import json
 import time
 import math
-import openai
+# import openai  # ✅ Rimosso, ora usiamo il servizio LLM centralizzato
 from pydantic import ValidationError
 from sentence_transformers import SentenceTransformer, util
 from tqdm import tqdm

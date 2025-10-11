@@ -5,7 +5,7 @@ numpy
 sentence-transformers
 torch
 matplotlib
-openai
+azure-openai
 python-dotenv
 pydantic
 PyMuPDF

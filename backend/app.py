@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import os
 import uuid
 import fitz  # PyMuPDF
@@ -90,6 +90,10 @@ class PositionPayload(BaseModel):
 
 class MessagePayload(BaseModel):
     text: str
+
+class InterviewParametersModel(BaseModel):
+    reasoning_steps: int = Field(ge=3, le=10, description="Numero totale di reasoning steps (incluso step 0)")
+    max_interactions_per_step: int = Field(ge=2, le=8, description="Numero massimo di interazioni per step")
 
 
 app = FastAPI(title="Vertigo AI Backend", version="0.1.0")
@@ -370,10 +374,32 @@ def get_position(position_id: str, auth_data=Depends(hr_auth)):
 @app.post("/positions/{position_id}/data-prep")
 def run_data_prep(position_id: str, auth_data=Depends(hr_auth)):
     collections = get_tenant_collections_from_auth(auth_data)
-    ok = run_full_generation_pipeline(position_id, collections["positions"])
+    tenant_id = auth_data.get("tenant_id")
+    
+    # Recupera parametri del colloquio per il tenant
+    reasoning_steps_count = get_reasoning_steps_for_tenant(tenant_id)
+    
+    ok = run_full_generation_pipeline(position_id, collections["positions"], reasoning_steps_count)
     if not ok:
         raise HTTPException(status_code=500, detail="Data preparation failed")
     return {"ok": True}
+
+def get_reasoning_steps_for_tenant(tenant_id: str = None) -> int:
+    """Recupera il numero di reasoning steps per il tenant"""
+    if not tenant_id:
+        return 5  # Default
+    
+    try:
+        collections = get_tenant_collections(tenant_id)
+        params_doc = collections["settings"].find_one({"type": "interview_parameters"})
+        
+        if params_doc:
+            return params_doc.get("reasoning_steps", 5)
+        else:
+            return 5  # Default
+    except Exception as e:
+        print(f"Error loading reasoning steps for tenant {tenant_id}: {e}")
+        return 5  # Default
 
 
 @app.delete("/positions/{position_id}")
@@ -765,6 +791,71 @@ def list_sessions(auth_data=Depends(hr_auth)):
     results = list_incomplete_sessions_tenant(collections["sessions"])
     return {"items": results}
 
+
+# Interview Parameters Management
+@app.get("/interview-parameters")
+def get_interview_parameters(auth_data=Depends(hr_auth)):
+    """Recupera i parametri del colloquio per il tenant"""
+    tenant_id = auth_data.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="No tenant information available")
+    
+    collections = get_tenant_collections(tenant_id)
+    
+    # Cerca parametri esistenti
+    params_doc = collections["settings"].find_one({"type": "interview_parameters"})
+    
+    if params_doc:
+        return {
+            "reasoning_steps": params_doc.get("reasoning_steps", 5),
+            "max_interactions_per_step": params_doc.get("max_interactions_per_step", 3),
+            "estimated_duration": calculate_estimated_duration(
+                params_doc.get("reasoning_steps", 5),
+                params_doc.get("max_interactions_per_step", 3)
+            )
+        }
+    else:
+        # Valori di default
+        return {
+            "reasoning_steps": 5,
+            "max_interactions_per_step": 3,
+            "estimated_duration": calculate_estimated_duration(5, 3)
+        }
+
+@app.post("/interview-parameters")
+def save_interview_parameters(params: InterviewParametersModel, auth_data=Depends(hr_auth)):
+    """Salva i parametri del colloquio per il tenant"""
+    tenant_id = auth_data.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="No tenant information available")
+    
+    collections = get_tenant_collections(tenant_id)
+    
+    # Salva o aggiorna parametri
+    collections["settings"].update_one(
+        {"type": "interview_parameters"},
+        {"$set": {
+            "reasoning_steps": params.reasoning_steps,
+            "max_interactions_per_step": params.max_interactions_per_step,
+            "updated_at": datetime.utcnow()
+        }},
+        upsert=True
+    )
+    
+    estimated_duration = calculate_estimated_duration(params.reasoning_steps, params.max_interactions_per_step)
+    
+    return {
+        "message": "Parametri salvati con successo",
+        "reasoning_steps": params.reasoning_steps,
+        "max_interactions_per_step": params.max_interactions_per_step,
+        "estimated_duration": estimated_duration
+    }
+
+def calculate_estimated_duration(reasoning_steps: int, max_interactions_per_step: int) -> str:
+    """Calcola la durata stimata del colloquio"""
+    total_interactions = reasoning_steps * max_interactions_per_step
+    minutes = int(total_interactions * 1.5)  # 1.5 minuti per interazione
+    return f"{minutes} minuti"
 
 @app.get("/user/info")
 def get_user_info(auth_data=Depends(hr_auth)):

@@ -31,7 +31,7 @@ class CaseCollection(BaseModel):
 
 FINAL_MODEL = "gpt-4.1-2025-04-14"
 
-def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, hr_special_needs: str = "") -> CaseCollection | None:
+def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, hr_special_needs: str = "", reasoning_steps_count: int = 5) -> CaseCollection | None:
     """
     Genera una collezione di 5 casi di studio strutturati in formato JSON.
     Integra le Indicazioni HR nella generazione.
@@ -50,7 +50,7 @@ def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, senior
 
     print("1. Creazione del prompt finale con esempio JSON...")
     final_prompt = prompts_final.create_final_case_prompt(
-        icp_text, guide_text, kb_summary, seniority_level, json_example_str, hr_special_needs
+        icp_text, guide_text, kb_summary, seniority_level, json_example_str, hr_special_needs, reasoning_steps_count
     )
 
     print(f"2. Invio della richiesta al modello '{FINAL_MODEL}' per la generazione strutturata...")

@@ -113,8 +113,7 @@ def main():
             final_report = generate_qualitative_llm_report(
                 candidate_data_for_prompt, 
                 market_data_for_prompt, 
-                offer_description,
-                pipeline.openai_client
+                offer_description
             )
             
             print("\n--- REPORT DI POSIZIONAMENTO PROFESSIONALE ---")

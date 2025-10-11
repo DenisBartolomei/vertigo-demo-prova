@@ -2,6 +2,12 @@ import { useEffect, useState } from 'react'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://vertigo-ai-backend-tbia7kjh7a-oc.a.run.app'
 
+interface InterviewParameters {
+  reasoning_steps: number
+  max_interactions_per_step: number
+  estimated_duration: string
+}
+
 export function Positions() {
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -10,6 +16,12 @@ export function Positions() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [details, setDetails] = useState<Record<string, any>>({})
   const [isPreparing, setIsPreparing] = useState(false)
+  const [interviewParams, setInterviewParams] = useState<InterviewParameters>({
+    reasoning_steps: 5,
+    max_interactions_per_step: 3,
+    estimated_duration: "22 minuti"
+  })
+  const [loadingParams, setLoadingParams] = useState(false)
   const token = localStorage.getItem('hr_jwt')
 
   async function load() {
@@ -22,7 +34,69 @@ export function Positions() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { 
+    load()
+    loadInterviewParameters()
+  }, [])
+
+  // Funzione per calcolare durata stimata
+  const calculateDuration = (steps: number, interactions: number): string => {
+    const totalInteractions = steps * interactions
+    const minutes = Math.floor(totalInteractions * 1.5)
+    return `${minutes} minuti`
+  }
+
+  // Carica parametri del colloquio
+  async function loadInterviewParameters() {
+    try {
+      const resp = await fetch(`${API_BASE}/interview-parameters`, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        setInterviewParams({
+          reasoning_steps: data.reasoning_steps,
+          max_interactions_per_step: data.max_interactions_per_step,
+          estimated_duration: data.estimated_duration
+        })
+      }
+    } catch (error) {
+      console.error('Error loading interview parameters:', error)
+    }
+  }
+
+  // Salva parametri del colloquio
+  async function saveInterviewParameters() {
+    setLoadingParams(true)
+    try {
+      const resp = await fetch(`${API_BASE}/interview-parameters`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify({
+          reasoning_steps: interviewParams.reasoning_steps,
+          max_interactions_per_step: interviewParams.max_interactions_per_step
+        })
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        setInterviewParams({
+          ...interviewParams,
+          estimated_duration: data.estimated_duration
+        })
+        alert('✅ Parametri del colloquio salvati con successo!')
+      } else {
+        alert('❌ Errore nel salvataggio dei parametri')
+      }
+    } catch (error) {
+      console.error('Error saving interview parameters:', error)
+      alert('❌ Errore di connessione')
+    } finally {
+      setLoadingParams(false)
+    }
+  }
 
   async function upsertPosition() {
     setIsPreparing(true)
@@ -205,7 +279,7 @@ export function Positions() {
       )}
       
       <div>
-        <h2>Annunci</h2>
+        <h2>📋 Annunci e Colloqui</h2>
         <p className="muted">Crea e gestisci le posizioni lavorative per i colloqui dei candidati</p>
       </div>
       
@@ -335,6 +409,121 @@ export function Positions() {
             💾 Salva Posizione & Avvia Preparazione Dati
           </button>
         </div>
+      </div>
+
+      {/* Interview Parameters Section */}
+      <div className="card fade-in" style={{ 
+        background: 'linear-gradient(135deg, var(--light-purple), var(--pastel-pink))',
+        border: '1px solid rgba(139, 92, 246, 0.2)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+          <div style={{ 
+            width: '40px', 
+            height: '40px', 
+            borderRadius: '50%', 
+            background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontSize: '18px'
+          }}>
+            ⚙️
+          </div>
+          <h3 style={{ color: 'var(--primary-purple)', margin: 0 }}>Parametri del Colloquio</h3>
+        </div>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '20px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: 'var(--text-primary)' }}>
+              Numero di Steps Totali
+            </label>
+            <input 
+              type="number" 
+              min="3" 
+              max="10" 
+              value={interviewParams.reasoning_steps}
+              onChange={(e) => {
+                const steps = parseInt(e.target.value)
+                setInterviewParams({
+                  ...interviewParams,
+                  reasoning_steps: steps,
+                  estimated_duration: calculateDuration(steps, interviewParams.max_interactions_per_step)
+                })
+              }}
+              style={{ width: '100%' }}
+            />
+            <small style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              Il sistema genererà {interviewParams.reasoning_steps - 1} steps + step 0 = {interviewParams.reasoning_steps} totali
+            </small>
+          </div>
+          
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: 'var(--text-primary)' }}>
+              Interazioni per Step
+            </label>
+            <input 
+              type="number" 
+              min="2" 
+              max="8" 
+              value={interviewParams.max_interactions_per_step}
+              onChange={(e) => {
+                const interactions = parseInt(e.target.value)
+                setInterviewParams({
+                  ...interviewParams,
+                  max_interactions_per_step: interactions,
+                  estimated_duration: calculateDuration(interviewParams.reasoning_steps, interactions)
+                })
+              }}
+              style={{ width: '100%' }}
+            />
+            <small style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              Numero massimo di interazioni per completare uno step
+            </small>
+          </div>
+        </div>
+        
+        <div style={{ 
+          marginBottom: '20px', 
+          padding: '16px', 
+          background: 'rgba(255, 255, 255, 0.8)',
+          borderRadius: 'var(--radius-lg)',
+          textAlign: 'center',
+          border: '1px solid rgba(139, 92, 246, 0.1)'
+        }}>
+          <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+            Durata Stimata del Colloquio
+          </div>
+          <div style={{ 
+            fontSize: '24px', 
+            fontWeight: '700', 
+            color: 'var(--primary-purple)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px'
+          }}>
+            ⏱️ {interviewParams.estimated_duration}
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+            Basato su {interviewParams.reasoning_steps} steps × {interviewParams.max_interactions_per_step} interazioni × 1.5 min
+          </div>
+        </div>
+        
+        <button 
+          onClick={saveInterviewParameters}
+          disabled={loadingParams}
+          style={{ 
+            width: '100%', 
+            justifyContent: 'center',
+            background: 'var(--primary-purple)',
+            color: 'white',
+            border: 'none',
+            opacity: loadingParams ? 0.7 : 1
+          }}
+        >
+          {loadingParams ? '⏳ Salvataggio...' : '💾 Salva Parametri Colloquio'}
+        </button>
       </div>
 
       {/* Existing Positions */}

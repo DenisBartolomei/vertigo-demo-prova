@@ -3,13 +3,15 @@
 SYSTEM_PROMPT = """Sei un agente AI progettato per produrre informazioni strutturate, ricevendo in input informazioni non strutturate.
 Dati gli input, restituisci un oggetto JSON con i campi predefiniti nella struttura attesa. Formatta accuratamente i dati di output. Se un dato manca o non si può determinare, restituisci un valore di default (e.g., null, 0, or 'N/A')."""
 
-def create_final_case_prompt(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, json_example_str: str, hr_special_needs: str) -> str:
+def create_final_case_prompt(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, json_example_str: str, hr_special_needs: str, reasoning_steps_count: int = 5) -> str:
     """
     Assembla il prompt finale per la generazione dei case strutturati, integrando le Indicazioni HR.
     """
     hr_block = hr_special_needs.strip() if hr_special_needs else "Nessuna indicazione speciale fornita."
     return f"""
-Produci 5 case complessi e strutturati, e decomponi il raggiungimento della soluzione in 5 step consecutivi (reasoning steps, da 1 a 5).
+Produci 5 case complessi e strutturati, e decomponi il raggiungimento della soluzione in {reasoning_steps_count - 1} step consecutivi (reasoning steps, da 1 a {reasoning_steps_count - 1}).
++ step 0 per il ragionamento iniziale = {reasoning_steps_count} steps totali.
+
 Integra le INDICAZIONI SPECIALI HR come vincoli o preferenze operative nella costruzione degli scenari e nella scelta delle skill da testare.
 
 Indicazioni Speciali HR: usa questo interpretando le richieste in chiave di quanto richiesto nella ICP e guida alla generazione.

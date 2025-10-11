@@ -18,6 +18,24 @@ from .chatbot import SmartCaseStudyChatbot
 _SESSION_CHATBOTS: dict[str, SmartCaseStudyChatbot] = {}
 
 
+def get_interview_parameters_for_tenant(tenant_id: str = None) -> int:
+    """Recupera i parametri del colloquio per il tenant, restituisce max_interactions_per_step"""
+    if not tenant_id:
+        return 3  # Default
+    
+    try:
+        collections = get_tenant_collections(tenant_id)
+        params_doc = collections["settings"].find_one({"type": "interview_parameters"})
+        
+        if params_doc:
+            return params_doc.get("max_interactions_per_step", 3)
+        else:
+            return 3  # Default
+    except Exception as e:
+        print(f"Error loading interview parameters for tenant {tenant_id}: {e}")
+        return 3  # Default
+
+
 def initialize_chatbot_for_session(session_id: str, tenant_id: str = None) -> Optional[Dict[str, Any]]:
     if tenant_id:
         collections = get_tenant_collections(tenant_id)
@@ -56,11 +74,15 @@ def initialize_chatbot_for_session(session_id: str, tenant_id: str = None) -> Op
         if sid in steps_dict:
             steps_dict[sid]["criteria"] = criterion.get("criteria")
 
+    # Recupera parametri personalizzati per il colloquio
+    max_attempts = get_interview_parameters_for_tenant(tenant_id)
+    
     chatbot = SmartCaseStudyChatbot(
         steps=steps_dict,
         case_title=selected_case.get("question_title", ""),
         case_text=selected_case.get("question_text", ""),
         case_id=selected_case_id,
+        max_attempts=max_attempts
     )
     _SESSION_CHATBOTS[session_id] = chatbot
 

@@ -7,7 +7,7 @@ import fitz  # PyMuPDF
 import numpy as np
 import pandas as pd
 import torch
-import openai
+# import openai  # ✅ Rimosso, ora usiamo il servizio LLM centralizzato
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from dateutil.parser import parse as universal_date_parser
