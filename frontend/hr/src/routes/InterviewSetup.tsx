@@ -139,13 +139,13 @@ export function InterviewSetup() {
       {/* Box 1: Configurazione Interviste */}
       <div className="card fade-in">
         <div style={{ 
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
           color: 'white',
           padding: '20px',
           borderRadius: '12px',
           marginBottom: '24px'
         }}>
-          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
+          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: 'white' }}>
             🎯 Configurazione Interviste
           </h2>
           <p style={{ margin: '8px 0 0 0', opacity: 0.9, fontSize: '14px' }}>
@@ -227,7 +227,7 @@ export function InterviewSetup() {
 
           {/* Stime Calcolate */}
           <div style={{ 
-            background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
             color: 'white',
             padding: '20px',
             borderRadius: '12px'
@@ -277,13 +277,13 @@ export function InterviewSetup() {
       {/* Box 2: Pre-screening */}
       <div className="card fade-in">
         <div style={{ 
-          background: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
-          color: '#8b4513',
+          background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+          color: 'white',
           padding: '20px',
           borderRadius: '12px',
           marginBottom: '24px'
         }}>
-          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
+          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: 'white' }}>
             🔍 Pre-screening Candidati
           </h2>
           <p style={{ margin: '8px 0 0 0', opacity: 0.8, fontSize: '14px' }}>

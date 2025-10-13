@@ -30,7 +30,7 @@ gcloud run deploy vertigo-ai-backend \
     --timeout 300 \
     --max-instances 10 \
     --min-instances 1 \
-    --set-env-vars MONGODB_URI="${MONGODB_URI}",OPENAI_API_KEY="${OPENAI_API_KEY}",JWT_SECRET="${JWT_SECRET}",PYTHON_ENV=production
+    --set-env-vars MONGODB_URI="${MONGODB_URI}",AZURE_OPENAI_ENDPOINT="${AZURE_OPENAI_ENDPOINT}",AZURE_OPENAI_API_KEY="${AZURE_OPENAI_API_KEY}",AZURE_OPENAI_API_VERSION="${AZURE_OPENAI_API_VERSION}",AZURE_OPENAI_DEPLOYMENT_NAME="${AZURE_OPENAI_DEPLOYMENT_NAME}",JWT_SECRET="${JWT_SECRET}",PYTHON_ENV=production
 
 # 2. Get backend URL
 BACKEND_URL=$(gcloud run services describe vertigo-ai-backend --region=${REGION} --format="value(status.url)")
