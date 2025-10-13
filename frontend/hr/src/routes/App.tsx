@@ -126,6 +126,10 @@ export function App() {
             <span style={{ fontSize: '18px' }}>📋</span>
             Annunci
           </Link>
+          <Link to="/app/setup-colloqui">
+            <span style={{ fontSize: '18px' }}>⚙️</span>
+            Setup Colloqui
+          </Link>
           <Link to="/app/candidati">
             <span style={{ fontSize: '18px' }}>📈</span>
             Reportistica Candidati

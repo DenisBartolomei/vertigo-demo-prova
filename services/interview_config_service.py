@@ -10,8 +10,8 @@ from .data_manager import db
 class InterviewConfig(BaseModel):
     """Configurazione intervista per tenant"""
     tenant_id: str
-    reasoning_steps: int = Field(default=4, ge=2, le=10, description="Numero di reasoning steps (da 2 a 10)")
-    max_attempts: int = Field(default=5, ge=2, le=15, description="Numero massimo di tentativi per step (da 2 a 15)")
+    reasoning_steps: int = Field(default=4, ge=2, le=6, description="Numero di reasoning steps (da 2 a 6)")
+    max_attempts: int = Field(default=5, ge=2, le=5, description="Numero massimo di tentativi per step (da 2 a 5)")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
@@ -28,7 +28,7 @@ class InterviewConfig(BaseModel):
 
 def get_interview_config(tenant_id: str) -> Optional[InterviewConfig]:
     """Recupera configurazione intervista per tenant"""
-    if not db:
+    if db is None:
         return None
     
     collection = db["interview_configs"]
@@ -42,7 +42,7 @@ def get_interview_config(tenant_id: str) -> Optional[InterviewConfig]:
 
 def save_interview_config(config: InterviewConfig) -> bool:
     """Salva configurazione intervista per tenant"""
-    if not db:
+    if db is None:
         return False
     
     collection = db["interview_configs"]

@@ -858,11 +858,11 @@ def update_interview_configuration(
     if not isinstance(reasoning_steps, int) or not isinstance(max_attempts, int):
         raise HTTPException(status_code=400, detail="reasoning_steps and max_attempts must be integers")
     
-    if reasoning_steps < 2 or reasoning_steps > 10:
-        raise HTTPException(status_code=400, detail="reasoning_steps must be between 2 and 10")
+    if reasoning_steps < 2 or reasoning_steps > 6:
+        raise HTTPException(status_code=400, detail="reasoning_steps must be between 2 and 6")
     
-    if max_attempts < 2 or max_attempts > 15:
-        raise HTTPException(status_code=400, detail="max_attempts must be between 2 and 15")
+    if max_attempts < 2 or max_attempts > 5:
+        raise HTTPException(status_code=400, detail="max_attempts must be between 2 and 5")
     
     # Create new config
     config = InterviewConfig(
