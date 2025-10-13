@@ -42,55 +42,8 @@ export function AntiCheatWarning({ warningCount, isBlocked, onAccept, onContinue
 
   if (!showWarning) return null
 
-  return (
-    <div style={{
-      position: 'fixed',
-      top: '20px',
-      right: '20px',
-      backgroundColor: '#fff3cd',
-      border: '1px solid #ffa500',
-      borderRadius: '8px',
-      padding: '16px',
-      maxWidth: '400px',
-      zIndex: 10000,
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-        <span style={{ fontSize: '20px' }}>⚠️</span>
-        <strong style={{ color: '#856404' }}>Security Warning</strong>
-      </div>
-      <p style={{ margin: '0 0 12px 0', color: '#856404', fontSize: '14px', lineHeight: '1.4' }}>
-        Suspicious activity detected. Please focus on the interview and avoid:
-      </p>
-      <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#856404', fontSize: '13px' }}>
-        <li>Switching tabs or windows</li>
-        <li>Copying and pasting content</li>
-        <li>Using keyboard shortcuts</li>
-        <li>Right-clicking on the page</li>
-      </ul>
-      <p style={{ margin: '0 0 12px 0', color: '#856404', fontSize: '12px', fontStyle: 'italic' }}>
-        All activities are being monitored and recorded.
-      </p>
-      <button
-        onClick={handleAccept}
-        style={{
-          backgroundColor: '#ffa500',
-          color: 'white',
-          border: 'none',
-          padding: '8px 16px',
-          borderRadius: '4px',
-          fontSize: '12px',
-          cursor: 'pointer',
-          fontWeight: '500'
-        }}
-      >
-        I Understand
-      </button>
-    </div>
-  )
-  }
-
-  return (
+  if (isBlocked) {
+    return (
     <div style={{
       position: 'fixed',
       top: 0,
@@ -177,6 +130,54 @@ export function AntiCheatWarning({ warningCount, isBlocked, onAccept, onContinue
           </p>
         )}
       </div>
+    </div>
+    )
+  }
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: '20px',
+      right: '20px',
+      backgroundColor: '#fff3cd',
+      border: '1px solid #ffa500',
+      borderRadius: '8px',
+      padding: '16px',
+      maxWidth: '400px',
+      zIndex: 10000,
+      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+        <span style={{ fontSize: '20px' }}>⚠️</span>
+        <strong style={{ color: '#856404' }}>Security Warning</strong>
+      </div>
+      <p style={{ margin: '0 0 12px 0', color: '#856404', fontSize: '14px', lineHeight: '1.4' }}>
+        Suspicious activity detected. Please focus on the interview and avoid:
+      </p>
+      <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#856404', fontSize: '13px' }}>
+        <li>Switching tabs or windows</li>
+        <li>Copying and pasting content</li>
+        <li>Using keyboard shortcuts</li>
+        <li>Right-clicking on the page</li>
+      </ul>
+      <p style={{ margin: '0 0 12px 0', color: '#856404', fontSize: '12px', fontStyle: 'italic' }}>
+        All activities are being monitored and recorded.
+      </p>
+      <button
+        onClick={handleAccept}
+        style={{
+          backgroundColor: '#ffa500',
+          color: 'white',
+          border: 'none',
+          padding: '8px 16px',
+          borderRadius: '4px',
+          fontSize: '12px',
+          cursor: 'pointer',
+          fontWeight: '500'
+        }}
+      >
+        I Understand
+      </button>
     </div>
   )
 }
