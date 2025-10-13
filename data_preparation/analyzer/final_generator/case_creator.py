@@ -24,17 +24,18 @@ class CaseStructure(BaseModel):
     question_id: str = Field(description="ID univoco per il caso, es. 'case-pm-01'.")
     question_title: str = Field(description="Titolo principale del caso di studio.")
     question_text: str = Field(description="Testo narrativo completo che introduce il problema e l'obiettivo del caso.")
-    reasoning_steps: List[ReasoningStep] = Field(description="Lista di 4 reasoning steps (da 0 a 3) che decompongono la soluzione.")
+    reasoning_steps: List[ReasoningStep] = Field(description="Lista di reasoning steps che decompongono la soluzione.")
 
 class CaseCollection(BaseModel):
     cases: List[CaseStructure] = Field(description="Una lista contenente esattamente 5 casi di studio.")
 
 FINAL_MODEL = "gpt-4.1-2025-04-14"
 
-def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, hr_special_needs: str = "") -> CaseCollection | None:
+def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, hr_special_needs: str = "", reasoning_steps: int = 4) -> CaseCollection | None:
     """
     Genera una collezione di 5 casi di studio strutturati in formato JSON.
     Integra le Indicazioni HR nella generazione.
+    reasoning_steps: Numero di reasoning steps richiesti dall'HR (il sistema aggiungerà automaticamente lo step 0)
     """
     example_skill = SkillToTest(skill_name="Esempio Skill", testing_method="Esempio metodo di test")
     example_step = {
@@ -50,7 +51,7 @@ def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, senior
 
     print("1. Creazione del prompt finale con esempio JSON...")
     final_prompt = prompts_final.create_final_case_prompt(
-        icp_text, guide_text, kb_summary, seniority_level, json_example_str, hr_special_needs
+        icp_text, guide_text, kb_summary, seniority_level, json_example_str, hr_special_needs, reasoning_steps
     )
 
     print(f"2. Invio della richiesta al modello '{FINAL_MODEL}' per la generazione strutturata...")

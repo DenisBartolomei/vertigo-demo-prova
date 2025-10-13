@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { InterviewConfig } from '../components/InterviewConfig'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://vertigo-ai-backend-tbia7kjh7a-oc.a.run.app'
 
@@ -10,6 +11,7 @@ export function Positions() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [details, setDetails] = useState<Record<string, any>>({})
   const [isPreparing, setIsPreparing] = useState(false)
+  const [showInterviewConfig, setShowInterviewConfig] = useState(false)
   const token = localStorage.getItem('hr_jwt')
 
   async function load() {
@@ -339,21 +341,43 @@ export function Positions() {
 
       {/* Existing Positions */}
       <div className="card fade-in">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-          <div style={{ 
-            width: '40px', 
-            height: '40px', 
-            borderRadius: '50%', 
-            background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontSize: '18px'
-          }}>
-            📊
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ 
+              width: '40px', 
+              height: '40px', 
+              borderRadius: '50%', 
+              background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontSize: '18px'
+            }}>
+              📊
+            </div>
+            <h3>Posizioni Esistenti</h3>
           </div>
-          <h3>Posizioni Esistenti</h3>
+          
+          <button
+            onClick={() => setShowInterviewConfig(!showInterviewConfig)}
+            style={{
+              background: showInterviewConfig ? 'var(--accent-purple)' : 'var(--primary-purple)',
+              color: 'white',
+              border: 'none',
+              padding: '8px 16px',
+              borderRadius: 'var(--radius-md)',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '500',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            ⚙️ {showInterviewConfig ? 'Nascondi Configurazione' : 'Configura Interviste'}
+          </button>
         </div>
         
         {loading ? (
@@ -546,6 +570,13 @@ export function Positions() {
           </div>
         )}
       </div>
+
+      {/* Interview Configuration */}
+      {showInterviewConfig && (
+        <div className="card fade-in">
+          <InterviewConfig />
+        </div>
+      )}
     </div>
   )
 }

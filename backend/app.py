@@ -55,6 +55,12 @@ from services.tenant_data_manager import (
     list_incomplete_sessions_tenant,
     get_dashboard_data_tenant
 )
+from services.interview_config_service import (
+    get_interview_config,
+    save_interview_config,
+    get_interview_config_or_default,
+    InterviewConfig,
+)
 from services.email_service import send_interview_link
 
 
@@ -369,7 +375,12 @@ def get_position(position_id: str, auth_data=Depends(hr_auth)):
 @app.post("/positions/{position_id}/data-prep")
 def run_data_prep(position_id: str, auth_data=Depends(hr_auth)):
     collections = get_tenant_collections_from_auth(auth_data)
-    ok = run_full_generation_pipeline(position_id, collections["positions"])
+    
+    # Recupera configurazione intervista per il tenant
+    tenant_id = auth_data["tenant_id"]
+    config = get_interview_config_or_default(tenant_id)
+    
+    ok = run_full_generation_pipeline(position_id, collections["positions"], config.reasoning_steps)
     if not ok:
         raise HTTPException(status_code=500, detail="Data preparation failed")
     return {"ok": True}
@@ -814,6 +825,64 @@ def get_dashboard_data(
         raise HTTPException(status_code=500, detail="Failed to retrieve dashboard data")
     
     return dashboard_data
+
+
+# Interview Configuration APIs
+@app.get("/interview-config")
+def get_interview_configuration(auth_data=Depends(hr_auth)):
+    """Get interview configuration for the authenticated tenant"""
+    tenant_id = auth_data["tenant_id"]
+    config = get_interview_config_or_default(tenant_id)
+    return {
+        "reasoning_steps": config.reasoning_steps,
+        "max_attempts": config.max_attempts,
+        "estimated_duration_minutes": config.estimated_duration_minutes,
+        "max_questions": config.max_questions
+    }
+
+@app.put("/interview-config")
+def update_interview_configuration(
+    config_data: dict,
+    auth_data=Depends(hr_auth)
+):
+    """Update interview configuration for the authenticated tenant"""
+    tenant_id = auth_data["tenant_id"]
+    
+    # Validate input
+    reasoning_steps = config_data.get("reasoning_steps")
+    max_attempts = config_data.get("max_attempts")
+    
+    if reasoning_steps is None or max_attempts is None:
+        raise HTTPException(status_code=400, detail="reasoning_steps and max_attempts are required")
+    
+    if not isinstance(reasoning_steps, int) or not isinstance(max_attempts, int):
+        raise HTTPException(status_code=400, detail="reasoning_steps and max_attempts must be integers")
+    
+    if reasoning_steps < 2 or reasoning_steps > 10:
+        raise HTTPException(status_code=400, detail="reasoning_steps must be between 2 and 10")
+    
+    if max_attempts < 2 or max_attempts > 15:
+        raise HTTPException(status_code=400, detail="max_attempts must be between 2 and 15")
+    
+    # Create new config
+    config = InterviewConfig(
+        tenant_id=tenant_id,
+        reasoning_steps=reasoning_steps,
+        max_attempts=max_attempts
+    )
+    
+    # Save config
+    success = save_interview_config(config)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to save configuration")
+    
+    return {
+        "reasoning_steps": config.reasoning_steps,
+        "max_attempts": config.max_attempts,
+        "estimated_duration_minutes": config.estimated_duration_minutes,
+        "max_questions": config.max_questions,
+        "message": "Configuration updated successfully"
+    }
 
 
 # Candidate interview (public via token)

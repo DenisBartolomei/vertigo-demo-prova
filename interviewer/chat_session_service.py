@@ -12,6 +12,7 @@ from services.tenant_data_manager import (
     get_session_data_tenant,
 )
 from services.tenant_service import get_tenant_collections
+from services.interview_config_service import get_interview_config_or_default
 from .chatbot import SmartCaseStudyChatbot
 
 
@@ -56,11 +57,23 @@ def initialize_chatbot_for_session(session_id: str, tenant_id: str = None) -> Op
         if sid in steps_dict:
             steps_dict[sid]["criteria"] = criterion.get("criteria")
 
+    # Recupera configurazione intervista per il tenant
+    if tenant_id:
+        config = get_interview_config_or_default(tenant_id)
+        max_attempts = config.max_attempts
+        max_questions = config.max_questions
+    else:
+        # Fallback per tenant globali
+        max_attempts = 5
+        max_questions = 10
+    
     chatbot = SmartCaseStudyChatbot(
         steps=steps_dict,
         case_title=selected_case.get("question_title", ""),
         case_text=selected_case.get("question_text", ""),
         case_id=selected_case_id,
+        max_attempts=max_attempts,
+        max_questions=max_questions,
     )
     _SESSION_CHATBOTS[session_id] = chatbot
 
@@ -154,7 +167,7 @@ def get_interview_state(session_id: str, tenant_id: str = None) -> Dict[str, Any
     bot = _get_chatbot(session_id)
     if not bot:
         raise ValueError("Chatbot not initialized")
-    remaining = bot.MAX_QUESTIONS - bot.questions_asked_count
+    remaining = bot.max_questions - bot.questions_asked_count
     return {
         "finished": bot.is_finished,
         "remaining_questions": remaining,

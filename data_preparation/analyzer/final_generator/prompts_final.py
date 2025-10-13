@@ -3,13 +3,19 @@
 SYSTEM_PROMPT = """Sei un agente AI progettato per produrre informazioni strutturate, ricevendo in input informazioni non strutturate.
 Dati gli input, restituisci un oggetto JSON con i campi predefiniti nella struttura attesa. Formatta accuratamente i dati di output. Se un dato manca o non si può determinare, restituisci un valore di default (e.g., null, 0, or 'N/A')."""
 
-def create_final_case_prompt(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, json_example_str: str, hr_special_needs: str) -> str:
+def create_final_case_prompt(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, json_example_str: str, hr_special_needs: str, reasoning_steps: int = 4) -> str:
     """
     Assembla il prompt finale per la generazione dei case strutturati, integrando le Indicazioni HR.
+    reasoning_steps: Numero di reasoning steps richiesti dall'HR (il sistema aggiungerà automaticamente lo step 0)
     """
     hr_block = hr_special_needs.strip() if hr_special_needs else "Nessuna indicazione speciale fornita."
+    
+    # Calcola il numero effettivo di steps da generare (reasoning_steps + 1 per lo step 0)
+    total_steps = reasoning_steps + 1
+    steps_range = f"da 1 a {reasoning_steps}"
+    
     return f"""
-Produci 5 case complessi e strutturati, e decomponi il raggiungimento della soluzione in 5 step consecutivi (reasoning steps, da 1 a 5).
+Produci 5 case complessi e strutturati, e decomponi il raggiungimento della soluzione in {reasoning_steps} step consecutivi (reasoning steps, {steps_range}).
 Integra le INDICAZIONI SPECIALI HR come vincoli o preferenze operative nella costruzione degli scenari e nella scelta delle skill da testare.
 
 Indicazioni Speciali HR: usa questo interpretando le richieste in chiave di quanto richiesto nella ICP e guida alla generazione.
@@ -20,7 +26,7 @@ Perché i Case, e relativi reasoning steps siano perfetti:
 o	Ciascun case dovrà essere in grado di verificare TUTTE le “Competenze tecniche richieste esplicitamente dall'annuncio”, "Competenze trasversali richieste esplicitamente dall'annuncio (escluse le lingue)" e "Responsabilità principali e attività operative attese" presentati nella ICP. Per fare ciò, dovrai quindi attribuire a ciascun reasoning step almeno 3 skill che secondo te sono ideali da verificare in quel contesto (secondo lo schema imposto).
 o	Dovranno adattare la complessità e la profondità al livello di seniority richiesto (Evita domande da super-esperto se il ruolo è junior, e viceversa evita domande semplici per profili lead).
 o	Dovranno prendere spunto dalla Knowledge Base (kb_insights) riportata di seguito (es. 'Descrivi come guideresti l’implementazione di [Tecnologia X] in un contesto simile a [Insight da Progetto Y da KB]'; Oppure ‘ Come utilizzeresti [Tecnologia / Metodologia X] in un contesto simile a [Insight da Progetto Z da KB]') e dalla sezione **Responsabilità principali e attività operative attese** della ICP.
-o	Dovrà esserci un reasoning step ulteriore, rispetto ai 5 creati per decomporre la soluzione. Il reasoning step in questione, chiamato sempre reasoning step 0, servirà a mettere in luce il ragionamento necessario per la risoluzione dei Case, lo costruirai dunque prendendo spunto dai 6 reasoning step creati per decomporre la soluzione. Questo reasoning step servirà a un agente specializzato per capire come testare le capacità di impostare il ragionamento dei candidati.
+o	Dovrà esserci un reasoning step ulteriore, rispetto ai {reasoning_steps} creati per decomporre la soluzione. Il reasoning step in questione, chiamato sempre reasoning step 0, servirà a mettere in luce il ragionamento necessario per la risoluzione dei Case, lo costruirai dunque prendendo spunto dai {total_steps} reasoning step creati per decomporre la soluzione. Questo reasoning step servirà a un agente specializzato per capire come testare le capacità di impostare il ragionamento dei candidati.
 o	Dovranno essere risolvibili "su carta", cioè all'interno di una dinamica di test, senza poter effettivamente effettuare attività reali. La risoluzione sarà prettamente tramite PC, quindi non ci saranno interazioni con funzioni aziendali, clienti, colleghi. Puoi quindi simulare la casistica, ma non aspettarti che il candidato esegua attività effettivamente.
 o	Il testo del Case dovrà essere articolato e non una domanda semplice e secca.
 ---

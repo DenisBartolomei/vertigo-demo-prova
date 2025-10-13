@@ -7,18 +7,17 @@ import os
 from datetime import datetime
 
 class SmartCaseStudyChatbot:
-    MAX_ATTEMPTS = 5
-    MAX_QUESTIONS = 10
-
     # --- CONFIGURAZIONE DEI MODELLI ---
     INTERVIEWER_MODEL = "gpt-4.1-2025-04-14"
     CLASSIFICATION_MODEL = "gpt-4o-mini" 
 
-    def __init__(self, steps: dict, case_title: str, case_text: str, case_id: str):
+    def __init__(self, steps: dict, case_title: str, case_text: str, case_id: str, max_attempts: int = 5, max_questions: int = 10):
         self.steps = steps
         self.case_title = case_title
         self.case_text = case_text
         self.case_id = case_id
+        self.max_attempts = max_attempts
+        self.max_questions = max_questions
         self.questions_asked_count = 0
         self.current_step_id = None
         self.completed_step_ids = set()
@@ -71,7 +70,7 @@ class SmartCaseStudyChatbot:
 
     def _answer_candidate_question(self, user_question: str) -> str:
         self.questions_asked_count += 1
-        remaining_q = self.MAX_QUESTIONS - self.questions_asked_count
+        remaining_q = self.max_questions - self.questions_asked_count
         current_step_info = self.steps[self.current_step_id]
         answer_prompt = prompts.create_answer_to_candidate_question_prompt(
             case_text=self.case_text,
@@ -91,7 +90,7 @@ class SmartCaseStudyChatbot:
             return "Il colloquio è terminato. Grazie per la tua partecipazione! Riceverai l'esito appena avremo valutato il tuo esercizio"
         self.conversation_history.append({"role": "user", "content": user_input})
         if self._is_user_input_a_question(user_input):
-            if self.questions_asked_count < self.MAX_QUESTIONS:
+            if self.questions_asked_count < self.max_questions:
                 response = self._answer_candidate_question(user_input)
             else:
                 response = "Hai esaurito le domande a tua disposizione. Per favore, procedi ora con la tua analisi."
@@ -102,7 +101,7 @@ class SmartCaseStudyChatbot:
                 self.completed_step_ids.add(self.current_step_id)
                 response = self._transition_to_next_step()
             else:
-                if self.attempts_on_current_step >= self.MAX_ATTEMPTS:
+                if self.attempts_on_current_step >= self.max_attempts:
                     self.completed_step_ids.add(self.current_step_id)
                     response = self._conclude_step_and_transition()
                 else:
