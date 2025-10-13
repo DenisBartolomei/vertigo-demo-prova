@@ -1,26 +1,31 @@
 import os
-from openai import OpenAI
+from openai import AzureOpenAI
 from dotenv import load_dotenv
 from typing import Optional
 
 # Carica le variabili dal file .env se presente (per lo sviluppo locale)
 load_dotenv()
 
-API_KEY = None
-# --- LOGICA A CASCATA ROBUSTA ---
-# Prova con le variabili d'ambiente
-API_KEY = os.getenv("OPENAI_API_KEY")
-# --- FINE LOGICA ROBUSTA ---
+# Variabili Azure OpenAI
+AZURE_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
+AZURE_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
+AZURE_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2025-04-14")
+AZURE_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
 
-
-# Inizializza il client OpenAI solo se la chiave API è stata trovata
+# Inizializza il client Azure OpenAI solo se tutte le variabili sono state trovate
 client = None
-if not API_KEY:
-    print("❌ ERRORE CRITICO: OPENAI_API_KEY non trovata. Controlla le variabili d'ambiente.")
-    # No UI error in backend mode
-    pass 
+if not all([AZURE_ENDPOINT, AZURE_API_KEY, AZURE_DEPLOYMENT_NAME]):
+    print("❌ ERRORE CRITICO: Variabili Azure OpenAI mancanti.")
+    print(f"   AZURE_OPENAI_ENDPOINT: {'✅' if AZURE_ENDPOINT else '❌'}")
+    print(f"   AZURE_OPENAI_API_KEY: {'✅' if AZURE_API_KEY else '❌'}")
+    print(f"   AZURE_OPENAI_DEPLOYMENT_NAME: {'✅' if AZURE_DEPLOYMENT_NAME else '❌'}")
+    print(f"   AZURE_OPENAI_API_VERSION: {AZURE_API_VERSION}")
 else:
-    client = OpenAI(api_key=API_KEY)
+    client = AzureOpenAI(
+        api_key=AZURE_API_KEY,
+        api_version=AZURE_API_VERSION,
+        azure_endpoint=AZURE_ENDPOINT
+    )
 
 def get_llm_response(prompt: str, model: str, system_prompt: str, **kwargs) -> str:
     """
@@ -36,7 +41,7 @@ def get_llm_response(prompt: str, model: str, system_prompt: str, **kwargs) -> s
     ]
     try:
         response = client.chat.completions.create(
-            model=model,
+            model=AZURE_DEPLOYMENT_NAME,  # Usa il deployment name per Azure
             messages=messages,
             **kwargs 
         )
@@ -85,7 +90,7 @@ def get_structured_llm_response(
     # Prepariamo gli argomenti per la chiamata API
     # Iniziamo con quelli obbligatori
     api_kwargs = {
-        "model": model,
+        "model": AZURE_DEPLOYMENT_NAME,  # Usa il deployment name per Azure
         "messages": messages,
         "tools": tools,
         "tool_choice": {"type": "function", "function": {"name": tool_name}}
