@@ -82,46 +82,48 @@ def run_feedback_pipeline(session_id: str) -> str | None:
     save_stage_output(session_id, "gaps_with_courses", json.loads(enriched_gaps_content_str))
 
     # --- STEP 4A: Benchmark di mercato (recruitment suite, no-file) ---
-    print("\n[STEP 4A] Benchmark di mercato (recruitment suite, no-file)...")
+    print("\n[STEP 4A] Benchmark di mercato DISABILITATO PER TEST...")
 
-    # Inizializza le variabili a None per gestire i casi in cui il benchmark non viene eseguito
+    # TEMPORANEAMENTE DISABILITATO - Recruitment Suite
     qualitative_text = None
     chart_cat_b64 = None
     market_skills_list = None
-
-    # La logica per ottenere i dati dal DB rimane la stessa
-    jd_text = ""
-    role_title = target_role
-    cv_text_for_market = stages_data.get("uploaded_cv_text")
-
-    try:
-        if db is None:
-            raise ConnectionError("Connessione a MongoDB non disponibile.")
-        positions_collection = db["positions_data"]
-        pos_doc = positions_collection.find_one({"_id": target_role}, {"job_description": 1, "position_name": 1})
-        if pos_doc:
-            jd_text = pos_doc.get("job_description", "") or ""
-            role_title = pos_doc.get("position_name", role_title) or role_title
-    except Exception as e:
-        print(f"Avviso: impossibile recuperare la JD o il titolo dal DB per il benchmark: {e}")
-
-    # Esegui il benchmark solo se hai i dati necessari
-    if jd_text and cv_text_for_market:
-        # Cattura i 3 valori restituiti dalla funzione
-        qualitative_text, chart_cat_b64, market_skills_list = run_market_benchmark_from_text(
-            job_description_text=jd_text,
-            cv_text=cv_text_for_market,
-            offer_title=role_title
-        )
-        # Salva i risultati nella sessione per persistenza e debug
-        if qualitative_text:
-            save_stage_output(session_id, "market_benchmark_text", qualitative_text)
-        if chart_cat_b64:
-            save_stage_output(session_id, "market_chart_categories_base64", chart_cat_b64)
-        if market_skills_list:
-            save_stage_output(session_id, "market_chart_skills_base64", market_skills_list)
-    else:
-        print("Avviso: JD o testo CV non disponibili; benchmark di mercato saltato.")
+    
+    print("  - [FEEDBACK GENERATOR] Recruitment Suite DISABILITATA per test")
+    
+    # CODICE COMMENTATO PER TEST
+    # # La logica per ottenere i dati dal DB rimane la stessa
+    # jd_text = ""
+    # role_title = target_role
+    # cv_text_for_market = stages_data.get("uploaded_cv_text")
+    # 
+    # try:
+    #     if db is None:
+    #         raise ConnectionError("Connessione a MongoDB non disponibile.")
+    #     positions_collection = db["positions_data"]
+    #     pos_doc = positions_collection.find_one({"_id": target_role}, {"job_description": 1, "position_name": 1})
+    #     if pos_doc:
+    #         jd_text = pos_doc.get("job_description", "") or ""
+    #         role_title = pos_doc.get("position_name", role_title) or role_title
+    # except Exception as e:
+    #     print(f"Avviso: impossibile recuperare la JD o il titolo dal DB per il benchmark: {e}")
+    # 
+    # # Esegui il benchmark solo se hai i dati necessari
+    # if jd_text and cv_text_for_market:
+    #     qualitative_text, chart_cat_b64, market_skills_list = run_market_benchmark_from_text(
+    #         job_description_text=jd_text,
+    #         cv_text=cv_text_for_market,
+    #         offer_title=role_title
+    #     )
+    #     # Salva i risultati nella sessione per persistenza e debug
+    #     if qualitative_text:
+    #         save_stage_output(session_id, "market_benchmark_text", qualitative_text)
+    #     if chart_cat_b64:
+    #         save_stage_output(session_id, "market_chart_categories_base64", chart_cat_b64)
+    #     if market_skills_list:
+    #         save_stage_output(session_id, "market_chart_skills_base64", market_skills_list)
+    # else:
+    #     print("Avviso: JD o testo CV non disponibili; benchmark di mercato saltato.")
 
 # Ora le variabili qualitative_text, chart_cat_b64, e chart_skills_b64
 # sono pronte per essere usate più avanti, nella chiamata a create_feedback_pdf

@@ -677,8 +677,8 @@ def generate_feedback(session_id: str, auth_data=Depends(hr_auth)):
         return {"ok": True, "message": "Feedback already generated", "pdf_path": stages.get("feedback_pdf_path")}
     
     try:
-        # Import and run tenant-aware feedback pipeline
-        pdf_path = run_feedback_pipeline_tenant(session_id, collections["sessions"])
+        # Import and run tenant-aware feedback pipeline GENERAZIONE FEEDBACK DISABILITATA
+#        pdf_path = run_feedback_pipeline_tenant(session_id, collections["sessions"])
         
         if pdf_path:
             # Save the PDF path to the session
@@ -1216,10 +1216,10 @@ def evaluate_session(session_id: str, _=Depends(hr_auth)):
     _ = compute_and_save_skill_relevance(session_id=session_id)
     return {"ok": True}
 
-
+#GENERAZIONE FEEDBACK DISABILITATA
 @app.post("/sessions/{session_id}/feedback")
 def generate_feedback(session_id: str, _=Depends(hr_auth)):
-    pdf_path = run_feedback_pipeline(session_id=session_id)
+#    pdf_path = run_feedback_pipeline(session_id=session_id)
     if not pdf_path:
         raise HTTPException(status_code=500, detail="Feedback generation failed")
     return {"pdf_path": pdf_path}

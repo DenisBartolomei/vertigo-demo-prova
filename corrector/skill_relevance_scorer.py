@@ -70,10 +70,44 @@ def _build_case_map_text(caso_svolto_data: dict) -> str:
         map_lines.append(f"- Step {step.get('id','N/A')} ({step.get('title','N/A')}): Progettato per testare '{skills}'.")
     return "\n".join(map_lines)
 
+def _extract_skills_from_case(caso_svolto_data: dict, position_data: dict) -> List[dict]:
+    """
+    Estrae le skill effettivamente testate nel caso selezionato dai reasoning steps.
+    Ogni item contiene: skill_id, skill_name, criteria_texts (lista con 2 stringhe).
+    """
+    # Estrai tutte le skill uniche testate nel caso
+    tested_skills = set()
+    for step in caso_svolto_data.get("reasoning_steps", []):
+        for skill_test in step.get("skills_to_test", []):
+            skill_name = skill_test.get("skill_name", "").strip()
+            if skill_name:
+                tested_skills.add(skill_name)
+    
+    # Trova i criteri di valutazione per le skill testate
+    eval_criteria = position_data.get("evaluation_criteria", {})
+    schema = eval_criteria.get("evaluation_schema", [])
+    
+    canonical = []
+    for item in schema:
+        req = item.get("requirement") or ""
+        if req in tested_skills:
+            crit = item.get("criteria", {})
+            c1 = crit.get("evaluation_criteria_1") or ""
+            c2 = crit.get("evaluation_criteria_2") or ""
+            canonical.append({
+                "skill_id": _slugify(req),
+                "skill_name": req,
+                "criteria_texts": [c1, c2]
+            })
+    
+    return canonical
+
 def _extract_canonical_skills(position_data: dict) -> List[dict]:
     """
     Estrae la lista canonica delle skill dai criteri di valutazione finali (evaluation_criteria.evaluation_schema).
     Ogni item contiene: skill_id, skill_name, criteria_texts (lista con 2 stringhe).
+    
+    DEPRECATED: Usa _extract_skills_from_case per estrarre solo le skill testate nel caso.
     """
     eval_criteria = position_data.get("evaluation_criteria", {})
     schema = eval_criteria.get("evaluation_schema", [])
@@ -208,14 +242,9 @@ def compute_and_save_skill_relevance(session_id: str, tenant_id: str = None) -> 
         print(f"  - ERRORE: posizione '{position_id}' non trovata.")
         return False
 
-    # Skill canoniche (stabili) dalla rubrica
-    canonical_skills = _extract_canonical_skills(position_data)
-    if not canonical_skills:
-        print("  - ERRORE: 'evaluation_criteria.evaluation_schema' non trovato o vuoto. Impossibile stabilire le skill canoniche.")
-        return False
-
     # Mappa del caso selezionato (se disponibile)
     case_map_text = ""
+    caso_svolto_data = None
     try:
         selected_case_id = stages.get("case_id")
         all_cases_data = position_data.get("all_cases", {})
@@ -224,6 +253,21 @@ def compute_and_save_skill_relevance(session_id: str, tenant_id: str = None) -> 
             case_map_text = _build_case_map_text(caso_svolto_data)
     except Exception:
         case_map_text = ""
+
+    # Skill canoniche: usa solo le skill effettivamente testate nel caso selezionato
+    if caso_svolto_data:
+        canonical_skills = _extract_skills_from_case(caso_svolto_data, position_data)
+        print(f"  - [SKILL SCORER] Estratte {len(canonical_skills)} skill testate nel caso selezionato.")
+        if not canonical_skills:
+            print("  - WARNING: Nessuna skill testata trovata nel caso. Usando tutte le skill dell'ICP come fallback.")
+            canonical_skills = _extract_canonical_skills(position_data)
+    else:
+        print("  - WARNING: Caso selezionato non trovato. Usando tutte le skill dell'ICP.")
+        canonical_skills = _extract_canonical_skills(position_data)
+    
+    if not canonical_skills:
+        print("  - ERRORE: 'evaluation_criteria.evaluation_schema' non trovato o vuoto. Impossibile stabilire le skill canoniche.")
+        return False
 
     # Scoring CV
     cv_scores_map = _score_cv_relevance(cv_text, canonical_skills) if cv_text else {}
@@ -255,31 +299,7 @@ def compute_and_save_skill_relevance(session_id: str, tenant_id: str = None) -> 
         save_stage_output(session_id, "skill_relevance", collection_obj.model_dump())
     print(f"  - [SKILL SCORER] Completato e salvato per sessione {session_id}.")
     
-    # Automatically generate feedback after skill relevance calculation
-    print(f"  - [SKILL SCORER] Avvio generazione automatica feedback per sessione {session_id}...")
-    try:
-        if tenant_id and collections:
-            # Import the tenant-aware feedback pipeline
-            import sys
-            import os
-            sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-            from backend.app import run_feedback_pipeline_tenant
-            pdf_path = run_feedback_pipeline_tenant(session_id, collections["sessions"])
-            if pdf_path:
-                save_stage_output_tenant(session_id, "feedback_pdf_path", pdf_path, collections["sessions"])
-                print(f"  - [SKILL SCORER] Feedback generato automaticamente: {pdf_path}")
-            else:
-                print(f"  - [SKILL SCORER] Errore nella generazione automatica del feedback")
-        else:
-            # For non-tenant sessions, use the original pipeline
-            from feedback_generator.run_feedback_generator import run_feedback_pipeline
-            pdf_path = run_feedback_pipeline(session_id)
-            if pdf_path:
-                save_stage_output(session_id, "feedback_pdf_path", pdf_path)
-                print(f"  - [SKILL SCORER] Feedback generato automaticamente: {pdf_path}")
-            else:
-                print(f"  - [SKILL SCORER] Errore nella generazione automatica del feedback")
-    except Exception as e:
-        print(f"  - [SKILL SCORER] Errore durante la generazione automatica del feedback: {e}")
+    # GENERAZIONE FEEDBACK TEMPORANEAMENTE DISABILITATA PER TEST
+    print(f"  - [SKILL SCORER] Pipeline di feedback DISABILITATA per test")
     
     return True

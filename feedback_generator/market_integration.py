@@ -33,9 +33,9 @@ def run_market_benchmark_from_text(
     except Exception as e:
         print(f"ERRORE CRITICO: Impossibile caricare i candidati benchmark. {e}")
         candidates_data_full = []
-
+#GENERAZIONE FEEDBACK DISABILITATA
     candidates_data_filtered = [p for p in candidates_data_full if p.get('normalized_experiences')]
-    pipeline = RecruitmentPipeline()
+#    pipeline = RecruitmentPipeline()
     
     llm_analysis, _ = pipeline.run_full_pipeline(
         offer_title,

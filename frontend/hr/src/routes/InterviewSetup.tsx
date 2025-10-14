@@ -104,34 +104,16 @@ export function InterviewSetup() {
   return (
     <div className="container" style={{ display: 'grid', gap: '32px' }}>
       {/* Header */}
-      <div className="card fade-in">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-          <div style={{ 
-            width: '40px', 
-            height: '40px', 
-            borderRadius: '50%', 
-            background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontSize: '18px'
-          }}>
-            ⚙️
-          </div>
-          <h1 style={{ 
-            fontSize: '28px', 
-            fontWeight: '600', 
-            margin: 0,
-            background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text'
-          }}>
-            Setup Colloqui
-          </h1>
-        </div>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '16px', lineHeight: '1.5' }}>
+      <div>
+        <h1 style={{ 
+          fontSize: '28px', 
+          fontWeight: '600', 
+          margin: '0 0 24px 0',
+          color: 'var(--primary-purple)'
+        }}>
+          Setup Colloqui
+        </h1>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '16px', lineHeight: '1.5', margin: 0 }}>
           Configura i parametri per personalizzare la durata e la complessità delle interviste per la tua azienda.
         </p>
       </div>
@@ -146,7 +128,7 @@ export function InterviewSetup() {
           marginBottom: '24px'
         }}>
           <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: 'white' }}>
-            🎯 Configurazione Interviste
+            Configurazione Interviste
           </h2>
           <p style={{ margin: '8px 0 0 0', opacity: 0.9, fontSize: '14px' }}>
             Personalizza la durata e la complessità dei colloqui
@@ -277,7 +259,7 @@ export function InterviewSetup() {
       {/* Box 2: Pre-screening */}
       <div className="card fade-in">
         <div style={{ 
-          background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+          background: 'white',
           color: 'white',
           padding: '20px',
           borderRadius: '12px',

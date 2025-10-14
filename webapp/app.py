@@ -482,13 +482,13 @@ elif st.session_state.page == "feedback_processing":
                 else:
                     st.warning("Valutazione skill non disponibile.")
 
-        # RIMOSSO: Scoring delle attività (CV + colloquio)
+        # RIMOSSO: Scoring delle attività (CV + colloquio) GENERAZIONE FEEDBACK DISABILITATA
 
         if eval_success:
             st.success("Valutazione della performance completata.")
             with st.spinner("Fase 2/2: Creazione del report di feedback personalizzato..."):
-                from feedback_generator.run_feedback_generator import run_feedback_pipeline
-                pdf_path = run_feedback_pipeline(session_id=st.session_state.session_id)
+#                from feedback_generator.run_feedback_generator import run_feedback_pipeline
+#                pdf_path = run_feedback_pipeline(session_id=st.session_state.session_id)
 
             if pdf_path:
                 st.session_state.feedback_pdf_path = pdf_path
