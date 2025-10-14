@@ -15,10 +15,10 @@ def create_final_case_prompt(icp_text: str, guide_text: str, kb_summary: str, se
     steps_range = f"da 1 a {reasoning_steps}"
     
     return f"""
-Produci 5 case complessi e strutturati, e decomponi il raggiungimento della soluzione in {reasoning_steps} step consecutivi (reasoning steps, {steps_range}).
+Produci 5 casi studio complessi e strutturati, e decomponi il raggiungimento della soluzione in {reasoning_steps} step consecutivi (reasoning steps, {steps_range}).
 Integra le INDICAZIONI SPECIALI HR come vincoli o preferenze operative nella costruzione degli scenari e nella scelta delle skill da testare.
 
-Indicazioni Speciali HR: usa questo interpretando le richieste in chiave di quanto richiesto nella ICP e guida alla generazione.
+Indicazioni Speciali HR: usa questo interpretando le richieste in chiave di quanto richiesto nella ICP e guida alla generazione. Dagli buona importanza dal momento che sono le richieste particolari.
 {hr_block}
 
 Poiché per ciascun case dovranno essere verificate tutte le skill richieste dovrai, per ciascun reasoning step, indicare 3 skill da poter testare (estratte in modo accurato dalla ICP e basandoti sulle indicazioni della Guida alla generazione) all'interno del reasoning step stesso, esplictando brevemente in che modo (per questo lavoro aiutati con l'input GUIDA ALLA GENERAZIONE, che contiene tutti i requisiti da testare, e le modalità con cui è possibile farlo).
