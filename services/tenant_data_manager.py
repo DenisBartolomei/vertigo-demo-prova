@@ -287,14 +287,14 @@ def list_incomplete_sessions_tenant(collection_name: str) -> list:
 def get_dashboard_data_tenant(tenant_id: str, time_range: str = "30d") -> dict:
     """Get comprehensive dashboard data for HR analytics"""
     if db is None:
-        print(f"❌ Database not available for tenant {tenant_id}")
+        print(f"Database not available for tenant {tenant_id}")
         return {}
     
     try:
         from datetime import datetime, timedelta
         import math
         
-        print(f"📊 Getting dashboard data for tenant: {tenant_id}, time_range: {time_range}")
+        print(f"Getting dashboard data for tenant: {tenant_id}, time_range: {time_range}")
         
         # Calculate date range
         now = datetime.utcnow()

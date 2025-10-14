@@ -24,19 +24,19 @@ if not MONGO_URI:
     print("ERRORE CRITICO: MONGODB_URI non trovata. Controlla le variabili d'ambiente.")
 else:
     try:
-        print(f"🔗 Tentativo di connessione a MongoDB Atlas...")
-        print(f"🔗 URI: {MONGO_URI[:50]}...")
+        print(f"Tentativo di connessione a MongoDB Atlas...")
+        print(f"URI: {MONGO_URI[:50]}...")
         client = MongoClient(MONGO_URI, server_api=ServerApi('1'), serverSelectionTimeoutMS=10000)
         db = client[DB_NAME]
         sessions_collection = db[SESSIONS_COLLECTION_NAME]
-        print(f"🔗 Test ping al database...")
+        print(f"Test ping al database...")
         client.admin.command('ping')
-        print("✅ Connessione a MongoDB Atlas stabilita con successo!")
+        print("Connessione a MongoDB Atlas stabilita con successo!")
     except Exception as e:
-        print(f"❌ ERRORE CRITICO: Impossibile connettersi a MongoDB Atlas.")
-        print(f"❌ Tipo errore: {type(e).__name__}")
-        print(f"❌ Dettagli: {str(e)}")
-        print(f"❌ URI usata: {MONGO_URI[:50]}...")
+        print(f"ERRORE CRITICO: Impossibile connettersi a MongoDB Atlas.")
+        print(f"Tipo errore: {type(e).__name__}")
+        print(f"Dettagli: {str(e)}")
+        print(f"URI usata: {MONGO_URI[:50]}...")
 
 # --- Funzioni di Gestione Dati ---
 

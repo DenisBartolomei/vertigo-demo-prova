@@ -380,7 +380,7 @@ def run_data_prep(position_id: str, auth_data=Depends(hr_auth)):
     tenant_id = auth_data["tenant_id"]
     config = get_interview_config_or_default(tenant_id)
     
-    ok = run_full_generation_pipeline(position_id, collections["positions"], config.reasoning_steps)
+    ok = run_full_generation_pipeline(position_id, config.reasoning_steps, collections["positions"])
     if not ok:
         raise HTTPException(status_code=500, detail="Data preparation failed")
     return {"ok": True}

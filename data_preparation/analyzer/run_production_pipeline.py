@@ -15,7 +15,7 @@ from ..corrector.evaluation_criteria_generator.criteria_generator import generat
 
 from services.data_manager import db
 
-def run_full_generation_pipeline(position_id: str, collection_name: str = "positions_data", reasoning_steps: int) -> bool:
+def run_full_generation_pipeline(position_id: str, reasoning_steps: int, collection_name: str = "positions_data") -> bool:
     """
     Orchestra l'intera pipeline di generazione dei dati per una nuova posizione.
     """
@@ -74,7 +74,7 @@ def run_full_generation_pipeline(position_id: str, collection_name: str = "posit
 
     # --- STEP 4: GENERAZIONE DEI CASI ---
     print(f"\n[STEP 4/6] Generazione finale dei casi strutturati...")
-    case_collection = generate_final_cases(icp_text, case_guide_text, kb_summary, seniority_level, hr_special_needs, reasoning_steps)
+    case_collection = generate_final_cases(icp_text, case_guide_text, kb_summary, seniority_level, reasoning_steps, hr_special_needs)
     if not case_collection:
         print("  - Fallimento nella generazione dei Casi. Pipeline interrotta.")
         return False

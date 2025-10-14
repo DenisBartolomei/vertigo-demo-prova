@@ -1,7 +1,7 @@
 import json
 from typing import List
 from pydantic import BaseModel, Field
-from interviewer.llm_service import get_structured_llm_response
+from interviewer.llm_service import get_structured_llm_response, AZURE_DEPLOYMENT_NAME
 from . import prompts_eval_criteria
 
 class EvaluationCriterion(BaseModel):

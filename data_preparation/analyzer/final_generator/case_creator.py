@@ -26,7 +26,7 @@ class CaseCollection(BaseModel):
 
 FINAL_MODEL = AZURE_DEPLOYMENT_NAME
 
-def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, hr_special_needs: str = "", reasoning_steps: int) -> CaseCollection | None:
+def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, reasoning_steps: int, hr_special_needs: str = "") -> CaseCollection | None:
     """
     Genera una collezione di 5 casi di studio strutturati in formato JSON.
     Integra le Indicazioni HR nella generazione.

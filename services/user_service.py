@@ -175,10 +175,10 @@ def create_initial_admin_user(tenant_id: str, company_name: str) -> Optional[str
     )
     
     if user_id:
-        print(f"🔑 Initial admin user created:")
+        print(f"Initial admin user created:")
         print(f"   Email: {admin_email}")
         print(f"   Password: {admin_password}")
         print(f"   Tenant: {tenant_id}")
-        print(f"   ⚠️  Please save these credentials securely!")
+        print(f"   WARNING: Please save these credentials securely!")
     
     return user_id

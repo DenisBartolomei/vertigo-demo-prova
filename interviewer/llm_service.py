@@ -15,10 +15,10 @@ AZURE_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
 # Inizializza il client Azure OpenAI solo se tutte le variabili sono state trovate
 client = None
 if not all([AZURE_ENDPOINT, AZURE_API_KEY, AZURE_DEPLOYMENT_NAME]):
-    print("❌ ERRORE CRITICO: Variabili Azure OpenAI mancanti.")
-    print(f"   AZURE_OPENAI_ENDPOINT: {'✅' if AZURE_ENDPOINT else '❌'}")
-    print(f"   AZURE_OPENAI_API_KEY: {'✅' if AZURE_API_KEY else '❌'}")
-    print(f"   AZURE_OPENAI_DEPLOYMENT_NAME: {'✅' if AZURE_DEPLOYMENT_NAME else '❌'}")
+    print("ERRORE CRITICO: Variabili Azure OpenAI mancanti.")
+    print(f"   AZURE_OPENAI_ENDPOINT: {'OK' if AZURE_ENDPOINT else 'MISSING'}")
+    print(f"   AZURE_OPENAI_API_KEY: {'OK' if AZURE_API_KEY else 'MISSING'}")
+    print(f"   AZURE_OPENAI_DEPLOYMENT_NAME: {'OK' if AZURE_DEPLOYMENT_NAME else 'MISSING'}")
     print(f"   AZURE_OPENAI_API_VERSION: {AZURE_API_VERSION}")
 else:
     client = AzureOpenAI(
