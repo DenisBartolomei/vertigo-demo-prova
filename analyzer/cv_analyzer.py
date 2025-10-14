@@ -1,6 +1,6 @@
 from interviewer.llm_service import get_llm_response 
 from .prompts_analyzer import create_cv_analysis_prompt
-
+from interviewer.llm_service import AZURE_DEPLOYMENT_NAME
 # Modello LLM
 ANALYZER_MODEL = AZURE_DEPLOYMENT_NAME 
 

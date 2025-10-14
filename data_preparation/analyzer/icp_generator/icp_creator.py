@@ -1,9 +1,9 @@
 # analyzer/icp_generator/icp_creator.py
-
+from interviewer.llm_service import AZURE_DEPLOYMENT_NAME
 from interviewer.llm_service import get_llm_response
 from . import prompts_icp
 
-ICP_MODEL = "gpt-4.1-2025-04-14"
+ICP_MODEL = AZURE_DEPLOYMENT_NAME
 
 def _extract_icp_from_full_response(full_response: str) -> str:
     try:

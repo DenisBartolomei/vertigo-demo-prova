@@ -1,5 +1,5 @@
 # analyzer/case_guide_generator/guide_creator.py
-
+from interviewer.llm_service import AZURE_DEPLOYMENT_NAME
 from interviewer.llm_service import get_llm_response
 from . import prompts_guide
 

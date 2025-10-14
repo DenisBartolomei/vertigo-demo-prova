@@ -8,8 +8,8 @@ from interviewer.llm_service import get_structured_llm_response
 from services.data_manager import db, get_session_data, save_stage_output
 from services.tenant_data_manager import get_session_data_tenant, save_stage_output_tenant
 from services.tenant_service import get_tenant_collections
-
 from .prompts_skill_scorer import create_cv_scoring_prompt, create_interview_scoring_prompt
+from interviewer.llm_service import AZURE_DEPLOYMENT_NAME
 
 SKILL_SCORER_MODEL = AZURE_DEPLOYMENT_NAME
 SKILL_SCORING_TEMPERATURE = 0.0

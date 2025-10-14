@@ -1,7 +1,8 @@
 from interviewer.llm_service import get_llm_response
 from . import prompts_final_eval
+from interviewer.llm_service import AZURE_DEPLOYMENT_NAME
 
-EVALUATION_MODEL = "gpt-4.1-2025-04-14"
+EVALUATION_MODEL = AZURE_DEPLOYMENT_NAME
 
 def _format_conversation(conversation_history: list) -> str:
     """Converte la cronologia della conversazione da JSON a un formato testuale leggibile."""

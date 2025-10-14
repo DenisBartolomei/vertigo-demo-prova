@@ -1,5 +1,5 @@
 # interviewer/chatbot.py
-
+from interviewer.llm_service import AZURE_DEPLOYMENT_NAME
 from .llm_service import get_llm_response
 from . import prompts
 import json
@@ -8,8 +8,8 @@ from datetime import datetime
 
 class SmartCaseStudyChatbot:
     # --- CONFIGURAZIONE DEI MODELLI ---
-    INTERVIEWER_MODEL = "gpt-4.1-2025-04-14"
-    CLASSIFICATION_MODEL = "gpt-4o-mini" 
+    INTERVIEWER_MODEL = AZURE_DEPLOYMENT_NAME
+    CLASSIFICATION_MODEL = AZURE_DEPLOYMENT_NAME 
 
     def __init__(self, steps: dict, case_title: str, case_text: str, case_id: str, max_attempts: int = 5, max_questions: int = 10):
         self.steps = steps

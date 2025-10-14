@@ -3,6 +3,8 @@ from typing import List
 from pydantic import BaseModel, Field
 from interviewer.llm_service import get_structured_llm_response
 from . import prompts_criteria
+from interviewer.llm_service import AZURE_DEPLOYMENT_NAME
+
 
 class Criterion(BaseModel):
     step_id: int = Field(description="L'ID del reasoning step a cui questo criterio si riferisce.")

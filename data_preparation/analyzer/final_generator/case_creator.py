@@ -3,6 +3,7 @@ from typing import List
 from pydantic import BaseModel, Field
 from interviewer.llm_service import get_structured_llm_response
 from . import prompts_final
+from interviewer.llm_service import AZURE_DEPLOYMENT_NAME
 
 class SkillToTest(BaseModel):
     skill_name: str = Field(description="Il nome della skill o competenza da verificare (es. 'Problem Solving', 'Python').")

@@ -1,11 +1,11 @@
 # analyzer/kb_summarizer/kb_processor.py
-
+from interviewer.llm_service import AZURE_DEPLOYMENT_NAME
 import os
 # Assicuriamoci che l'import del servizio LLM sia corretto per la nuova struttura
 from interviewer.llm_service import get_llm_response
 from . import prompts_kb
 
-KB_MODEL = "gpt-4.1-2025-04-14" 
+KB_MODEL = AZURE_DEPLOYMENT_NAME
 
 def _extract_kb_insight_from_response(full_response: str) -> str:
     """
