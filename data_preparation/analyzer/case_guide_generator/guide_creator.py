@@ -3,7 +3,7 @@
 from interviewer.llm_service import get_llm_response
 from . import prompts_guide
 
-GUIDE_MODEL = "gpt-4.1-2025-04-14"
+GUIDE_MODEL = AZURE_DEPLOYMENT_NAME
 
 def generate_case_guide(icp_text: str, seniority_level: str, hr_special_needs: str = "") -> str | None:
     """

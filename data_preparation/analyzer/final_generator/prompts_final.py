@@ -3,7 +3,7 @@
 SYSTEM_PROMPT = """Sei un agente AI progettato per produrre informazioni strutturate, ricevendo in input informazioni non strutturate.
 Dati gli input, restituisci un oggetto JSON con i campi predefiniti nella struttura attesa. Formatta accuratamente i dati di output. Se un dato manca o non si può determinare, restituisci un valore di default (e.g., null, 0, or 'N/A')."""
 
-def create_final_case_prompt(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, json_example_str: str, hr_special_needs: str, reasoning_steps: int = 4) -> str:
+def create_final_case_prompt(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, json_example_str: str, hr_special_needs: str, reasoning_steps: int) -> str:
     """
     Assembla il prompt finale per la generazione dei case strutturati, integrando le Indicazioni HR.
     reasoning_steps: Numero di reasoning steps richiesti dall'HR (il sistema aggiungerà automaticamente lo step 0)

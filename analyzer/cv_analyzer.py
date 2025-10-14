@@ -2,7 +2,7 @@ from interviewer.llm_service import get_llm_response
 from .prompts_analyzer import create_cv_analysis_prompt
 
 # Modello LLM
-ANALYZER_MODEL = "gpt-4.1-2025-04-14" 
+ANALYZER_MODEL = AZURE_DEPLOYMENT_NAME 
 
 def analyze_cv(cv_text: str, job_description_text: str, hr_special_needs: str = "") -> str:
     """

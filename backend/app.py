@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Header
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
@@ -1287,6 +1287,72 @@ def get_report(session_id: str, kind: str, auth_data=Depends(hr_auth)):
         raise HTTPException(status_code=404, detail="Report not available")
     return {"report": rep}
 
+
+# Interview Configuration Management
+@app.get("/interview-config")
+def get_interview_config_endpoint(auth_data=Depends(hr_auth)):
+    """Get interview configuration for the current tenant"""
+    tenant_id = auth_data.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Invalid tenant ID")
+    
+    config = get_interview_config_or_default(tenant_id)
+    return {
+        "reasoning_steps": config.reasoning_steps,
+        "max_attempts": config.max_attempts,
+        "estimated_duration_minutes": config.estimated_duration_minutes,
+        "max_questions": config.max_questions,
+        "created_at": config.created_at,
+        "updated_at": config.updated_at
+    }
+
+@app.put("/interview-config")
+async def update_interview_config_endpoint(
+    request: Request,
+    auth_data=Depends(hr_auth)
+):
+    """Update interview configuration for the current tenant"""
+    tenant_id = auth_data.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Invalid tenant ID")
+    
+    # Extract parameters from request body
+    body = await request.json()
+    reasoning_steps = body.get("reasoning_steps")
+    max_attempts = body.get("max_attempts")
+    
+    if reasoning_steps is None or max_attempts is None:
+        raise HTTPException(status_code=400, detail="reasoning_steps and max_attempts are required")
+    
+    # Validate parameters
+    if not (2 <= reasoning_steps <= 6):
+        raise HTTPException(status_code=400, detail="reasoning_steps must be between 2 and 6")
+    
+    if not (2 <= max_attempts <= 5):
+        raise HTTPException(status_code=400, detail="max_attempts must be between 2 and 5")
+    
+    # Create or update configuration
+    config = InterviewConfig(
+        tenant_id=tenant_id,
+        reasoning_steps=reasoning_steps,
+        max_attempts=max_attempts
+    )
+    
+    success = save_interview_config(config)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to save configuration")
+    
+    return {
+        "ok": True,
+        "message": "Configuration updated successfully",
+        "config": {
+            "reasoning_steps": config.reasoning_steps,
+            "max_attempts": config.max_attempts,
+            "estimated_duration_minutes": config.estimated_duration_minutes,
+            "max_questions": config.max_questions,
+            "updated_at": config.updated_at
+        }
+    }
 
 @app.get("/health")
 def health_check():

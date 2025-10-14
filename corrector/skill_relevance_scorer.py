@@ -11,7 +11,7 @@ from services.tenant_service import get_tenant_collections
 
 from .prompts_skill_scorer import create_cv_scoring_prompt, create_interview_scoring_prompt
 
-SKILL_SCORER_MODEL = "gpt-4.1-2025-04-14"
+SKILL_SCORER_MODEL = AZURE_DEPLOYMENT_NAME
 SKILL_SCORING_TEMPERATURE = 0.0
 
 # ----- Schemi Pydantic per le tool call -----

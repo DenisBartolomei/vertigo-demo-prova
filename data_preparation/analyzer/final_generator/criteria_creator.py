@@ -15,7 +15,7 @@ class CriteriaForCase(BaseModel):
 class CriteriaCollection(BaseModel):
     criteria_sets: List[CriteriaForCase] = Field(description="Una lista contenente i set di criteri per ciascun caso fornito in input.")
 
-FINAL_MODEL = "gpt-4.1-2025-04-14"
+FINAL_MODEL = AZURE_DEPLOYMENT_NAME
 
 def generate_final_criteria(icp_text: str, cases_json_str: str, seniority_level: str, hr_special_needs: str = "") -> CriteriaCollection | None:
     """

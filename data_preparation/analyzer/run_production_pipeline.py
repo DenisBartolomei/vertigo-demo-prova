@@ -15,7 +15,7 @@ from ..corrector.evaluation_criteria_generator.criteria_generator import generat
 
 from services.data_manager import db
 
-def run_full_generation_pipeline(position_id: str, collection_name: str = "positions_data", reasoning_steps: int = 4) -> bool:
+def run_full_generation_pipeline(position_id: str, collection_name: str = "positions_data", reasoning_steps: int) -> bool:
     """
     Orchestra l'intera pipeline di generazione dei dati per una nuova posizione.
     """

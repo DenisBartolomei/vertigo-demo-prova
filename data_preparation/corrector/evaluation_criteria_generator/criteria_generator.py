@@ -15,7 +15,7 @@ class RequirementEvaluation(BaseModel):
 class EvaluationCriteriaCollection(BaseModel):
     evaluation_schema: List[RequirementEvaluation] = Field(description="Una lista completa dei requisiti e dei loro criteri di valutazione.")
 
-GENERATION_MODEL = "gpt-4.1-2025-04-14"
+GENERATION_MODEL = AZURE_DEPLOYMENT_NAME
 
 def generate_evaluation_criteria(icp_text: str, cases_json_str: str, seniority_level: str, hr_special_needs: str = "") -> EvaluationCriteriaCollection | None:
     """

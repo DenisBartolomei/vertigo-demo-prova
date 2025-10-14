@@ -4,12 +4,6 @@ from pydantic import BaseModel, Field
 from interviewer.llm_service import get_structured_llm_response
 from . import prompts_final
 
-import json
-from typing import List, Optional
-from pydantic import BaseModel, Field
-from interviewer.llm_service import get_structured_llm_response
-from . import prompts_final
-
 class SkillToTest(BaseModel):
     skill_name: str = Field(description="Il nome della skill o competenza da verificare (es. 'Problem Solving', 'Python').")
     testing_method: str = Field(description="Breve descrizione di come lo step può essere usato per valutare questa specifica skill.")
@@ -29,9 +23,9 @@ class CaseStructure(BaseModel):
 class CaseCollection(BaseModel):
     cases: List[CaseStructure] = Field(description="Una lista contenente esattamente 5 casi di studio.")
 
-FINAL_MODEL = "gpt-4.1-2025-04-14"
+FINAL_MODEL = AZURE_DEPLOYMENT_NAME
 
-def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, hr_special_needs: str = "", reasoning_steps: int = 4) -> CaseCollection | None:
+def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, hr_special_needs: str = "", reasoning_steps: int) -> CaseCollection | None:
     """
     Genera una collezione di 5 casi di studio strutturati in formato JSON.
     Integra le Indicazioni HR nella generazione.
