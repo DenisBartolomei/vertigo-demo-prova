@@ -70,9 +70,6 @@ def resolve_token_global(token: str) -> Optional[tuple[str, str]]:
         if doc:
             if doc.get("expires_at") and datetime.utcnow() > doc["expires_at"]:
                 continue
-            # Check if interview has started - if so, token should be expired
-            if doc.get("interview_started"):
-                continue
             # increment uses (best-effort)
             try:
                 db[coll_name].update_one({"_id": doc["_id"]}, {"$inc": {"uses": 1}})

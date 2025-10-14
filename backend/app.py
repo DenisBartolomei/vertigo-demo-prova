@@ -942,8 +942,7 @@ def start_interview(token: str):
         )
         print(f"🔒 Interview started for session {session_id} - token marked as used")
     
-    # Mark token as started (this will make it expire for future uses)
-    mark_interview_started_global(token)
+    # Note: Token remains valid for the duration of the interview
     
     return {"message": message}
 
