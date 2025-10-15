@@ -21,7 +21,7 @@ Regole:
 - Restituisci un oggetto JSON con la lista 'scores' contenente TUTTE le skill, ognuna con:
   - skill_id
   - skill_name
-  - cv_relevance_pct (intero 0-4)
+  - cv_relevance_score (intero 0-4)
   - notes_cv (frase breve, opzionale, max 30 parole)
 
 [SKILL LIST CANONICA + CRITERI DESCRITTIVI]
@@ -53,7 +53,7 @@ Regole:
 - Restituisci un oggetto JSON con la lista 'scores' contenente TUTTE le skill, ognuna con:
   - skill_id
   - skill_name
-  - interview_relevance_pct (intero 0-4)
+  - interview_relevance_score (intero 0-4)
   - notes_interview (frase breve, opzionale, max 30 parole)
 
 [SKILL LIST CANONICA + CRITERI DESCRITTIVI]

@@ -4,6 +4,7 @@ import { useAntiCheat } from '../hooks/useAntiCheat'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { AntiCheatWarning } from '../components/AntiCheatWarning'
 import { InterviewIntro } from '../components/InterviewIntro'
+import { SandboxArea } from '../components/SandboxArea'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://vertigo-ai-backend-tbia7kjh7a-oc.a.run.app'
 
@@ -491,156 +492,20 @@ export function Interview() {
         )}
       </div>
 
-      {isStarted && !isCompleted && (
-        <div className="chat-input-container">
-          {/* Speech error display */}
-          {speechError && (
-            <div style={{
-              backgroundColor: '#f8d7da',
-              border: '1px solid #f5c6cb',
-              borderRadius: '8px',
-              padding: '8px 12px',
-              margin: '0 16px 8px 16px',
-              fontSize: '14px',
-              color: '#721c24'
-            }}>
-              ⚠️ {speechError}
-            </div>
-          )}
-          
-          <div className="chat-input-wrapper">
-            <textarea
-              className="chat-input"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  sendMessage()
-                }
-              }}
-              placeholder="Type your answer here... (Press Enter to send, Shift+Enter for new line, or use 🎤 for voice input)"
-              rows={1}
-              style={{
-                height: 'auto',
-                minHeight: '24px',
-                maxHeight: '120px',
-                overflow: 'hidden'
-              }}
-              onInput={(e) => {
-                const target = e.target as HTMLTextAreaElement
-                target.style.height = 'auto'
-                target.style.height = Math.min(target.scrollHeight, 120) + 'px'
-              }}
-            />
-            
-            {/* Voice input button */}
-            {isSpeechSupported && (
-              <button
-                className={`voice-button ${isListening ? 'listening' : ''}`}
-                onClick={handleVoiceToggle}
-                disabled={loading}
-                style={{
-                  background: isListening 
-                    ? 'linear-gradient(135deg, #ff6b6b, #ee5a52)' 
-                    : 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '40px',
-                  height: '40px',
-                  marginRight: '8px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '16px',
-                  color: 'white',
-                  transition: 'all 0.3s ease',
-                  animation: isListening ? 'pulse 1.5s infinite' : 'none',
-                  boxShadow: isListening 
-                    ? '0 0 20px rgba(255, 107, 107, 0.5)' 
-                    : '0 2px 8px rgba(0,0,0,0.1)'
-                }}
-                title={isListening ? 'Ferma dettatura' : 'Inizia dettatura vocale'}
-              >
-                {isListening ? '⏹️' : '🎤'}
-              </button>
-            )}
-            
-            <button 
-              className="send-button" 
-              onClick={sendMessage} 
-              disabled={loading || !input.trim()}
-            >
-              ➤
-            </button>
-          </div>
-          
-          {/* Voice input status */}
-          {isListening && (
-            <div style={{
-              textAlign: 'center',
-              padding: '8px 16px',
-              fontSize: '14px',
-              color: 'var(--primary-purple)',
-              fontWeight: '500',
-              backgroundColor: 'rgba(139, 69, 255, 0.1)',
-              margin: '0 16px',
-              borderRadius: '8px',
-              border: '1px solid rgba(139, 69, 255, 0.2)'
-            }}>
-              🎤 In ascolto... Parla ora
-            </div>
-          )}
-        </div>
-      )}
+      {/* Sandbox Area */}
+      <SandboxArea
+        input={input}
+        setInput={setInput}
+        onSend={sendMessage}
+        loading={loading}
+        isListening={isListening}
+        onVoiceToggle={handleVoiceToggle}
+        isSpeechSupported={isSpeechSupported}
+        speechError={speechError}
+        isStarted={isStarted}
+        isCompleted={isCompleted}
+      />
 
-      {isCompleted && (
-        <div className="chat-input-container">
-          <div style={{
-            background: 'linear-gradient(135deg, var(--light-purple), var(--pastel-pink))',
-            border: '2px solid var(--primary-purple)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '24px',
-            textAlign: 'center',
-            margin: '0 16px'
-          }}>
-            <div style={{ 
-              fontSize: '48px', 
-              marginBottom: '16px',
-              background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text'
-            }}>
-              🎉
-            </div>
-            <h3 style={{ 
-              fontSize: '24px', 
-              fontWeight: '600', 
-              marginBottom: '12px',
-              color: 'var(--text-primary)'
-            }}>
-              Grazie per aver completato il colloquio!
-            </h3>
-            <p style={{ 
-              fontSize: '16px', 
-              color: 'var(--text-secondary)',
-              lineHeight: '1.5',
-              marginBottom: '16px'
-            }}>
-              Il tuo colloquio è stato completato con successo. Procederemo ora con la valutazione delle tue risposte e delle tue competenze.
-            </p>
-            <p style={{ 
-              fontSize: '14px', 
-              color: 'var(--text-muted)',
-              fontStyle: 'italic'
-            }}>
-              Ti contatteremo presto con i risultati della valutazione. Grazie per il tuo tempo e la tua partecipazione!
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

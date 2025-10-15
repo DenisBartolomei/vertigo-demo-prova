@@ -532,18 +532,11 @@ elif st.session_state.page == "feedback_display":
     skill_rel = (session_data or {}).get("stages", {}).get("skill_relevance", {})
     skill_scores = (skill_rel or {}).get("scores", [])
 
-    def _to_0_4(pct_val):
-        try:
-            # Conversione a scala intera 0..4 (arrotondamento), clamp inclusivo
-            return max(0, min(4, int(round((pct_val or 0) / 25.0))))
-        except Exception:
-            return 0
-
     # Sezione: Skill Cards (CV vs Colloquio) — SCALA DISCRETA 0..4
     st.divider()
     st.subheader("Valutazione Skill (CV vs Colloquio) — scala 0–4")
     if skill_scores:
-        # Calcolo delle medie per il riepilogo
+        # Calcolo delle medie per il riepilogo - i valori sono già 0-4
         cv_scores = [s.get('cv_relevance_score', 0) for s in skill_scores]
         int_scores = [s.get('interview_relevance_score', 0) for s in skill_scores]
         
