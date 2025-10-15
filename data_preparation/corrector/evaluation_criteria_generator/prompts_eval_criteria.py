@@ -18,7 +18,7 @@ Dati:
 - Livello_di_seniority, che rappresenta il livello di seniority richiesto dalla posizione lavorativa per cui stiamo lavorando.
 
 Il tuo compito è creare un sistema che permetta di valutare il soddisfacimento dei requisiti di una posizione di lavoro, attraverso l'analisi delle interazioni avvenute durante la risoluzione di un Case da parte del candidato.
-I requisiti tecnici e non, saranno forniti nel report "ICP". Mentre nel set_di_domande si trovano i Case predisposti, e che saranno risolti dai candidati, dai quali dovranno essere identificati i criteri per valutare il soddisfacimento dei requisiti della ICP.
+I requisiti tecnici e non, saranno forniti nel report "ICP", nei paragrafi **Competenze tecniche richieste esplicitamente dall'annuncio** e **Competenze trasversali richieste esplicitamente dall'annuncio (escluse le lingue)**, fai in modo di riportarti esattamente come sono scritti. Mentre nel set_di_domande si trovano i Case predisposti, e che saranno risolti dai candidati, dai quali dovranno essere identificati i criteri per valutare il soddisfacimento dei requisiti della ICP.
 
 Esempio.
 Requisito: problem solving.

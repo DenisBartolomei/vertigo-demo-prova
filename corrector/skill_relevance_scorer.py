@@ -4,6 +4,7 @@ import json
 import re
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
+from difflib import SequenceMatcher
 from interviewer.llm_service import get_structured_llm_response
 from services.data_manager import db, get_session_data, save_stage_output
 from services.tenant_data_manager import get_session_data_tenant, save_stage_output_tenant
@@ -56,6 +57,55 @@ def _slugify(text: str) -> str:
     text = re.sub(r"-{2,}", "-", text)
     return text.strip("-")
 
+def _normalize_skill_name(skill_name: str) -> str:
+    """
+    Normalizza il nome di una skill per il matching:
+    - Rimuove spazi extra
+    - Converte in lowercase
+    - Rimuove punteggiatura comune
+    - Standardizza caratteri speciali
+    """
+    if not skill_name:
+        return ""
+    
+    # Normalizza spazi e converte in lowercase
+    normalized = re.sub(r'\s+', ' ', skill_name.strip().lower())
+    
+    # Rimuove punteggiatura comune che può variare
+    normalized = re.sub(r'[,;:\.]+', '', normalized)
+    
+    # Standardizza parentesi e caratteri speciali
+    normalized = re.sub(r'[()\[\]{}]', '', normalized)
+    
+    return normalized.strip()
+
+def _find_best_skill_match(skill_name: str, requirements: List[str], threshold: float = 0.9) -> Optional[str]:
+    """
+    Trova il miglior match per una skill tra i requirements usando similarity ratio.
+    Restituisce il requirement che ha la similarity più alta >= threshold, o None se nessuno supera la soglia.
+    """
+    if not skill_name or not requirements:
+        return None
+    
+    normalized_skill = _normalize_skill_name(skill_name)
+    best_match = None
+    best_ratio = 0.0
+    
+    for req in requirements:
+        if not req:
+            continue
+            
+        normalized_req = _normalize_skill_name(req)
+        
+        # Calcola similarity ratio
+        ratio = SequenceMatcher(None, normalized_skill, normalized_req).ratio()
+        
+        if ratio > best_ratio and ratio >= threshold:
+            best_ratio = ratio
+            best_match = req
+    
+    return best_match
+
 def _format_conversation(conversation_history: List[dict]) -> str:
     lines = []
     for m in conversation_history:
@@ -74,6 +124,7 @@ def _extract_skills_from_case(caso_svolto_data: dict, position_data: dict) -> Li
     """
     Estrae le skill effettivamente testate nel caso selezionato dai reasoning steps.
     Ogni item contiene: skill_id, skill_name, criteria_texts (lista con 2 stringhe).
+    Usa matching fuzzy per gestire piccole differenze nei nomi delle skill.
     """
     # Estrai tutte le skill uniche testate nel caso
     tested_skills = set()
@@ -83,22 +134,74 @@ def _extract_skills_from_case(caso_svolto_data: dict, position_data: dict) -> Li
             if skill_name:
                 tested_skills.add(skill_name)
     
+    print(f"  - [SKILL EXTRACTOR] Trovate {len(tested_skills)} skill uniche nel caso:")
+    for skill in tested_skills:
+        print(f"    * {skill}")
+    
     # Trova i criteri di valutazione per le skill testate
     eval_criteria = position_data.get("evaluation_criteria", {})
     schema = eval_criteria.get("evaluation_schema", [])
     
+    # Estrai tutti i requirements disponibili per il matching
+    available_requirements = [item.get("requirement", "").strip() for item in schema if item.get("requirement")]
+    print(f"  - [SKILL EXTRACTOR] Trovati {len(available_requirements)} requirements nell'ICP")
+    
     canonical = []
-    for item in schema:
-        req = item.get("requirement") or ""
-        if req in tested_skills:
-            crit = item.get("criteria", {})
+    matched_skills = set()
+    unmatched_skills = []
+    
+    for skill_name in tested_skills:
+        # Prima prova matching esatto
+        exact_match = None
+        for item in schema:
+            req = item.get("requirement", "").strip()
+            if req == skill_name:
+                exact_match = item
+                break
+        
+        if exact_match:
+            # Match esatto trovato
+            crit = exact_match.get("criteria", {})
             c1 = crit.get("evaluation_criteria_1") or ""
             c2 = crit.get("evaluation_criteria_2") or ""
             canonical.append({
-                "skill_id": _slugify(req),
-                "skill_name": req,
+                "skill_id": _slugify(skill_name),
+                "skill_name": skill_name,
                 "criteria_texts": [c1, c2]
             })
+            matched_skills.add(skill_name)
+            print(f"    ✓ Match esatto: '{skill_name}' -> '{exact_match.get('requirement')}'")
+        else:
+            # Prova matching fuzzy
+            best_match_req = _find_best_skill_match(skill_name, available_requirements, threshold=0.9)
+            if best_match_req:
+                # Trova l'item corrispondente
+                for item in schema:
+                    if item.get("requirement", "").strip() == best_match_req:
+                        crit = item.get("criteria", {})
+                        c1 = crit.get("evaluation_criteria_1") or ""
+                        c2 = crit.get("evaluation_criteria_2") or ""
+                        canonical.append({
+                            "skill_id": _slugify(skill_name),
+                            "skill_name": skill_name,
+                            "criteria_texts": [c1, c2]
+                        })
+                        matched_skills.add(skill_name)
+                        print(f"    ✓ Match fuzzy: '{skill_name}' -> '{best_match_req}'")
+                        break
+            else:
+                # Nessun match trovato - includi comunque con criteri vuoti
+                canonical.append({
+                    "skill_id": _slugify(skill_name),
+                    "skill_name": skill_name,
+                    "criteria_texts": ["", ""]
+                })
+                unmatched_skills.append(skill_name)
+                print(f"    ⚠ Nessun match: '{skill_name}' (inclusa con criteri vuoti)")
+    
+    print(f"  - [SKILL EXTRACTOR] Risultato: {len(matched_skills)} skill matchate, {len(unmatched_skills)} senza match")
+    if unmatched_skills:
+        print(f"    Skill senza match: {unmatched_skills}")
     
     return canonical
 
@@ -254,7 +357,7 @@ def compute_and_save_skill_relevance(session_id: str, tenant_id: str = None) -> 
     except Exception:
         case_map_text = ""
 
-    # Skill canoniche: usa solo le skill effettivamente testate nel caso selezionato
+    # Skill canoniche: usa le skill effettivamente testate nel caso selezionato
     if caso_svolto_data:
         canonical_skills = _extract_skills_from_case(caso_svolto_data, position_data)
         print(f"  - [SKILL SCORER] Estratte {len(canonical_skills)} skill testate nel caso selezionato.")

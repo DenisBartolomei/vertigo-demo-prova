@@ -37,7 +37,7 @@ o	Dai a ciascun case un taglio narrativo, ad esempio: "Sei il responsabile del m
 o	Evita ambiguità ed eccessiva generalità.
 o	Usa l'input "GUIDA ALLA GENERAZIONE" per comprendere come poter testare in modo efficace ciascuna requisito richiesto dall'annuncio, ricorda che ciascun case dovrà poter testare tutte le skill contenute nell'annuncio.
 o	Non usare ulteriore testo oltre alla produzione di quanto richiesto sopra.
-o   **IMPORTANTE**: Per il campo `skills_to_test`, assicurati di generare una lista di oggetti, dove ogni oggetto ha due chiavi: `skill_name` e `testing_method`. Non generare una semplice lista di stringhe. Le skills_to_test devono essere al 100% pertinenti e attinenti a quanto richiesto dalla ICP e dalle INDICAZIONI SPECIALI HR; non inventare o dedurre nulla di nuovo.
+o   **IMPORTANTE**: Per il campo `skills_to_test`, assicurati di generare una lista di oggetti, dove ogni oggetto ha due chiavi: `skill_name` e `testing_method`. Non generare una semplice lista di stringhe. Le skills_to_test devono essere al 100% attinenti a quanto richiesto dalla ICP e dalle INDICAZIONI SPECIALI HR, inteso che devono essere scritte nello stesso identico modo, senza variazioni; non inventare o dedurre nulla di nuovo.
 o   **FORMATO JSON OBBLIGATORIO**: Il tuo output finale DEVE essere un oggetto JSON che rispetta esattamente la struttura, i nomi delle chiavi e i tipi di dati mostrati nell'esempio di seguito.
 
 ESEMPIO DELLA STRUTTURA JSON ATTESA:
