@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAntiCheat } from '../hooks/useAntiCheat'
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { AntiCheatWarning } from '../components/AntiCheatWarning'
 import { InterviewIntro } from '../components/InterviewIntro'
 
@@ -145,6 +146,17 @@ export function Interview() {
   const [termsAccepted, setTermsAccepted] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  // Speech recognition hook
+  const {
+    isListening,
+    transcript,
+    isSupported: isSpeechSupported,
+    error: speechError,
+    startListening,
+    stopListening,
+    resetTranscript
+  } = useSpeechRecognition('it-IT')
+
   // Anti-cheat system
   const antiCheat = useAntiCheat({
     maxTabSwitches: 3,
@@ -175,6 +187,14 @@ export function Interview() {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // Sync speech transcript with input
+  useEffect(() => {
+    if (transcript) {
+      setInput(prev => prev + transcript)
+      resetTranscript()
+    }
+  }, [transcript, resetTranscript])
 
   // Add beforeunload warning when interview is started
   useEffect(() => {
@@ -335,6 +355,14 @@ export function Interview() {
     // User wants to continue despite warnings
   }
 
+  const handleVoiceToggle = () => {
+    if (isListening) {
+      stopListening()
+    } else {
+      startListening()
+    }
+  }
+
   const formatTime = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
@@ -465,6 +493,21 @@ export function Interview() {
 
       {isStarted && !isCompleted && (
         <div className="chat-input-container">
+          {/* Speech error display */}
+          {speechError && (
+            <div style={{
+              backgroundColor: '#f8d7da',
+              border: '1px solid #f5c6cb',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              margin: '0 16px 8px 16px',
+              fontSize: '14px',
+              color: '#721c24'
+            }}>
+              ⚠️ {speechError}
+            </div>
+          )}
+          
           <div className="chat-input-wrapper">
             <textarea
               className="chat-input"
@@ -476,7 +519,7 @@ export function Interview() {
                   sendMessage()
                 }
               }}
-              placeholder="Type your answer here... (Press Enter to send, Shift+Enter for new line)"
+              placeholder="Type your answer here... (Press Enter to send, Shift+Enter for new line, or use 🎤 for voice input)"
               rows={1}
               style={{
                 height: 'auto',
@@ -490,6 +533,40 @@ export function Interview() {
                 target.style.height = Math.min(target.scrollHeight, 120) + 'px'
               }}
             />
+            
+            {/* Voice input button */}
+            {isSpeechSupported && (
+              <button
+                className={`voice-button ${isListening ? 'listening' : ''}`}
+                onClick={handleVoiceToggle}
+                disabled={loading}
+                style={{
+                  background: isListening 
+                    ? 'linear-gradient(135deg, #ff6b6b, #ee5a52)' 
+                    : 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '40px',
+                  height: '40px',
+                  marginRight: '8px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '16px',
+                  color: 'white',
+                  transition: 'all 0.3s ease',
+                  animation: isListening ? 'pulse 1.5s infinite' : 'none',
+                  boxShadow: isListening 
+                    ? '0 0 20px rgba(255, 107, 107, 0.5)' 
+                    : '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+                title={isListening ? 'Ferma dettatura' : 'Inizia dettatura vocale'}
+              >
+                {isListening ? '⏹️' : '🎤'}
+              </button>
+            )}
+            
             <button 
               className="send-button" 
               onClick={sendMessage} 
@@ -498,6 +575,23 @@ export function Interview() {
               ➤
             </button>
           </div>
+          
+          {/* Voice input status */}
+          {isListening && (
+            <div style={{
+              textAlign: 'center',
+              padding: '8px 16px',
+              fontSize: '14px',
+              color: 'var(--primary-purple)',
+              fontWeight: '500',
+              backgroundColor: 'rgba(139, 69, 255, 0.1)',
+              margin: '0 16px',
+              borderRadius: '8px',
+              border: '1px solid rgba(139, 69, 255, 0.2)'
+            }}>
+              🎤 In ascolto... Parla ora
+            </div>
+          )}
         </div>
       )}
 

@@ -544,8 +544,8 @@ elif st.session_state.page == "feedback_display":
     st.subheader("Valutazione Skill (CV vs Colloquio) — scala 0–4")
     if skill_scores:
         # Calcolo delle medie per il riepilogo
-        cv_scores = [_to_0_4(s.get('cv_relevance_pct', 0)) for s in skill_scores]
-        int_scores = [_to_0_4(s.get('interview_relevance_pct', 0)) for s in skill_scores]
+        cv_scores = [s.get('cv_relevance_score', 0) for s in skill_scores]
+        int_scores = [s.get('interview_relevance_score', 0) for s in skill_scores]
         
         cv_mean = sum(cv_scores) / len(cv_scores) if cv_scores else 0
         int_mean = sum(int_scores) / len(int_scores) if int_scores else 0
@@ -587,8 +587,8 @@ elif st.session_state.page == "feedback_display":
         for i, s in enumerate(skill_scores):
             with cols[i % 3]:
                 st.markdown(f"**{s.get('skill_name','Skill')}**")
-                cv_v = _to_0_4(s.get('cv_relevance_pct', 0))
-                int_v = _to_0_4(s.get('interview_relevance_pct', 0))
+                cv_v = s.get('cv_relevance_score', 0)
+                int_v = s.get('interview_relevance_score', 0)
                 st.progress(cv_v / 4.0, text=f"CV: {cv_v}/4")
                 st.progress(int_v / 4.0, text=f"Colloquio: {int_v}/4")
                 notes_cv = s.get('notes_cv') or "—"

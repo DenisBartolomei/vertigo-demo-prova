@@ -8,11 +8,11 @@ def create_cv_scoring_prompt(skill_list_json: str, cv_text: str) -> str:
 Sei l'agente AI specializzato in HR più potente al mondo. Sei rigoroso e standardizzato. Il tuo compito è assegnare un punteggio di rilevanza alle skill elencate, basandoti ESCLUSIVAMENTE sul testo del CV fornito.
 
 Scala di valutazione (applicala SEMPRE, senza eccezioni):
-- 0/100: Nessuna evidenza o menzione della skill, o indicazioni vaghe prive di sostanza verificabile.
-- 25/100: Menzione debole/indiretta, contesto non chiaro o poco rilevante.
-- 50/100: Presenza di evidenze parziali, non complete o non coerenti con i criteri descrittivi della skill.
-- 75/100: Evidenze solide e coerenti, con qualche lacuna o limitata profondità.
-- 100/100: Evidenze eccellenti, ricorrenti, dettagliate e perfettamente coerenti con i criteri descrittivi della skill.
+- 0/4: Nessuna evidenza o menzione della skill, o indicazioni vaghe prive di sostanza verificabile.
+- 1/4: Menzione debole/indiretta, contesto non chiaro o poco rilevante.
+- 2/4: Presenza di evidenze parziali, non complete o non coerenti con i criteri descrittivi della skill.
+- 3/4: Evidenze solide e coerenti, con qualche lacuna o limitata profondità.
+- 4/4: Evidenze eccellenti, ricorrenti, dettagliate e perfettamente coerenti con i criteri descrittivi della skill.
 
 Regole:
 - Non inferire oltre quanto presente nel CV. Niente supposizioni.
@@ -21,7 +21,7 @@ Regole:
 - Restituisci un oggetto JSON con la lista 'scores' contenente TUTTE le skill, ognuna con:
   - skill_id
   - skill_name
-  - cv_relevance_pct (intero 0-100)
+  - cv_relevance_pct (intero 0-4)
   - notes_cv (frase breve, opzionale, max 30 parole)
 
 [SKILL LIST CANONICA + CRITERI DESCRITTIVI]
@@ -39,11 +39,11 @@ def create_interview_scoring_prompt(skill_list_json: str, conversation_text: str
 Sei l'agente AI specializzato in HR più potente al mondo. Sei rigoroso e standardizzato. Il tuo compito è assegnare un punteggio di rilevanza alle skill elencate, basandoti ESCLUSIVAMENTE sulla conversazione del colloquio fornita.
 
 Scala di valutazione (applicala SEMPRE, senza eccezioni):
-- 0/100: Nessuna evidenza della skill in conversazione.
-- 25/100: Segnali deboli/indiretti, risposte vaghe o non direttamente legate alla skill.
-- 50/100: Evidenze parziali, non complete o non coerenti con i criteri descrittivi della skill.
-- 75/100: Evidenze solide e coerenti, con qualche lacuna o limitata profondità.
-- 100/100: Evidenze eccellenti, ricorrenti, dettagliate e perfettamente coerenti con i criteri descrittivi della skill.
+- 0/4: Nessuna evidenza della skill in conversazione.
+- 1/4: Segnali deboli/indiretti, risposte vaghe o non direttamente legate alla skill.
+- 2/4: Evidenze parziali, non complete o non coerenti con i criteri descrittivi della skill.
+- 3/4: Evidenze solide e coerenti, con qualche lacuna o limitata profondità.
+- 4/4: Evidenze eccellenti, ricorrenti, dettagliate e perfettamente coerenti con i criteri descrittivi della skill.
 
 Regole:
 - Non inferire oltre quanto detto in conversazione. Niente supposizioni.
@@ -53,7 +53,7 @@ Regole:
 - Restituisci un oggetto JSON con la lista 'scores' contenente TUTTE le skill, ognuna con:
   - skill_id
   - skill_name
-  - interview_relevance_pct (intero 0-100)
+  - interview_relevance_pct (intero 0-4)
   - notes_interview (frase breve, opzionale, max 30 parole)
 
 [SKILL LIST CANONICA + CRITERI DESCRITTIVI]

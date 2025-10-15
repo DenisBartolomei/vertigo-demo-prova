@@ -34,8 +34,8 @@ export function InterviewIntro({ positionName, candidateName, onStart, onAcceptT
           <ul>
             <li>This is a written interview that will assess your skills and experience</li>
             <li>Take your time to provide thoughtful, detailed answers</li>
-            <li>There's no time limit, but aim to be thorough yet concise</li>
-            <li>Answer based on your actual experience and knowledge</li>
+            <li>There's no time limit, but we use time to monitor your activity</li>
+            <li>We recommend to use Chrome and not to use any AI tools: they will be detected and will penalize your score</li>
             <li>Feel free to ask questions if you need clarification</li>
           </ul>
         </div>
@@ -72,9 +72,7 @@ export function InterviewIntro({ positionName, candidateName, onStart, onAcceptT
 
               <h4>Consequences:</h4>
               <ul className="consequences-list">
-                <li>First violation: Warning notification</li>
-                <li>Multiple violations: Temporary interview block</li>
-                <li>Severe violations: Interview termination</li>
+                <li>Any violation: Warning notification</li>
                 <li>All violations are recorded and included in your evaluation report</li>
               </ul>
 
@@ -117,7 +115,7 @@ export function InterviewIntro({ positionName, candidateName, onStart, onAcceptT
           onClick={handleStart}
           disabled={!acceptedTerms || loading}
         >
-          {loading ? '⏳ Avvio in corso...' : acceptedTerms ? '🚀 Inizia Colloquio' : '⚠️ Accetta Termini per Continuare'}
+          {loading ? '⏳ Starting...' : acceptedTerms ? '🚀 Start the case' : '⚠️ Agree to terms and conditions'}
         </button>
       </div>
 

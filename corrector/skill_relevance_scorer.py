@@ -20,7 +20,7 @@ SKILL_SCORING_TEMPERATURE = 0.0
 class CVSkillScore(BaseModel):
     skill_id: str
     skill_name: str
-    cv_relevance_pct: int = Field(ge=0, le=100)
+    cv_relevance_pct: int = Field(ge=0, le=4)
     notes_cv: Optional[str] = None
 
 class CVScoreCollection(BaseModel):
@@ -29,7 +29,7 @@ class CVScoreCollection(BaseModel):
 class InterviewSkillScore(BaseModel):
     skill_id: str
     skill_name: str
-    interview_relevance_pct: int = Field(ge=0, le=100)
+    interview_relevance_pct: int = Field(ge=0, le=4)
     notes_interview: Optional[str] = None
 
 class InterviewScoreCollection(BaseModel):
@@ -38,8 +38,8 @@ class InterviewScoreCollection(BaseModel):
 class SkillScore(BaseModel):
     skill_id: str
     skill_name: str
-    cv_relevance_pct: int = Field(ge=0, le=100)
-    interview_relevance_pct: int = Field(ge=0, le=100)
+    cv_relevance_pct: int = Field(ge=0, le=4)
+    interview_relevance_pct: int = Field(ge=0, le=4)
     notes_cv: Optional[str] = None
     notes_interview: Optional[str] = None
 
@@ -266,7 +266,7 @@ def _score_cv_relevance(cv_text: str, canonical_skills: List[dict]) -> Dict[str,
         validated = CVScoreCollection.model_validate(parsed)
         out = {}
         for s in validated.scores:
-            out[s.skill_id] = {"pct": s.cv_relevance_pct, "notes": s.notes_cv or ""}
+            out[s.skill_id] = {"score": s.cv_relevance_pct, "notes": s.notes_cv or ""}
         return out
     except Exception as e:
         print(f"  - [Skill Scorer] Errore validando CV score: {e}")
@@ -300,7 +300,7 @@ def _score_interview_relevance(conversation_json: List[dict], canonical_skills: 
         validated = InterviewScoreCollection.model_validate(parsed)
         out = {}
         for s in validated.scores:
-            out[s.skill_id] = {"pct": s.interview_relevance_pct, "notes": s.notes_interview or ""}
+            out[s.skill_id] = {"score": s.interview_relevance_pct, "notes": s.notes_interview or ""}
         return out
     except Exception as e:
         print(f"  - [Skill Scorer] Errore validando interview score: {e}")
@@ -382,15 +382,15 @@ def compute_and_save_skill_relevance(session_id: str, tenant_id: str = None) -> 
     for item in canonical_skills:
         sid = item["skill_id"]
         sname = item["skill_name"]
-        cv_pct = cv_scores_map.get(sid, {}).get("pct", 0)
+        cv_score = cv_scores_map.get(sid, {}).get("score", 0)
         cv_notes = cv_scores_map.get(sid, {}).get("notes", "")
-        int_pct = interview_scores_map.get(sid, {}).get("pct", 0)
+        int_score = interview_scores_map.get(sid, {}).get("score", 0)
         int_notes = interview_scores_map.get(sid, {}).get("notes", "")
         final_scores.append(SkillScore(
             skill_id=sid,
             skill_name=sname,
-            cv_relevance_pct=int(cv_pct),
-            interview_relevance_pct=int(int_pct),
+            cv_relevance_pct=int(cv_score),
+            interview_relevance_pct=int(int_score),
             notes_cv=cv_notes or None,
             notes_interview=int_notes or None
         ))
