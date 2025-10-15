@@ -37,7 +37,7 @@ html, body, #root {
 /* Chat Layout */
 .chat-container {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   height: 100vh;
   max-width: 1400px;
   margin: 0 auto;
@@ -46,6 +46,13 @@ html, body, #root {
   border-radius: var(--radius-xl);
   margin: 16px;
   overflow: hidden;
+}
+
+.chat-main-content {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
 }
 
 .chat-header {
@@ -852,7 +859,7 @@ html, body, #root {
     font-size: 14px !important;
   }
   
-  .chat-container {
+  .chat-main-content {
     flex-direction: column;
   }
   

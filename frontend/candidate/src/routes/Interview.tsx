@@ -429,7 +429,8 @@ export function Interview() {
         </div>
       )}
 
-      <div className="chat-messages">
+      <div className="chat-main-content">
+        <div className="chat-messages">
       {showIntro ? (
           <InterviewIntro
             positionName={session.position_name}
@@ -490,22 +491,22 @@ export function Interview() {
             <div ref={messagesEndRef} />
           </>
         )}
+        </div>
+
+        {/* Sandbox Area */}
+        <SandboxArea
+          input={input}
+          setInput={setInput}
+          onSend={sendMessage}
+          loading={loading}
+          isListening={isListening}
+          onVoiceToggle={handleVoiceToggle}
+          isSpeechSupported={isSpeechSupported}
+          speechError={speechError}
+          isStarted={isStarted}
+          isCompleted={isCompleted}
+        />
       </div>
-
-      {/* Sandbox Area */}
-      <SandboxArea
-        input={input}
-        setInput={setInput}
-        onSend={sendMessage}
-        loading={loading}
-        isListening={isListening}
-        onVoiceToggle={handleVoiceToggle}
-        isSpeechSupported={isSpeechSupported}
-        speechError={speechError}
-        isStarted={isStarted}
-        isCompleted={isCompleted}
-      />
-
     </div>
   )
 }

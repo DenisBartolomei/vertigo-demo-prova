@@ -317,6 +317,7 @@ def compute_and_save_skill_relevance(session_id: str, tenant_id: str = None) -> 
     - salva in stages.skill_relevance
     """
     print(f"--- [SKILL SCORER] Avvio calcolo rilevanza skill per sessione: {session_id} ---")
+    print(f"  - [SKILL SCORER] Tenant ID: {tenant_id}")
     if tenant_id:
         collections = get_tenant_collections(tenant_id)
         session = get_session_data_tenant(session_id, collections["sessions"])
@@ -330,6 +331,10 @@ def compute_and_save_skill_relevance(session_id: str, tenant_id: str = None) -> 
     stages = session.get("stages", {})
     cv_text = stages.get("uploaded_cv_text", "")
     conversation_json = stages.get("conversation", [])
+    
+    print(f"  - [SKILL SCORER] Position ID: {position_id}")
+    print(f"  - [SKILL SCORER] CV text length: {len(cv_text)}")
+    print(f"  - [SKILL SCORER] Conversation length: {len(conversation_json)}")
 
     if db is None:
         print("  - ERRORE: DB non disponibile.")
@@ -344,17 +349,33 @@ def compute_and_save_skill_relevance(session_id: str, tenant_id: str = None) -> 
     if not position_data:
         print(f"  - ERRORE: posizione '{position_id}' non trovata.")
         return False
+    
+    print(f"  - [SKILL SCORER] Position data trovata: {position_data.get('_id', 'N/A')}")
+    eval_criteria = position_data.get("evaluation_criteria", {})
+    print(f"  - [SKILL SCORER] Evaluation criteria presente: {bool(eval_criteria)}")
+    if eval_criteria:
+        schema = eval_criteria.get("evaluation_schema", [])
+        print(f"  - [SKILL SCORER] Evaluation schema items: {len(schema)}")
 
     # Mappa del caso selezionato (se disponibile)
     case_map_text = ""
     caso_svolto_data = None
     try:
         selected_case_id = stages.get("case_id")
+        print(f"  - [SKILL SCORER] Selected case ID: {selected_case_id}")
         all_cases_data = position_data.get("all_cases", {})
+        print(f"  - [SKILL SCORER] All cases data presente: {bool(all_cases_data)}")
+        if all_cases_data:
+            cases = all_cases_data.get("cases", [])
+            print(f"  - [SKILL SCORER] Numero di casi disponibili: {len(cases)}")
         caso_svolto_data = next((case for case in all_cases_data.get("cases", []) if case.get("question_id") == selected_case_id), None)
         if caso_svolto_data:
             case_map_text = _build_case_map_text(caso_svolto_data)
-    except Exception:
+            print(f"  - [SKILL SCORER] Caso selezionato trovato: {caso_svolto_data.get('question_id', 'N/A')}")
+        else:
+            print(f"  - [SKILL SCORER] Caso selezionato NON trovato")
+    except Exception as e:
+        print(f"  - [SKILL SCORER] Errore nel caricamento caso: {e}")
         case_map_text = ""
 
     # Skill canoniche: usa le skill effettivamente testate nel caso selezionato
@@ -396,10 +417,16 @@ def compute_and_save_skill_relevance(session_id: str, tenant_id: str = None) -> 
         ))
 
     collection_obj = SkillScoreCollection(position_id=position_id, scores=final_scores)
+    print(f"  - [SKILL SCORER] Final scores creati: {len(final_scores)} skill")
+    for score in final_scores:
+        print(f"    * {score.skill_name}: CV={score.cv_relevance_score}/4, Interview={score.interview_relevance_score}/4")
+    
     if tenant_id and collections:
         save_stage_output_tenant(session_id, "skill_relevance", collection_obj.model_dump(), collections["sessions"])
+        print(f"  - [SKILL SCORER] Salvato in tenant collection: {collections['sessions']}")
     else:
         save_stage_output(session_id, "skill_relevance", collection_obj.model_dump())
+        print(f"  - [SKILL SCORER] Salvato in collection standard")
     print(f"  - [SKILL SCORER] Completato e salvato per sessione {session_id}.")
     
     # GENERAZIONE FEEDBACK TEMPORANEAMENTE DISABILITATA PER TEST
