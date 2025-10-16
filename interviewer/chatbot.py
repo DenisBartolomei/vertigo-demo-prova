@@ -72,10 +72,12 @@ class SmartCaseStudyChatbot:
         self.questions_asked_count += 1
         remaining_q = self.max_questions - self.questions_asked_count
         current_step_info = self.steps[self.current_step_id]
+        history_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in self.conversation_history])
         answer_prompt = prompts.create_answer_to_candidate_question_prompt(
             case_text=self.case_text,
             current_step_description=current_step_info.get('description', ''),
-            user_question=user_question
+            user_question=user_question,
+            history_text=history_text
         )
         answer = get_llm_response(
             prompt=answer_prompt,
@@ -163,10 +165,12 @@ class SmartCaseStudyChatbot:
             return prompts.SUCCESSFUL_FINISH_MESSAGE
         current_step_info = self.steps[self.current_step_id]
         next_step_info = self.steps[next_step_id]
+        history_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in self.conversation_history])
         prompt = prompts.create_successful_transition_prompt(
             current_step_info.get('title', ''),
             next_step_info.get('title', ''),
-            next_step_info.get('description', '')
+            next_step_info.get('description', ''),
+            history_text
         )
         self.current_step_id = next_step_id
         self.attempts_on_current_step = 0
@@ -183,13 +187,15 @@ class SmartCaseStudyChatbot:
         next_step_info = self.steps[next_step_id]
 
         skills_str = ", ".join([s.get('skill_name', '') for s in current_step_info.get('skills_to_test', [])])
+        history_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in self.conversation_history])
 
         prompt = prompts.create_failed_transition_prompt(
             current_step_info.get('title', ''),
             current_step_info.get('criteria', 'Nessun criterio specifico.'),
             skills_str,
             next_step_info.get('title', ''),
-            next_step_info.get('description', '')
+            next_step_info.get('description', ''),
+            history_text
         )
         self.current_step_id = next_step_id
         self.attempts_on_current_step = 0
