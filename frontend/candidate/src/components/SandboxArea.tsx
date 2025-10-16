@@ -36,11 +36,11 @@ export function SandboxArea({
     return (
       <div className="sandbox-area">
         <div className="sandbox-header">
-          <h2 className="sandbox-title">Area di Risposta</h2>
+          <h2 className="sandbox-title">Answer here</h2>
         </div>
         <div className="sandbox-content">
           <div className="input-sandbox">
-            <h3>Pronto per iniziare</h3>
+            <h3>Ready to start</h3>
             <div style={{
               flex: 1,
               display: 'flex',
@@ -52,8 +52,8 @@ export function SandboxArea({
               padding: '40px 20px'
             }}>
               {isCompleted 
-                ? '🎉 Colloquio completato con successo!'
-                : '👋 Inizia il colloquio per utilizzare questa area'
+                ? '🎉 Interview completed successfully!'
+                : '👋 Start the interview to use this area'
               }
             </div>
           </div>
@@ -65,7 +65,7 @@ export function SandboxArea({
   return (
     <div className="sandbox-area">
       <div className="sandbox-header">
-        <h2 className="sandbox-title">La Tua Risposta</h2>
+        <h2 className="sandbox-title">Your Answer</h2>
       </div>
       
       <div className="sandbox-content">
@@ -84,14 +84,14 @@ export function SandboxArea({
         )}
         
         <div className="input-sandbox">
-          <h3>Scrivi o detta la tua risposta</h3>
+          <h3>Write or speak your answer</h3>
           
           <textarea
             className="sandbox-textarea"
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Scrivi la tua risposta qui... (Premi Enter per inviare, Shift+Enter per nuova riga, o usa 🎤 per dettatura vocale)"
+            placeholder="Write or speak your answer here... (Press Enter to send, Shift+Enter for new line, or use 🎤 for voice input)"
             disabled={loading}
           />
           
@@ -123,7 +123,7 @@ export function SandboxArea({
                     : '0 2px 8px rgba(0,0,0,0.1)',
                   flexShrink: 0
                 }}
-                title={isListening ? 'Ferma dettatura' : 'Inizia dettatura vocale'}
+                title={isListening ? 'Stop voice input' : 'Start voice input'}
               >
                 {isListening ? '⏹️' : '🎤'}
               </button>
@@ -134,7 +134,7 @@ export function SandboxArea({
               onClick={onSend} 
               disabled={loading || !input.trim()}
             >
-              {loading ? '⏳ Invio...' : '➤ Invia Risposta'}
+              {loading ? '⏳ Sending...' : '➤ Send Answer'}
             </button>
           </div>
           
@@ -151,7 +151,7 @@ export function SandboxArea({
               border: '1px solid rgba(139, 69, 255, 0.2)',
               marginTop: '12px'
             }}>
-              🎤 In ascolto... Parla ora
+              🎤 Listening... Speak now
             </div>
           )}
         </div>

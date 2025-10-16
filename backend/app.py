@@ -1261,8 +1261,8 @@ def get_skills_scaled(session_id: str, auth_data=Depends(hr_auth)):
     for s in scores:
         items.append({
             "skill_name": s.get("skill_name"),
-            "cv_0_4": _scale_to_0_4(s.get("cv_relevance_pct")),
-            "interview_0_4": _scale_to_0_4(s.get("interview_relevance_pct")),
+            "cv_0_4": s.get("cv_relevance_score", 0),
+            "interview_0_4": s.get("interview_relevance_score", 0),
             "notes_cv": s.get("notes_cv"),
             "notes_interview": s.get("notes_interview"),
         })

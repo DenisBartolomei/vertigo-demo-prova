@@ -203,7 +203,7 @@ export function Interview() {
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault()
-      e.returnValue = 'Se chiudi la pagina, il colloquio verrà terminato e inviato per la valutazione. Sei sicuro di voler uscire?'
+      e.returnValue = 'If you close the page, the interview will be terminated and sent for evaluation. Are you sure you want to exit?'
       return e.returnValue
     }
 
@@ -222,11 +222,11 @@ export function Interview() {
     try {
       const resp = await fetch(`${API_BASE}/interviews/${token}`)
       if (resp.status === 404) {
-        setError('Token non valido o scaduto. Il token può essere utilizzato una sola volta. Se hai già iniziato il colloquio, non puoi più accedere.')
+        setError('Token not valid or expired. The token can be used only once. If you have already started the interview, you cannot access it anymore.')
         return
       }
       if (resp.status === 410) {
-        setError('Il colloquio è stato completato e la valutazione è terminata. L\'accesso non è più disponibile.')
+        setError('The interview has been completed and the evaluation has been finished. The access is no longer available.')
         return
       }
       if (!resp.ok) throw new Error('Session not found')
@@ -270,7 +270,7 @@ export function Interview() {
         body: JSON.stringify({ text: input })
       })
       if (resp.status === 410) {
-        setError('Il colloquio è stato completato e la valutazione è terminata. L\'accesso non è più disponibile.')
+        setError('The interview has been completed and the evaluation has been finished. The access is no longer available.')
         return
       }
       if (!resp.ok) throw new Error('Failed to send message')
@@ -312,15 +312,15 @@ export function Interview() {
       
       const resp = await fetch(`${API_BASE}/interviews/${token}/start`, { method: 'POST' })
       if (resp.status === 410) {
-        setError('Il colloquio è stato completato e la valutazione è terminata. L\'accesso non è più disponibile.')
+        setError('The interview has been completed and the evaluation has been finished. The access is no longer available.')
         return
       }
       if (resp.status === 409) {
-        setError('Questo colloquio è già stato avviato. Ogni token può essere utilizzato una sola volta.')
+        setError('This interview has already been started. Each token can be used only once.')
         return
       }
       if (resp.status === 404) {
-        setError('Token non valido o scaduto. Il token può essere utilizzato una sola volta.')
+        setError('Token not valid or expired. The token can be used only once.')
         return
       }
       if (!resp.ok) throw new Error('Failed to start interview')
@@ -425,7 +425,7 @@ export function Interview() {
           textAlign: 'center',
           fontWeight: '500'
         }}>
-          ⚠️ <strong>ATTENZIONE:</strong> Se chiudi la pagina o esci dall'intervista, il colloquio verrà terminato e inviato per la valutazione.
+          ⚠️ <strong>ATTENTION:</strong> If you close the page or exit the interview, the interview will be terminated and sent for evaluation.
         </div>
       )}
 
