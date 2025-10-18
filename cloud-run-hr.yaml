@@ -9,7 +9,7 @@ spec:
     metadata:
       annotations:
         autoscaling.knative.dev/maxScale: "5"
-        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/minScale: "0"
     spec:
       containerConcurrency: 1000
       containers:
