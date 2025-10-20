@@ -97,6 +97,20 @@ class MessagePayload(BaseModel):
     text: str
 
 
+class EvaluationCriterion(BaseModel):
+    evaluation_criteria_1: str
+    evaluation_criteria_2: str
+
+
+class RequirementEvaluation(BaseModel):
+    requirement: str
+    criteria: EvaluationCriterion
+
+
+class EvaluationCriteriaUpdate(BaseModel):
+    evaluation_schema: list[RequirementEvaluation]
+
+
 app = FastAPI(title="Vertigo AI Backend", version="0.1.0")
 
 app.add_middleware(
@@ -397,6 +411,48 @@ def delete_position(position_id: str, auth_data=Depends(hr_auth)):
         return {"ok": True, "message": "Position deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete position: {str(e)}")
+
+
+@app.put("/positions/{position_id}/evaluation-criteria")
+def update_evaluation_criteria(position_id: str, payload: EvaluationCriteriaUpdate, auth_data=Depends(hr_auth)):
+    collections = get_tenant_collections_from_auth(auth_data)
+    
+    try:
+        collection = db[collections["positions"]]
+        
+        # Verifica che la posizione esista
+        position = collection.find_one({"_id": position_id})
+        if not position:
+            raise HTTPException(status_code=404, detail="Position not found")
+        
+        # Converti il payload in un dizionario per MongoDB
+        evaluation_criteria = {
+            "evaluation_schema": [
+                {
+                    "requirement": req.requirement,
+                    "criteria": {
+                        "evaluation_criteria_1": req.criteria.evaluation_criteria_1,
+                        "evaluation_criteria_2": req.criteria.evaluation_criteria_2
+                    }
+                }
+                for req in payload.evaluation_schema
+            ]
+        }
+        
+        # Aggiorna il documento
+        result = collection.update_one(
+            {"_id": position_id},
+            {"$set": {"evaluation_criteria": evaluation_criteria}}
+        )
+        
+        if result.modified_count == 0 and result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Position not found")
+        
+        return {"ok": True, "message": "Evaluation criteria updated successfully", "evaluation_criteria": evaluation_criteria}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update evaluation criteria: {str(e)}")
 
 
 @app.put("/sessions/{session_id}/token-sent")

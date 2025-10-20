@@ -8,7 +8,10 @@ export function Positions() {
   const [form, setForm] = useState({ position_id: '', position_name: '', job_description: '', seniority_level: 'Mid-Level', hr_special_needs: '' })
   const [kbDocs, setKbDocs] = useState<{ title: string; content: string }[]>([])
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<Record<string, 'text' | 'cases' | 'evaluation' | null>>({})
   const [details, setDetails] = useState<Record<string, any>>({})
+  const [editedCriteria, setEditedCriteria] = useState<Record<string, any>>({})
+  const [savingCriteria, setSavingCriteria] = useState(false)
   const [isPreparing, setIsPreparing] = useState(false)
   const token = localStorage.getItem('hr_jwt')
 
@@ -124,6 +127,73 @@ export function Positions() {
         const d = await res.json()
         setDetails(prev => ({ ...prev, [id]: d }))
       }
+    }
+  }
+
+  function handleTabClick(positionId: string, tab: 'text' | 'cases' | 'evaluation') {
+    setActiveTab(prev => ({
+      ...prev,
+      [positionId]: prev[positionId] === tab ? null : tab
+    }))
+  }
+
+  function initializeEditedCriteria(positionId: string, criteria: any) {
+    if (!editedCriteria[positionId] && criteria?.evaluation_schema) {
+      setEditedCriteria(prev => ({
+        ...prev,
+        [positionId]: JSON.parse(JSON.stringify(criteria.evaluation_schema))
+      }))
+    }
+  }
+
+  function updateCriterion(positionId: string, reqIndex: number, field: 'evaluation_criteria_1' | 'evaluation_criteria_2', value: string) {
+    setEditedCriteria(prev => {
+      const updated = { ...prev }
+      if (!updated[positionId]) {
+        updated[positionId] = []
+      }
+      updated[positionId] = [...updated[positionId]]
+      updated[positionId][reqIndex] = {
+        ...updated[positionId][reqIndex],
+        criteria: {
+          ...updated[positionId][reqIndex].criteria,
+          [field]: value
+        }
+      }
+      return updated
+    })
+  }
+
+  async function saveCriteria(positionId: string) {
+    setSavingCriteria(true)
+    try {
+      const resp = await fetch(`${API_BASE}/positions/${positionId}/evaluation-criteria`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ evaluation_schema: editedCriteria[positionId] })
+      })
+
+      if (resp.ok) {
+        alert('Criteri di valutazione aggiornati con successo!')
+        // Ricarica i dettagli della posizione
+        const res = await fetch(`${API_BASE}/positions/${positionId}`, { headers: { Authorization: `Bearer ${token}` } })
+        if (res.ok) {
+          const d = await res.json()
+          setDetails(prev => ({ ...prev, [positionId]: d }))
+          setEditedCriteria(prev => ({ ...prev, [positionId]: null }))
+        }
+      } else {
+        const error = await resp.json()
+        alert(`Errore nel salvataggio: ${error.detail || 'Errore sconosciuto'}`)
+      }
+    } catch (error) {
+      console.error('Save error:', error)
+      alert('Errore di connessione durante il salvataggio.')
+    } finally {
+      setSavingCriteria(false)
     }
   }
 
@@ -412,96 +482,331 @@ export function Positions() {
                     </div>
                     
                     {isExpanded && (
-                      <div style={{ 
-                        marginTop: '20px', 
-                        padding: '20px', 
-                        background: 'linear-gradient(135deg, var(--light-purple), var(--pastel-pink))', 
-                        borderRadius: 'var(--radius-md)',
-                        border: '1px solid rgba(139, 92, 246, 0.2)'
-                      }}>
+                      <div style={{ marginTop: '20px' }}>
+                        {/* Tab Navigation */}
+                        <div style={{ 
+                          display: 'flex', 
+                          gap: '8px', 
+                          marginBottom: '20px',
+                          borderBottom: '2px solid var(--border-light)'
+                        }}>
+                          <button
+                            onClick={() => handleTabClick(p._id, 'text')}
+                            style={{
+                              padding: '12px 24px',
+                              background: activeTab[p._id] === 'text' ? 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))' : 'transparent',
+                              color: activeTab[p._id] === 'text' ? 'white' : 'var(--text-primary)',
+                              border: 'none',
+                              borderBottom: activeTab[p._id] === 'text' ? '3px solid var(--primary-purple)' : '3px solid transparent',
+                              borderRadius: '8px 8px 0 0',
+                              fontSize: '14px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            📄 Testo annuncio
+                          </button>
+                          <button
+                            onClick={() => handleTabClick(p._id, 'cases')}
+                            style={{
+                              padding: '12px 24px',
+                              background: activeTab[p._id] === 'cases' ? 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))' : 'transparent',
+                              color: activeTab[p._id] === 'cases' ? 'white' : 'var(--text-primary)',
+                              border: 'none',
+                              borderBottom: activeTab[p._id] === 'cases' ? '3px solid var(--primary-purple)' : '3px solid transparent',
+                              borderRadius: '8px 8px 0 0',
+                              fontSize: '14px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            💼 Casi da colloquio
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleTabClick(p._id, 'evaluation')
+                              if (info?.evaluation_criteria) {
+                                initializeEditedCriteria(p._id, info.evaluation_criteria)
+                              }
+                            }}
+                            style={{
+                              padding: '12px 24px',
+                              background: activeTab[p._id] === 'evaluation' ? 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))' : 'transparent',
+                              color: activeTab[p._id] === 'evaluation' ? 'white' : 'var(--text-primary)',
+                              border: 'none',
+                              borderBottom: activeTab[p._id] === 'evaluation' ? '3px solid var(--primary-purple)' : '3px solid transparent',
+                              borderRadius: '8px 8px 0 0',
+                              fontSize: '14px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            📊 Griglia valutativa
+                          </button>
+                        </div>
+
+                        {/* Tab Content */}
                         {info ? (
-                          <div style={{ display: 'grid', gap: '20px' }}>
-                            <div>
-                              <div style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '500', marginBottom: '4px' }}>
-                                LIVELLO DI SENIORITY
-                              </div>
-                              <div style={{ fontSize: '16px', fontWeight: '500' }}>
-                                {info.seniority_level || '—'}
-                              </div>
-                            </div>
-                            
-                            <div>
-                              <div style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '500', marginBottom: '8px' }}>
-                                CASI GENERATI
-                              </div>
-                              {hasCases ? (
-                                <div style={{ display: 'grid', gap: '12px' }}>
-                                  {info.all_cases.cases.map((c: any) => (
-                                    <div key={c.question_id} style={{ 
-                                      padding: '16px', 
-                                      background: 'rgba(255, 255, 255, 0.7)', 
-                                      borderRadius: 'var(--radius-md)',
-                                      border: '1px solid rgba(139, 92, 246, 0.1)'
-                                    }}>
-                                      <div style={{ fontWeight: '600', marginBottom: '8px', color: 'var(--text-primary)' }}>
-                                        {c.question_title}
-                                      </div>
-                                      <div style={{ 
-                                        whiteSpace: 'pre-wrap', 
-                                        color: 'var(--text-secondary)', 
-                                        marginBottom: '12px',
-                                        fontSize: '14px',
-                                        lineHeight: '1.5'
-                                      }}>
-                                        {c.question_text}
-                                      </div>
-                                      <div>
-                                        <div style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}>
-                                          Passaggi di Ragionamento
-                                        </div>
-                                        <ul style={{ paddingLeft: '16px', fontSize: '14px' }}>
-                                          {c.reasoning_steps?.map((s: any) => (
-                                            <li key={s.id} style={{ marginBottom: '8px', lineHeight: '1.4' }}>
-                                              <strong>Passaggio {s.id}:</strong> {s.title}
-                                              <div style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>
-                                                {s.description}
-                                              </div>
-                                              {Array.isArray(s.skills_to_test) && s.skills_to_test.length > 0 && (
-                                                <div style={{ 
-                                                  fontSize: '12px', 
-                                                  color: 'var(--text-muted)', 
-                                                  marginTop: '4px',
-                                                  background: 'rgba(139, 92, 246, 0.1)',
-                                                  padding: '2px 6px',
-                                                  borderRadius: '4px',
-                                                  display: 'inline-block'
-                                                }}>
-                                                  Competenze: {s.skills_to_test.map((x: any) => x.skill_name).filter(Boolean).join(', ') || '—'}
-                                                </div>
-                                              )}
-                                            </li>
-                                          ))}
-                                        </ul>
-                                      </div>
+                          <div style={{ 
+                            padding: '20px', 
+                            background: 'linear-gradient(135deg, var(--light-purple), var(--pastel-pink))', 
+                            borderRadius: 'var(--radius-md)',
+                            border: '1px solid rgba(139, 92, 246, 0.2)'
+                          }}>
+                            {/* Testo annuncio Tab */}
+                            {activeTab[p._id] === 'text' && (
+                              <div style={{ display: 'grid', gap: '20px' }}>
+                                <div>
+                                  <div style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '500', marginBottom: '8px' }}>
+                                    LIVELLO DI SENIORITY
+                                  </div>
+                                  <div style={{ 
+                                    fontSize: '16px', 
+                                    fontWeight: '500',
+                                    padding: '12px',
+                                    background: 'rgba(255, 255, 255, 0.7)',
+                                    borderRadius: 'var(--radius-md)'
+                                  }}>
+                                    {info.seniority_level || '—'}
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <div style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '500', marginBottom: '8px' }}>
+                                    DESCRIZIONE DEL LAVORO
+                                  </div>
+                                  <div style={{ 
+                                    whiteSpace: 'pre-wrap',
+                                    padding: '16px',
+                                    background: 'rgba(255, 255, 255, 0.7)',
+                                    borderRadius: 'var(--radius-md)',
+                                    fontSize: '14px',
+                                    lineHeight: '1.6'
+                                  }}>
+                                    {info.job_description || '—'}
+                                  </div>
+                                </div>
+
+                                {info.hr_special_needs && (
+                                  <div>
+                                    <div style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '500', marginBottom: '8px' }}>
+                                      ESIGENZE SPECIALI HR
                                     </div>
-                                  ))}
+                                    <div style={{ 
+                                      whiteSpace: 'pre-wrap',
+                                      padding: '16px',
+                                      background: 'rgba(255, 255, 255, 0.7)',
+                                      borderRadius: 'var(--radius-md)',
+                                      fontSize: '14px',
+                                      lineHeight: '1.6'
+                                    }}>
+                                      {info.hr_special_needs}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Casi da colloquio Tab */}
+                            {activeTab[p._id] === 'cases' && (
+                              <div>
+                                <div style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '500', marginBottom: '8px' }}>
+                                  CASI GENERATI
                                 </div>
-                              ) : (
-                                <div style={{ 
-                                  textAlign: 'center', 
-                                  padding: '20px', 
-                                  color: 'var(--text-muted)',
-                                  background: 'rgba(255, 255, 255, 0.5)',
-                                  borderRadius: 'var(--radius-md)'
-                                }}>
-                                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
-                                  Nessun caso disponibile ancora. Esegui la preparazione dati per generare i casi di colloquio.
+                                {hasCases ? (
+                                  <div style={{ display: 'grid', gap: '12px' }}>
+                                    {info.all_cases.cases.map((c: any) => (
+                                      <div key={c.question_id} style={{ 
+                                        padding: '16px', 
+                                        background: 'rgba(255, 255, 255, 0.7)', 
+                                        borderRadius: 'var(--radius-md)',
+                                        border: '1px solid rgba(139, 92, 246, 0.1)'
+                                      }}>
+                                        <div style={{ fontWeight: '600', marginBottom: '8px', color: 'var(--text-primary)' }}>
+                                          {c.question_title}
+                                        </div>
+                                        <div style={{ 
+                                          whiteSpace: 'pre-wrap', 
+                                          color: 'var(--text-secondary)', 
+                                          marginBottom: '12px',
+                                          fontSize: '14px',
+                                          lineHeight: '1.5'
+                                        }}>
+                                          {c.question_text}
+                                        </div>
+                                        <div>
+                                          <div style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}>
+                                            Passaggi di Ragionamento
+                                          </div>
+                                          <ul style={{ paddingLeft: '16px', fontSize: '14px' }}>
+                                            {c.reasoning_steps?.map((s: any) => (
+                                              <li key={s.id} style={{ marginBottom: '8px', lineHeight: '1.4' }}>
+                                                <strong>Passaggio {s.id}:</strong> {s.title}
+                                                <div style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>
+                                                  {s.description}
+                                                </div>
+                                                {Array.isArray(s.skills_to_test) && s.skills_to_test.length > 0 && (
+                                                  <div style={{ 
+                                                    fontSize: '12px', 
+                                                    color: 'var(--text-muted)', 
+                                                    marginTop: '4px',
+                                                    background: 'rgba(139, 92, 246, 0.1)',
+                                                    padding: '2px 6px',
+                                                    borderRadius: '4px',
+                                                    display: 'inline-block'
+                                                  }}>
+                                                    Competenze: {s.skills_to_test.map((x: any) => x.skill_name).filter(Boolean).join(', ') || '—'}
+                                                  </div>
+                                                )}
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div style={{ 
+                                    textAlign: 'center', 
+                                    padding: '20px', 
+                                    color: 'var(--text-muted)',
+                                    background: 'rgba(255, 255, 255, 0.5)',
+                                    borderRadius: 'var(--radius-md)'
+                                  }}>
+                                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
+                                    Nessun caso disponibile ancora. Esegui la preparazione dati per generare i casi di colloquio.
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Griglia valutativa Tab */}
+                            {activeTab[p._id] === 'evaluation' && (
+                              <div>
+                                <div style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '500', marginBottom: '12px' }}>
+                                  CRITERI DI VALUTAZIONE
                                 </div>
-                              )}
-                            </div>
+                                {info.evaluation_criteria?.evaluation_schema ? (
+                                  <div>
+                                    <div style={{ display: 'grid', gap: '16px', marginBottom: '20px' }}>
+                                      {(editedCriteria[p._id] || info.evaluation_criteria.evaluation_schema).map((req: any, idx: number) => (
+                                        <div key={idx} style={{ 
+                                          padding: '16px', 
+                                          background: 'rgba(255, 255, 255, 0.7)', 
+                                          borderRadius: 'var(--radius-md)',
+                                          border: '1px solid rgba(139, 92, 246, 0.1)'
+                                        }}>
+                                          <div style={{ 
+                                            fontWeight: '600', 
+                                            marginBottom: '12px', 
+                                            color: 'var(--text-primary)',
+                                            fontSize: '15px',
+                                            padding: '8px',
+                                            background: 'rgba(139, 92, 246, 0.1)',
+                                            borderRadius: '6px'
+                                          }}>
+                                            📌 {req.requirement}
+                                          </div>
+                                          <div style={{ display: 'grid', gap: '12px' }}>
+                                            <div>
+                                              <label style={{ 
+                                                display: 'block', 
+                                                fontSize: '13px', 
+                                                fontWeight: '500', 
+                                                color: 'var(--text-secondary)',
+                                                marginBottom: '6px' 
+                                              }}>
+                                                Criterio di Valutazione 1
+                                              </label>
+                                              <textarea
+                                                value={editedCriteria[p._id]?.[idx]?.criteria?.evaluation_criteria_1 || req.criteria.evaluation_criteria_1}
+                                                onChange={(e) => updateCriterion(p._id, idx, 'evaluation_criteria_1', e.target.value)}
+                                                rows={3}
+                                                style={{ 
+                                                  width: '100%', 
+                                                  padding: '10px',
+                                                  fontSize: '14px',
+                                                  borderRadius: '6px',
+                                                  border: '1px solid rgba(139, 92, 246, 0.3)',
+                                                  background: 'white'
+                                                }}
+                                              />
+                                            </div>
+                                            <div>
+                                              <label style={{ 
+                                                display: 'block', 
+                                                fontSize: '13px', 
+                                                fontWeight: '500', 
+                                                color: 'var(--text-secondary)',
+                                                marginBottom: '6px' 
+                                              }}>
+                                                Criterio di Valutazione 2
+                                              </label>
+                                              <textarea
+                                                value={editedCriteria[p._id]?.[idx]?.criteria?.evaluation_criteria_2 || req.criteria.evaluation_criteria_2}
+                                                onChange={(e) => updateCriterion(p._id, idx, 'evaluation_criteria_2', e.target.value)}
+                                                rows={3}
+                                                style={{ 
+                                                  width: '100%', 
+                                                  padding: '10px',
+                                                  fontSize: '14px',
+                                                  borderRadius: '6px',
+                                                  border: '1px solid rgba(139, 92, 246, 0.3)',
+                                                  background: 'white'
+                                                }}
+                                              />
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {editedCriteria[p._id] && (
+                                      <button
+                                        onClick={() => saveCriteria(p._id)}
+                                        disabled={savingCriteria}
+                                        style={{
+                                          width: '100%',
+                                          padding: '12px',
+                                          background: savingCriteria ? '#94a3b8' : 'linear-gradient(135deg, #10b981, #059669)',
+                                          color: 'white',
+                                          border: 'none',
+                                          borderRadius: '8px',
+                                          fontSize: '15px',
+                                          fontWeight: '600',
+                                          cursor: savingCriteria ? 'not-allowed' : 'pointer',
+                                          transition: 'all 0.2s ease'
+                                        }}
+                                      >
+                                        {savingCriteria ? '⏳ Salvataggio...' : '💾 Salva Modifiche'}
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div style={{ 
+                                    textAlign: 'center', 
+                                    padding: '20px', 
+                                    color: 'var(--text-muted)',
+                                    background: 'rgba(255, 255, 255, 0.5)',
+                                    borderRadius: 'var(--radius-md)'
+                                  }}>
+                                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
+                                    Nessun criterio di valutazione disponibile. Esegui la preparazione dati per generarli.
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         ) : (
-                          <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>
+                          <div style={{ 
+                            textAlign: 'center', 
+                            padding: '20px', 
+                            color: 'var(--text-muted)',
+                            background: 'linear-gradient(135deg, var(--light-purple), var(--pastel-pink))',
+                            borderRadius: 'var(--radius-md)'
+                          }}>
                             <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
                             Caricamento dettagli...
                           </div>
@@ -511,9 +816,7 @@ export function Positions() {
                         <div style={{ 
                           display: 'flex', 
                           gap: '12px', 
-                          marginTop: '20px',
-                          paddingTop: '20px',
-                          borderTop: '1px solid rgba(139, 92, 246, 0.2)'
+                          marginTop: '20px'
                         }}>
                           <button 
                             onClick={() => runPrep(p._id)}
