@@ -55,6 +55,8 @@ from services.tenant_data_manager import (
     list_incomplete_sessions_tenant,
     get_dashboard_data_tenant
 )
+from services.batch_service import BatchService
+from services.email_parser import extract_email_from_text
 from services.interview_config_service import (
     get_interview_config,
     save_interview_config,
@@ -109,6 +111,11 @@ class RequirementEvaluation(BaseModel):
 
 class EvaluationCriteriaUpdate(BaseModel):
     evaluation_schema: list[RequirementEvaluation]
+
+
+class StartInterviewPayload(BaseModel):
+    name: str
+    surname: str
 
 
 app = FastAPI(title="Vertigo AI Backend", version="0.1.0")
@@ -463,7 +470,12 @@ def mark_token_sent(session_id: str, auth_data=Depends(hr_auth)):
         collection = db[collections["sessions"]]
         result = collection.update_one(
             {"_id": session_id},
-            {"$set": {"token_sent": True, "token_sent_by": auth_data.get("sub"), "token_sent_at": datetime.utcnow()}}
+            {"$set": {
+                "token_sent": True, 
+                "token_sent_by": auth_data.get("sub"), 
+                "token_sent_at": datetime.utcnow(),
+                "is_new_batch": False  # Rimuove badge NEW quando token inviato
+            }}
         )
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -826,10 +838,46 @@ def get_session_conversation(session_id: str, auth_data=Depends(hr_auth)):
 
 @app.get("/sessions")
 def list_sessions(auth_data=Depends(hr_auth)):
-    """List incomplete sessions for Nuova Sessione dashboard"""
+    """List incomplete sessions for Nuova Sessione dashboard with batch grouping"""
     collections = get_tenant_collections_from_auth(auth_data)
     results = list_incomplete_sessions_tenant(collections["sessions"])
-    return {"items": results}
+    
+    # Raggruppa sessioni per batch_date
+    batch_groups = {}
+    ungrouped_sessions = []
+    
+    for session in results:
+        batch_date = session.get("batch_date")
+        if batch_date:
+            if batch_date not in batch_groups:
+                batch_groups[batch_date] = {
+                    "batch_date": batch_date,
+                    "batch_id": session.get("batch_id", ""),
+                    "sessions": [],
+                    "total_count": 0,
+                    "new_count": 0
+                }
+            
+            batch_groups[batch_date]["sessions"].append(session)
+            batch_groups[batch_date]["total_count"] += 1
+            
+            if session.get("is_new_batch", False):
+                batch_groups[batch_date]["new_count"] += 1
+        else:
+            # Sessioni non batch (upload singolo)
+            ungrouped_sessions.append(session)
+    
+    # Converti in lista ordinata per data (più recente prima)
+    batch_groups_list = []
+    for batch_date in sorted(batch_groups.keys(), reverse=True):
+        batch_groups_list.append(batch_groups[batch_date])
+    
+    return {
+        "items": results,  # Mantieni compatibilità con frontend esistente
+        "batch_groups": batch_groups_list,
+        "ungrouped_sessions": ungrouped_sessions,
+        "total_batches": len(batch_groups_list)
+    }
 
 
 @app.get("/user/info")
@@ -968,7 +1016,7 @@ def resolve_interview(token: str):
 
 
 @app.post("/interviews/{token}/start")
-def start_interview(token: str):
+def start_interview(token: str, payload: StartInterviewPayload):
     result = resolve_token_global(token)
     if not result:
         raise HTTPException(status_code=404, detail="Invalid or expired link")
@@ -986,6 +1034,21 @@ def start_interview(token: str):
     if sess.get("interview_started"):
         raise HTTPException(status_code=409, detail="Interview has already been started. Token can only be used once.")
     
+    # Salva nome e cognome del candidato
+    full_name = f"{payload.name} {payload.surname}".strip()
+    save_stage_output_tenant(
+        session_id, 
+        "candidate_name", 
+        full_name, 
+        collections["sessions"]
+    )
+    save_stage_output_tenant(
+        session_id, 
+        "candidate_surname", 
+        payload.surname, 
+        collections["sessions"]
+    )
+    
     message = start_interview_for_session(session_id, tenant_id)
     
     # Mark interview as started and save to database
@@ -993,7 +1056,12 @@ def start_interview(token: str):
         sessions_collection = db[f"sessions_{tenant_id}"]
         sessions_collection.update_one(
             {"_id": session_id}, 
-            {"$set": {"interview_started": True, "interview_started_at": datetime.utcnow().isoformat()}}, 
+            {"$set": {
+                "interview_started": True, 
+                "interview_started_at": datetime.utcnow().isoformat(),
+                "candidate_name": full_name,
+                "candidate_surname": payload.surname
+            }}, 
             upsert=False
         )
         print(f"🔒 Interview started for session {session_id} - token marked as used")
@@ -1409,10 +1477,208 @@ async def update_interview_config_endpoint(
         }
     }
 
+# Batch Processing imports moved to top level
+
+@app.post("/api/batch/upload-cvs", dependencies=[Depends(hr_auth)])
+async def bulk_upload_cvs(
+    position_id: str = Form(...),
+    files: List[UploadFile] = File(...),
+    auth_data: dict = Depends(hr_auth)
+):
+    """Upload massivo di CV per batch processing"""
+    tenant_id = auth_data.get("tenant_id")
+    collections = get_tenant_collections(tenant_id)
+    
+    if not files:
+        raise HTTPException(status_code=400, detail="Nessun file fornito")
+    
+    # Validazione numero file
+    if len(files) > 100:
+        raise HTTPException(status_code=400, detail="Massimo 100 file per batch")
+    
+    # Validazione file PDF
+    for file in files:
+        if not file.filename.lower().endswith('.pdf'):
+            raise HTTPException(status_code=400, detail=f"File {file.filename} non è un PDF")
+    
+    uploaded_sessions = []
+    batch_date = datetime.now().strftime("%Y-%m-%d")
+    batch_id = f"batch_{batch_date.replace('-', '')}_{datetime.now().strftime('%H%M%S')}"
+    
+    for file in files:
+        try:
+            # 1. Leggi CV
+            cv_bytes = await file.read()
+            cv_text = ""
+            try:
+                with fitz.open(stream=cv_bytes, filetype="pdf") as doc:
+                    cv_text = "".join(page.get_text() for page in doc)
+            except Exception as e:
+                print(f"⚠️ Errore lettura PDF {file.filename}: {e}")
+                continue
+            
+            # Validazione dimensione file
+            if len(cv_bytes) > 10 * 1024 * 1024:  # 10MB limit
+                print(f"⚠️ File {file.filename} troppo grande (>10MB), saltato")
+                continue
+            
+            # 2. Estrai email con regex
+            candidate_email = extract_email_from_text(cv_text)
+            
+            # 3. Crea sessione
+            session_id = str(uuid.uuid4())
+            candidate_name = file.filename.replace(".pdf", "").replace("_", " ")
+            
+            create_new_session_tenant(
+                session_id,  # positional
+                position_id,  # positional  
+                "",  # candidate_name - positional
+                collections["sessions"],  # collection_name - positional
+                candidate_email  # candidate_email - positional
+            )
+            
+            # 4. Salva CV e metadata batch
+            save_stage_output_tenant(
+                session_id=session_id,
+                stage_name="uploaded_cv_text",
+                data_content=cv_text,
+                collection_name=collections["sessions"]
+            )
+            
+            save_stage_output_tenant(
+                session_id=session_id,
+                stage_name="cv_analysis_status",
+                data_content="pending",
+                collection_name=collections["sessions"]
+            )
+            
+            # 5. Aggiungi metadata batch
+            if db:
+                sessions_collection = db[collections["sessions"]]
+                sessions_collection.update_one(
+                    {"_id": session_id},
+                    {"$set": {
+                        "tenant_id": tenant_id,  # CRITICO: Aggiungi tenant_id
+                        "batch_id": batch_id,
+                        "batch_date": batch_date,
+                        "is_new_batch": True,
+                        "candidate_surname": ""  # Nuovo campo
+                    }}
+                )
+            
+            uploaded_sessions.append({
+                "session_id": session_id,
+                "filename": file.filename,
+                "candidate_email": candidate_email
+            })
+            
+        except Exception as e:
+            print(f"❌ Errore processing file {file.filename}: {e}")
+            continue
+    
+    return {
+        "message": f"{len(uploaded_sessions)} CV caricati con successo",
+        "sessions": uploaded_sessions,
+        "batch_id": batch_id,
+        "batch_date": batch_date,
+        "note": "I CV verranno processati nel prossimo batch schedulato (ore 19:00)"
+    }
+
+@app.post("/api/batch/trigger-manual", dependencies=[Depends(hr_auth)])
+async def trigger_manual_batch(auth_data: dict = Depends(hr_auth)):
+    """Trigger manuale del batch (per testing o urgenze)"""
+    batch_service = BatchService()
+    batch_id = batch_service.create_cv_analysis_batch()
+    
+    if not batch_id:
+        return {"message": "Nessun CV da processare"}
+    
+    return {
+        "message": "Batch creato con successo",
+        "batch_id": batch_id,
+        "status": "validating"
+    }
+
+@app.get("/api/batch/status/{batch_id}", dependencies=[Depends(hr_auth)])
+async def get_batch_status(batch_id: str):
+    """Controlla status di un batch"""
+    batch_service = BatchService()
+    status = batch_service.check_batch_status(batch_id)
+    
+    # Info dal DB
+    batch_info = batch_service.get_batch_info(batch_id)
+    
+    return {
+        "batch_id": batch_id,
+        "status": status,
+        "created_at": batch_info.get("created_at") if batch_info else None,
+        "total_requests": batch_info.get("total_requests") if batch_info else 0,
+        "request_counts": batch_info.get("request_counts", {}) if batch_info else {}
+    }
+
+@app.post("/api/batch/retrieve/{batch_id}", dependencies=[Depends(hr_auth)])
+async def retrieve_batch_results(batch_id: str):
+    """Recupera risultati di un batch completato"""
+    batch_service = BatchService()
+    success = batch_service.retrieve_batch_results(batch_id)
+    
+    if success:
+        return {"message": "Risultati recuperati e salvati con successo"}
+    else:
+        raise HTTPException(status_code=400, detail="Batch non completato o errore")
+
+@app.get("/api/batch/list", dependencies=[Depends(hr_auth)])
+async def list_batches(auth_data: dict = Depends(hr_auth)):
+    """Lista tutti i batch jobs"""
+    batch_service = BatchService()
+    batches = batch_service.list_batches(limit=20)
+    
+    return {"batches": batches}
+
 @app.get("/health")
 def health_check():
     """Health check endpoint for Cloud Run"""
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
+# Startup events per scheduler e batch processor
+@app.on_event("startup")
+async def startup_event():
+    """Inizializzazione app con scheduler e batch processor"""
+    try:
+        # Avvia scheduler per batch giornalieri
+        from services.scheduler_service import get_scheduler
+        scheduler = get_scheduler()
+        scheduler.schedule_daily_cv_batch(hour="19:00")
+        scheduler.start()
+        print("✅ Batch scheduler inizializzato (ore 19:00)")
+        
+        # Avvia batch processor per monitoring automatico
+        from services.batch_processor import get_processor
+        processor = get_processor()
+        processor.start_monitoring(check_interval_seconds=300)  # 5 minuti
+        print("✅ Batch processor avviato (controllo ogni 5 minuti)")
+        
+    except Exception as e:
+        print(f"❌ Errore inizializzazione batch services: {e}")
+        import traceback
+        traceback.print_exc()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup al shutdown"""
+    try:
+        from services.scheduler_service import get_scheduler
+        from services.batch_processor import get_processor
+        
+        scheduler = get_scheduler()
+        scheduler.stop()
+        
+        processor = get_processor()
+        processor.stop_monitoring()
+        
+        print("✅ Batch services fermati")
+    except Exception as e:
+        print(f"⚠️ Errore durante shutdown: {e}")
 
 if __name__ == "__main__":
     import uvicorn

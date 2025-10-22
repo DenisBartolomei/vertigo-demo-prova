@@ -25,12 +25,12 @@ gcloud run deploy vertigo-ai-backend \
     --platform managed \
     --region ${REGION} \
     --allow-unauthenticated \
-    --memory 4Gi \
-    --cpu 2 \
+    --memory 2Gi \
+    --cpu 1 \
     --timeout 300 \
     --max-instances 10 \
-    --min-instances 1 \
-    --set-env-vars MONGODB_URI="${MONGODB_URI}",AZURE_OPENAI_ENDPOINT="${AZURE_OPENAI_ENDPOINT}",AZURE_OPENAI_API_KEY="${AZURE_OPENAI_API_KEY}",AZURE_OPENAI_API_VERSION="${AZURE_OPENAI_API_VERSION}",AZURE_OPENAI_DEPLOYMENT_NAME="${AZURE_OPENAI_DEPLOYMENT_NAME}",JWT_SECRET="${JWT_SECRET}",PYTHON_ENV=production
+    --min-instances 0 \
+    --set-env-vars MONGODB_URI="${MONGODB_URI}",AZURE_OPENAI_ENDPOINT="${AZURE_OPENAI_ENDPOINT}",AZURE_OPENAI_API_KEY="${AZURE_OPENAI_API_KEY}",AZURE_OPENAI_API_VERSION="${AZURE_OPENAI_API_VERSION}",AZURE_OPENAI_DEPLOYMENT_NAME="${AZURE_OPENAI_DEPLOYMENT_NAME}",JWT_SECRET="${JWT_SECRET}",PYTHON_ENV=production,AZURE_OPENAI_BATCH_ENDPOINT="${AZURE_OPENAI_BATCH_ENDPOINT}",AZURE_OPENAI_BATCH_API_KEY="${AZURE_OPENAI_BATCH_API_KEY}",AZURE_OPENAI_BATCH_API_VERSION=${AZURE_OPENAI_BATCH_API_VERSION}",AZURE_OPENAI_BATCH_DEPLOYMENT_NAME"${AZURE_OPENAI_BATCH_DEPLOYMENT_NAME}"
 
 # 2. Get backend URL
 BACKEND_URL=$(gcloud run services describe vertigo-ai-backend --region=${REGION} --format="value(status.url)")
@@ -53,7 +53,7 @@ gcloud run deploy vertigo-ai-hr \
     --memory 1Gi \
     --cpu 1 \
     --max-instances 5 \
-    --min-instances 1 \
+    --min-instances 0 \
     --set-env-vars BACKEND_URL="${BACKEND_URL}"
 
 # 6. Deploy Candidate Frontend
@@ -65,7 +65,7 @@ gcloud run deploy vertigo-ai-candidate \
     --memory 1Gi \
     --cpu 1 \
     --max-instances 5 \
-    --min-instances 1 \
+    --min-instances 0 \
     --set-env-vars BACKEND_URL="${BACKEND_URL}"
 
 # Get service URLs
