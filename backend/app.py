@@ -1342,13 +1342,13 @@ def get_security_report(session_id: str, auth_data=Depends(hr_auth)):
                     raw_score += 5
                 else:
                     raw_score += 1
-            
-            # Normalize the score to 0-100 range
-            security_summary["cheating_score"] = normalize_cheating_score(raw_score)
                 
                 # Count by type
                 event_type = event.get("event_type", "unknown")
                 security_summary["events_by_type"][event_type] = security_summary["events_by_type"].get(event_type, 0) + 1
+            
+            # Normalize the score to 0-100 range
+            security_summary["cheating_score"] = normalize_cheating_score(raw_score)
         
         # Sort events by timestamp
         security_events.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
