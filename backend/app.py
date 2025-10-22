@@ -120,7 +120,7 @@ class StartInterviewPayload(BaseModel):
     
     class Config:
         # Permetti campi extra per debugging
-        extra = "forbid"
+        extra = "allow"
 
 
 app = FastAPI(title="Vertigo AI Backend", version="0.1.0")
@@ -1022,14 +1022,29 @@ def resolve_interview(token: str):
 
 @app.post("/interviews/{token}/start")
 def start_interview(token: str, payload: StartInterviewPayload):
-    print(f"🔍 Tentativo di avvio colloquio con token: {token}")
-    print(f"📝 Payload ricevuto: name='{payload.name}', surname='{payload.surname}'")
-    print(f"📝 Payload completo: {payload.dict()}")
+    print(f"Tentativo di avvio colloquio con token: {token}")
+    print(f"Payload ricevuto: name='{payload.name}', surname='{payload.surname}'")
+    print(f"Payload completo: {payload.dict()}")
+    
+    # Validate required fields
+    if not payload.name or not payload.name.strip():
+        raise HTTPException(status_code=422, detail="Name is required and cannot be empty")
+    if not payload.surname or not payload.surname.strip():
+        raise HTTPException(status_code=422, detail="Surname is required and cannot be empty")
     
     try:
         result = resolve_token_global(token)
         if not result:
-            print(f"❌ Token non valido o scaduto: {token}")
+            print(f"Token non valido o scaduto: {token}")
+            # Debug: check if token exists in any collection
+            if db is not None:
+                collections = db.list_collection_names()
+                interview_collections = [c for c in collections if c.endswith("_interview_links")]
+                print(f"Available interview collections: {interview_collections}")
+                for coll_name in interview_collections:
+                    coll = db[coll_name]
+                    count = coll.count_documents({})
+                    print(f"Collection {coll_name}: {count} documents")
             raise HTTPException(status_code=404, detail="Invalid or expired link")
         
         session_id, tenant_id = result
@@ -1076,18 +1091,22 @@ def start_interview(token: str, payload: StartInterviewPayload):
     
     # Mark interview as started and save to database
     if db is not None:
-        sessions_collection = db[f"sessions_{tenant_id}"]
-        sessions_collection.update_one(
-            {"_id": session_id}, 
-            {"$set": {
-                "interview_started": True, 
-                "interview_started_at": datetime.utcnow().isoformat(),
-                "candidate_name": full_name,
-                "candidate_surname": payload.surname
-            }}, 
-            upsert=False
-        )
-        print(f"🔒 Interview started for session {session_id} - token marked as used")
+        try:
+            sessions_collection = db[f"sessions_{tenant_id}"]
+            sessions_collection.update_one(
+                {"_id": session_id}, 
+                {"$set": {
+                    "interview_started": True, 
+                    "interview_started_at": datetime.utcnow().isoformat(),
+                    "candidate_name": full_name,
+                    "candidate_surname": payload.surname
+                }}, 
+                upsert=False
+            )
+            print(f"Interview started for session {session_id} - token marked as used")
+        except Exception as db_error:
+            print(f"Warning: Failed to update session in database: {db_error}")
+            # Continue anyway - the interview can still proceed
     
     # Note: Token remains valid for the duration of the interview
     
@@ -1180,15 +1199,29 @@ def report_security_event(token: str, event_data: dict):
             "details": event_data.get("details", ""),
             "created_at": datetime.utcnow().isoformat()
         }       
-        # Generate unique event ID
-        event_id = f"{session_id}_{int(datetime.utcnow().timestamp() * 1000)}"
+        # Generate unique event ID with random component to avoid duplicates
+        import uuid
+        timestamp_ms = int(datetime.utcnow().timestamp() * 1000)
+        random_suffix = str(uuid.uuid4())[:8]
+        event_id = f"{session_id}_{timestamp_ms}_{random_suffix}"
         security_event["_id"] = event_id
         
-        # Save security event to database
+        # Save security event to database with duplicate handling
         if db is not None:
             security_events_collection = db[f"security_events_{tenant_id}"]
-            security_events_collection.insert_one(security_event)
-            print(f"🔒 Security event saved: {event_id}")
+            try:
+                security_events_collection.insert_one(security_event)
+                print(f"Security event saved: {event_id}")
+            except Exception as duplicate_error:
+                if "duplicate key" in str(duplicate_error).lower():
+                    # Generate new ID and retry once
+                    new_random_suffix = str(uuid.uuid4())[:8]
+                    new_event_id = f"{session_id}_{timestamp_ms}_{new_random_suffix}"
+                    security_event["_id"] = new_event_id
+                    security_events_collection.insert_one(security_event)
+                    print(f"Security event saved with new ID: {new_event_id}")
+                else:
+                    raise duplicate_error
         
         # Update session with security summary
         collections = get_tenant_collections(tenant_id)
@@ -1221,18 +1254,25 @@ def report_security_event(token: str, event_data: dict):
             summary["low_severity_events"] += 1
             summary["cheating_score"] += 1
         
+        # Normalize cheating score to 0-100 range
+        summary["cheating_score"] = normalize_cheating_score(summary["cheating_score"])
+        
         event_type = event_data.get("type", "unknown")
         summary["events_by_type"][event_type] = summary["events_by_type"].get(event_type, 0) + 1
         
         # Save updated session to database
         if db is not None:
-            sessions_collection = db[f"sessions_{tenant_id}"]
-            sessions_collection.update_one(
-                {"_id": session_id}, 
-                {"$set": {"security_summary": summary}}, 
-                upsert=False
-            )
-            print(f"📊 Security summary updated for session: {session_id}")
+            try:
+                sessions_collection = db[f"sessions_{tenant_id}"]
+                sessions_collection.update_one(
+                    {"_id": session_id}, 
+                    {"$set": {"security_summary": summary}}, 
+                    upsert=False
+                )
+                print(f"Security summary updated for session: {session_id}")
+            except Exception as update_error:
+                print(f"Warning: Failed to update security summary: {update_error}")
+                # Continue - the event was still recorded
         
         return {"status": "success", "event_id": event_id}
         
@@ -1293,14 +1333,18 @@ def get_security_report(session_id: str, auth_data=Depends(hr_auth)):
             }
             
             # Calculate cheating score
+            raw_score = 0
             for event in security_events:
                 severity = event.get("severity", "low")
                 if severity == "high":
-                    security_summary["cheating_score"] += 10
+                    raw_score += 10
                 elif severity == "medium":
-                    security_summary["cheating_score"] += 5
+                    raw_score += 5
                 else:
-                    security_summary["cheating_score"] += 1
+                    raw_score += 1
+            
+            # Normalize the score to 0-100 range
+            security_summary["cheating_score"] = normalize_cheating_score(raw_score)
                 
                 # Count by type
                 event_type = event.get("event_type", "unknown")
@@ -1309,15 +1353,15 @@ def get_security_report(session_id: str, auth_data=Depends(hr_auth)):
         # Sort events by timestamp
         security_events.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
         
-        # Generate risk assessment
+        # Generate risk assessment (using 0-100 scale)
         cheating_score = security_summary.get("cheating_score", 0)
-        if cheating_score >= 50:
+        if cheating_score >= 80:
             risk_level = "HIGH"
             risk_color = "#dc3545"
-        elif cheating_score >= 20:
+        elif cheating_score >= 50:
             risk_level = "MEDIUM"
             risk_color = "#ffc107"
-        elif cheating_score >= 5:
+        elif cheating_score >= 20:
             risk_level = "LOW"
             risk_color = "#28a745"
         else:
@@ -1341,17 +1385,91 @@ def get_security_report(session_id: str, auth_data=Depends(hr_auth)):
         raise HTTPException(status_code=500, detail="Failed to retrieve security report")
 
 
+def normalize_cheating_score(raw_score: int) -> int:
+    """
+    Normalize cheating score to 0-100 range using logarithmic scaling.
+    This prevents scores from exceeding 100 while maintaining relative differences.
+    """
+    if raw_score <= 0:
+        return 0
+    
+    # Use logarithmic scaling to compress high scores
+    # Formula: 100 * (1 - e^(-raw_score/50))
+    # This ensures scores approach 100 asymptotically but never exceed it
+    import math
+    normalized = 100 * (1 - math.exp(-raw_score / 50))
+    return min(100, int(round(normalized)))
+
+def fix_existing_cheating_scores():
+    """
+    Fix existing cheating scores that exceed 100 by normalizing them.
+    This should be run once to fix historical data.
+    """
+    if db is None:
+        print("Database not available for score normalization")
+        return False
+    
+    try:
+        # Find all collections with sessions
+        collections = db.list_collection_names()
+        session_collections = [c for c in collections if c.endswith("_sessions")]
+        
+        fixed_count = 0
+        for coll_name in session_collections:
+            collection = db[coll_name]
+            
+            # Find sessions with cheating_score > 100
+            sessions_to_fix = list(collection.find({
+                "security_summary.cheating_score": {"$gt": 100}
+            }))
+            
+            for session in sessions_to_fix:
+                old_score = session["security_summary"]["cheating_score"]
+                new_score = normalize_cheating_score(old_score)
+                
+                collection.update_one(
+                    {"_id": session["_id"]},
+                    {"$set": {"security_summary.cheating_score": new_score}}
+                )
+                
+                print(f"Fixed session {session['_id']}: {old_score} -> {new_score}")
+                fixed_count += 1
+        
+        print(f"Fixed {fixed_count} sessions with scores > 100")
+        return True
+        
+    except Exception as e:
+        print(f"Error fixing cheating scores: {e}")
+        return False
+
 def get_security_recommendation(cheating_score: int) -> str:
-    """Generate security recommendation based on cheating score"""
-    if cheating_score >= 50:
+    """Generate security recommendation based on cheating score (0-100 scale)"""
+    if cheating_score >= 80:
         return "RISCHIO ALTO: Rilevate multiple violazioni gravi. Considerare la squalifica del candidato o richiedere verifiche aggiuntive."
-    elif cheating_score >= 20:
+    elif cheating_score >= 50:
         return "RISCHIO MEDIO: Rilevate diverse violazioni. Rivedere attentamente il colloquio e considerare domande di follow-up."
-    elif cheating_score >= 5:
+    elif cheating_score >= 20:
         return "RISCHIO BASSO: Rilevate violazioni minori. Monitorare durante la valutazione finale."
     else:
         return "RISCHIO MINIMO: Nessuna violazione significativa rilevata. Il candidato sembra aver seguito le linee guida."
 
+
+# Admin endpoint to fix existing cheating scores
+@app.post("/admin/fix-cheating-scores", dependencies=[Depends(hr_auth)])
+def fix_cheating_scores_admin(auth_data=Depends(hr_auth)):
+    """Fix existing cheating scores that exceed 100 (admin only)"""
+    # Check if user is admin
+    if auth_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        success = fix_existing_cheating_scores()
+        if success:
+            return {"message": "Cheating scores normalized successfully", "status": "success"}
+        else:
+            return {"message": "Failed to normalize cheating scores", "status": "error"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fixing scores: {str(e)}")
 
 # Evaluation and feedback (HR)
 @app.post("/sessions/{session_id}/evaluate")

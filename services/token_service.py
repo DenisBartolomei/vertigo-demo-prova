@@ -58,27 +58,36 @@ def resolve_token(token: str, collection_name: str = COLLECTION) -> Optional[str
 def resolve_token_global(token: str) -> Optional[tuple[str, str]]:
     """Resolve token across all tenant collections, returns (session_id, tenant_id)"""
     if db is None:
+        print("Database not available for token resolution")
         return None
+    
     token_hash = _hash_token(token)
+    print(f"Resolving token with hash: {token_hash[:16]}...")
     
     # Search all interview_links collections
     collections = db.list_collection_names()
     interview_collections = [c for c in collections if c.endswith("_interview_links")]
+    print(f"Searching in collections: {interview_collections}")
     
     for coll_name in interview_collections:
         doc = db[coll_name].find_one({"token_hash": token_hash, "revoked": False})
         if doc:
+            print(f"Found token in collection {coll_name}")
             if doc.get("expires_at") and datetime.utcnow() > doc["expires_at"]:
+                print(f"Token expired at {doc.get('expires_at')}")
                 continue
             # increment uses (best-effort)
             try:
                 db[coll_name].update_one({"_id": doc["_id"]}, {"$inc": {"uses": 1}})
-            except Exception:
+            except Exception as e:
+                print(f"Failed to increment uses: {e}")
                 pass
             # Extract tenant_id from collection name
             tenant_id = coll_name.replace("_interview_links", "")
+            print(f"Token resolved: session_id={doc.get('session_id')}, tenant_id={tenant_id}")
             return doc.get("session_id"), tenant_id
     
+    print("Token not found in any collection")
     return None
 
 
