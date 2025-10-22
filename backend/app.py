@@ -117,6 +117,10 @@ class EvaluationCriteriaUpdate(BaseModel):
 class StartInterviewPayload(BaseModel):
     name: str
     surname: str
+    
+    class Config:
+        # Permetti campi extra per debugging
+        extra = "forbid"
 
 
 app = FastAPI(title="Vertigo AI Backend", version="0.1.0")
@@ -1018,22 +1022,40 @@ def resolve_interview(token: str):
 
 @app.post("/interviews/{token}/start")
 def start_interview(token: str, payload: StartInterviewPayload):
-    result = resolve_token_global(token)
-    if not result:
-        raise HTTPException(status_code=404, detail="Invalid or expired link")
-    session_id, tenant_id = result
+    print(f"🔍 Tentativo di avvio colloquio con token: {token}")
+    print(f"📝 Payload ricevuto: name='{payload.name}', surname='{payload.surname}'")
+    print(f"📝 Payload completo: {payload.dict()}")
     
-    # Check if evaluation is completed
-    collections = get_tenant_collections(tenant_id)
-    sess = get_session_data_tenant(session_id, collections["sessions"]) or {}
-    stages = sess.get("stages", {})
-    skill_summary = stages.get("skill_summary")
-    if skill_summary:
-        raise HTTPException(status_code=410, detail="Interview completed and evaluation finished. Access no longer available.")
-    
-    # Check if interview has already been started (single-use token)
-    if sess.get("interview_started"):
-        raise HTTPException(status_code=409, detail="Interview has already been started. Token can only be used once.")
+    try:
+        result = resolve_token_global(token)
+        if not result:
+            print(f"❌ Token non valido o scaduto: {token}")
+            raise HTTPException(status_code=404, detail="Invalid or expired link")
+        
+        session_id, tenant_id = result
+        print(f"✅ Token risolto: session_id={session_id}, tenant_id={tenant_id}")
+        
+        # Check if evaluation is completed
+        collections = get_tenant_collections(tenant_id)
+        sess = get_session_data_tenant(session_id, collections["sessions"]) or {}
+        stages = sess.get("stages", {})
+        skill_summary = stages.get("skill_summary")
+        if skill_summary:
+            print(f"❌ Colloquio già completato per session_id={session_id}")
+            raise HTTPException(status_code=410, detail="Interview completed and evaluation finished. Access no longer available.")
+        
+        # Check if interview has already been started (single-use token)
+        if sess.get("interview_started"):
+            print(f"❌ Colloquio già avviato per session_id={session_id}")
+            raise HTTPException(status_code=409, detail="Interview has already been started. Token can only be used once.")
+        
+        print(f"✅ Controlli superati, procedo con l'avvio del colloquio")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Errore inaspettato in start_interview: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
     
     # Salva nome e cognome del candidato
     full_name = f"{payload.name} {payload.surname}".strip()
@@ -1631,10 +1653,21 @@ async def retrieve_batch_results(batch_id: str):
 @app.get("/api/batch/list", dependencies=[Depends(hr_auth)])
 async def list_batches(auth_data: dict = Depends(hr_auth)):
     """Lista tutti i batch jobs"""
-    batch_service = BatchService()
-    batches = batch_service.list_batches(limit=20)
-    
-    return {"batches": batches}
+    try:
+        print(f"🔍 Tentativo di listare batch jobs per tenant: {auth_data.get('tenant_id')}")
+        
+        batch_service = BatchService()
+        print(f"✅ BatchService inizializzato")
+        
+        batches = batch_service.list_batches(limit=20)
+        print(f"✅ Batch jobs recuperati: {len(batches)} items")
+        
+        return {"batches": batches}
+    except Exception as e:
+        import traceback
+        print(f"❌ Errore in list_batches endpoint: {e}")
+        print(f"❌ Traceback completo: {traceback.format_exc()}")
+        return {"batches": [], "error": str(e)}
 
 @app.get("/health")
 def health_check():

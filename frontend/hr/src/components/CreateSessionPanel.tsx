@@ -34,6 +34,7 @@ export function CreateSessionPanel({
   const [candidateName, setCandidateName] = useState('')
   const [candidateEmail, setCandidateEmail] = useState('')
   const [cvFile, setCvFile] = useState<File | null>(null)
+  const [singleUploading, setSingleUploading] = useState(false)
 
   const handleBatchFilesSelected = (files: File[]) => {
     setBatchFiles(files)
@@ -51,17 +52,23 @@ export function CreateSessionPanel({
   }
 
   const handleSingleSubmit = async () => {
-    if (!cvFile || !singlePositionId || !candidateName) return
-    await onSingleUpload({
-      positionId: singlePositionId,
-      candidateName,
-      candidateEmail,
-      cvFile
-    })
-    setSinglePositionId('')
-    setCandidateName('')
-    setCandidateEmail('')
-    setCvFile(null)
+    if (!cvFile || !singlePositionId || !candidateName || singleUploading) return
+    
+    setSingleUploading(true)
+    try {
+      await onSingleUpload({
+        positionId: singlePositionId,
+        candidateName,
+        candidateEmail,
+        cvFile
+      })
+      setSinglePositionId('')
+      setCandidateName('')
+      setCandidateEmail('')
+      setCvFile(null)
+    } finally {
+      setSingleUploading(false)
+    }
   }
 
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -197,10 +204,11 @@ export function CreateSessionPanel({
               
               <button 
                 onClick={handleSingleSubmit} 
-                disabled={!cvFile || !singlePositionId || !candidateName}
+                disabled={!cvFile || !singlePositionId || !candidateName || singleUploading}
                 className="submit-button single-submit"
               >
-                🚀 Crea Sessione & Invia Invito
+                {singleUploading ? '⏳' : '🚀'} 
+                {singleUploading ? 'Creazione in corso...' : 'Crea Sessione & Invia Invito'}
               </button>
             </div>
           )}

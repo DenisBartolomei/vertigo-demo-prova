@@ -49,7 +49,7 @@ class BatchService:
         pending_sessions = []
         
         # Cerca in tutte le collection di sessioni tenant
-        if db:
+        if db is not None:
             collections = db.list_collection_names()
             session_collections = [c for c in collections if c.endswith("_sessions")]
             
@@ -80,7 +80,7 @@ class BatchService:
             position_id = session.get("position_id")
             
             # Recupera JD dal tenant specifico
-            if db:
+            if db is not None:
                 positions_collection = db[f"{tenant_id}_positions_data"]
                 position = positions_collection.find_one({"_id": position_id})
                 jd_text = position.get("job_description", "") if position else ""
@@ -328,11 +328,24 @@ class BatchService:
     
     def list_batches(self, limit: int = 20) -> List[Dict]:
         """Lista tutti i batch jobs"""
-        if not self.batch_collection:
-            return []
+        try:
+            if not self.batch_collection:
+                print("❌ Batch collection non disponibile")
+                return []
+                
+            batches = list(self.batch_collection.find(
+                {},
+                sort=[("created_at", -1)],
+                limit=limit
+            ))
             
-        return list(self.batch_collection.find(
-            {},
-            sort=[("created_at", -1)],
-            limit=limit
-        ))
+            # Converti ObjectId in string per JSON serialization
+            for batch in batches:
+                if '_id' in batch:
+                    batch['_id'] = str(batch['_id'])
+                    
+            return batches
+            
+        except Exception as e:
+            print(f"❌ Errore nel list_batches: {e}")
+            return []
