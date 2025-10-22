@@ -21,15 +21,15 @@ if BATCH_ENDPOINT and BATCH_API_KEY:
         api_version=API_VERSION,
         azure_endpoint=BATCH_ENDPOINT
     )
-    print(f"✅ Batch client inizializzato con deployment: {BATCH_DEPLOYMENT}")
+    print(f"Batch client inizializzato con deployment: {BATCH_DEPLOYMENT}")
 else:
-    print("❌ Batch client non inizializzato: credenziali mancanti")
+    print("Batch client non inizializzato: credenziali mancanti")
 
 class BatchService:
     """Gestisce batch processing con Azure OpenAI"""
     
     def __init__(self):
-        self.batch_collection = db["batch_jobs"] if db else None
+        self.batch_collection = db["batch_jobs"] if db is not None else None
         # RIMOSSO: self.sessions_collection globale - usiamo collezioni tenant-specific
     
     def create_cv_analysis_batch(self) -> Optional[str]:
@@ -40,10 +40,10 @@ class BatchService:
             batch_id: ID del batch job creato o None se nessun CV da processare
         """
         if not batch_client:
-            print("❌ Batch client non disponibile")
+            print("ERR Batch client non disponibile")
             return None
             
-        print(f"🔄 Creazione batch per CV analysis...")
+        print(f"[PROC] Creazione batch per CV analysis...")
         
         # 1. Trova tutte le sessioni con CV pending (tutti i tenant)
         pending_sessions = []
@@ -66,10 +66,10 @@ class BatchService:
                     pending_sessions.append(session)
         
         if not pending_sessions:
-            print("✅ Nessun CV da processare")
+            print("OK Nessun CV da processare")
             return None
         
-        print(f"📋 Trovati {len(pending_sessions)} CV da analizzare")
+        print(f"[INFO] Trovati {len(pending_sessions)} CV da analizzare")
         
         # 2. Crea file JSONL per batch API
         batch_requests = []
@@ -120,7 +120,7 @@ class BatchService:
         
         # Validazione dimensione batch
         if len(batch_requests) > 1000:
-            print(f"⚠️ Batch troppo grande ({len(batch_requests)} richieste), limitato a 1000")
+            print(f"[WARN] Batch troppo grande ({len(batch_requests)} richieste), limitato a 1000")
             batch_requests = batch_requests[:1000]
         
         with open(temp_file_path, 'w', encoding='utf-8') as f:
@@ -128,7 +128,7 @@ class BatchService:
                 f.write(json.dumps(req) + '\n')
         
         # 4. Upload file ad Azure OpenAI
-        print("☁️ Upload batch file ad Azure...")
+        print("[CLOUD] Upload batch file ad Azure...")
         try:
             with open(temp_file_path, 'rb') as f:
                 batch_input_file = batch_client.files.create(
@@ -136,14 +136,14 @@ class BatchService:
                     purpose="batch"
                 )
         except Exception as e:
-            print(f"❌ Errore upload file: {e}")
+            print(f"ERR Errore upload file: {e}")
             # Cleanup file temporaneo
             if os.path.exists(temp_file_path):
                 os.remove(temp_file_path)
             return None
         
         # 5. Crea batch job
-        print("🚀 Creazione batch job...")
+        print("[LAUNCH] Creazione batch job...")
         try:
             batch_job = batch_client.batches.create(
                 input_file_id=batch_input_file.id,
@@ -156,7 +156,7 @@ class BatchService:
                 }
             )
         except Exception as e:
-            print(f"❌ Errore creazione batch: {e}")
+            print(f"ERR Errore creazione batch: {e}")
             # Cleanup file temporaneo
             if os.path.exists(temp_file_path):
                 os.remove(temp_file_path)
@@ -179,7 +179,7 @@ class BatchService:
         # 7. Cleanup file locale
         os.remove(temp_file_path)
         
-        print(f"✅ Batch creato: {batch_job.id}")
+        print(f"OK Batch creato: {batch_job.id}")
         print(f"   Status: {batch_job.status}")
         print(f"   Requests: {len(batch_requests)}")
         
@@ -219,28 +219,28 @@ class BatchService:
             
             return batch.status
         except Exception as e:
-            print(f"❌ Errore controllo status batch {batch_id}: {e}")
+            print(f"ERR Errore controllo status batch {batch_id}: {e}")
             return "error"
     
     def retrieve_batch_results(self, batch_id: str) -> bool:
         """Recupera e salva i risultati di un batch completato"""
         if not batch_client:
-            print("❌ Batch client non disponibile")
+            print("ERR Batch client non disponibile")
             return False
             
-        print(f"📥 Recupero risultati batch {batch_id}...")
+        print(f"[DOWNLOAD] Recupero risultati batch {batch_id}...")
         
         try:
             # 1. Ottieni info batch
             batch = batch_client.batches.retrieve(batch_id)
             
             if batch.status != "completed":
-                print(f"⚠️ Batch non completato. Status: {batch.status}")
+                print(f"[WARN] Batch non completato. Status: {batch.status}")
                 return False
             
             # 2. Download file risultati
             if not batch.output_file_id:
-                print("❌ Nessun file output disponibile")
+                print("ERR Nessun file output disponibile")
                 return False
             
             result_file_content = batch_client.files.content(batch.output_file_id)
@@ -258,7 +258,7 @@ class BatchService:
                 
                 # Split tenant_id:session_id
                 if ":" not in custom_id:
-                    print(f"⚠️ Custom ID malformato: {custom_id}")
+                    print(f"[WARN] Custom ID malformato: {custom_id}")
                     continue
                 
                 tenant_id, session_id = custom_id.split(":", 1)
@@ -271,7 +271,7 @@ class BatchService:
                 session = sessions_collection.find_one({"_id": session_id})
                 
                 if not session:
-                    print(f"⚠️ Sessione {session_id} non trovata per tenant {tenant_id}")
+                    print(f"[WARN] Sessione {session_id} non trovata per tenant {tenant_id}")
                     continue
                 
                 if result.get("response") and result["response"]["status_code"] == 200:
@@ -300,7 +300,7 @@ class BatchService:
                         }}
                     )
             
-            print(f"✅ Processati {success_count}/{len(results)} risultati")
+            print(f"OK Processati {success_count}/{len(results)} risultati")
             
             # 5. Marca batch come processato
             if self.batch_collection:
@@ -316,7 +316,7 @@ class BatchService:
             return True
             
         except Exception as e:
-            print(f"❌ Errore recupero risultati batch {batch_id}: {e}")
+            print(f"ERR Errore recupero risultati batch {batch_id}: {e}")
             return False
     
     def get_batch_info(self, batch_id: str) -> Optional[Dict]:
@@ -329,8 +329,8 @@ class BatchService:
     def list_batches(self, limit: int = 20) -> List[Dict]:
         """Lista tutti i batch jobs"""
         try:
-            if not self.batch_collection:
-                print("❌ Batch collection non disponibile")
+            if self.batch_collection is None:
+                print("ERR Batch collection non disponibile")
                 return []
                 
             batches = list(self.batch_collection.find(
@@ -347,5 +347,5 @@ class BatchService:
             return batches
             
         except Exception as e:
-            print(f"❌ Errore nel list_batches: {e}")
+            print(f"ERR Errore nel list_batches: {e}")
             return []
