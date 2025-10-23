@@ -311,6 +311,10 @@ export function Interview() {
       antiCheat.startMonitoring()
       
       const resp = await fetch(`${API_BASE}/interviews/${token}/start`, { method: 'POST' })
+      if (resp.status === 400) {
+        setError('Please complete your profile information first by entering your name and surname.')
+        return
+      }
       if (resp.status === 410) {
         setError('The interview has been completed and the evaluation has been finished. The access is no longer available.')
         return

@@ -65,8 +65,8 @@ export function TokenLanding() {
         return
       }
 
-      // Avvia l'intervista con nome e cognome
-      const response = await fetch(`${API_BASE}/interviews/${token}/start`, {
+      // PRIMA: Salva solo nome e cognome
+      const saveResponse = await fetch(`${API_BASE}/interviews/${token}/save-name`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -77,22 +77,23 @@ export function TokenLanding() {
         })
       })
 
-      if (!response.ok) {
-        if (response.status === 409) {
-          setError('This interview has already been started. Please contact HR if you need assistance.')
-        } else if (response.status === 410) {
+      if (!saveResponse.ok) {
+        if (saveResponse.status === 404) {
+          setError('Invalid or expired token. Please check your email and try again.')
+        } else if (saveResponse.status === 410) {
           setError('This interview has been completed and is no longer available.')
         } else {
-          setError('Error starting interview. Please try again.')
+          const errorData = await saveResponse.json()
+          setError(errorData.detail || 'Error saving your information. Please try again.')
         }
         return
       }
 
-      // Naviga all'intervista
+      // DOPO: Naviga alla pagina termini e condizioni
       navigate(`/interview/${token}`)
       
     } catch (error) {
-      console.error('Error starting interview:', error)
+      console.error('Error saving details:', error)
       setError('Connection error. Please check your internet connection and try again.')
     } finally {
       setLoading(false)
