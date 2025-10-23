@@ -216,11 +216,9 @@ def login(payload: LoginPayload):
 
 
 @app.post("/auth/refresh")
-def refresh_token(auth_data: dict = Depends(hr_auth)):
+def refresh_token(request: Request, auth_data: dict = Depends(hr_auth)):
     """Refresh JWT token if it's close to expiration"""
     # Get the current token from the request
-    from fastapi import Request
-    request = Request
     authorization = request.headers.get("authorization")
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Missing token")

@@ -163,7 +163,7 @@ class BatchService:
             return None
         
         # 6. Salva info batch nel DB
-        if self.batch_collection:
+        if self.batch_collection is not None:
             batch_doc = {
                 "_id": batch_job.id,
                 "type": "cv_analysis",
@@ -194,7 +194,7 @@ class BatchService:
             batch = batch_client.batches.retrieve(batch_id)
             
             # Aggiorna status nel DB
-            if self.batch_collection:
+            if self.batch_collection is not None:
                 update_data = {
                     "status": batch.status,
                     "updated_at": datetime.utcnow()
@@ -303,7 +303,7 @@ class BatchService:
             print(f"OK Processati {success_count}/{len(results)} risultati")
             
             # 5. Marca batch come processato
-            if self.batch_collection:
+            if self.batch_collection is not None:
                 self.batch_collection.update_one(
                     {"_id": batch_id},
                     {"$set": {
@@ -321,7 +321,7 @@ class BatchService:
     
     def get_batch_info(self, batch_id: str) -> Optional[Dict]:
         """Ottieni informazioni dettagliate su un batch"""
-        if not self.batch_collection:
+        if self.batch_collection is None:
             return None
             
         return self.batch_collection.find_one({"_id": batch_id})
