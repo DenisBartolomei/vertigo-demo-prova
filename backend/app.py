@@ -702,10 +702,10 @@ def save_pdf_report_tenant(pdf_bytes: bytes, session_id: str, collection_name: s
 
 # Sessions (HR)
 @app.post("/sessions")
-async def create_session(position_id: str = Form(...), candidate_name: str = Form("Candidato"), cv_file: UploadFile = File(...), candidate_email: str = Form(None), frontend_base_url: str = Form("") , auth_data=Depends(hr_auth)):
+async def create_session(position_id: str = Form(...), cv_file: UploadFile = File(...), candidate_email: str = Form(None), frontend_base_url: str = Form("") , auth_data=Depends(hr_auth)):
     collections = get_tenant_collections_from_auth(auth_data)
     session_id = str(uuid.uuid4())
-    created = create_new_session_tenant(session_id, position_id, candidate_name, collections["sessions"], candidate_email)
+    created = create_new_session_tenant(session_id, position_id, None, collections["sessions"], candidate_email)
     if not created:
         raise HTTPException(status_code=500, detail="Failed to create session")
 
@@ -1054,15 +1054,28 @@ def resolve_interview(token: str):
 
 @app.post("/interviews/{token}/start")
 def start_interview(token: str, payload: StartInterviewPayload):
+    try:
     print(f"Tentativo di avvio colloquio con token: {token}")
     print(f"Payload ricevuto: name='{payload.name}', surname='{payload.surname}'")
     print(f"Payload completo: {payload.dict()}")
+    print(f"Tipo name: {type(payload.name)}, valore: '{payload.name}'")
+    print(f"Tipo surname: {type(payload.surname)}, valore: '{payload.surname}'")
     
-    # Validate required fields
-    if not payload.name or not payload.name.strip():
+    # Validate required fields with detailed logging
+    if not payload.name:
+        print(f"❌ Name is None or empty: '{payload.name}'")
         raise HTTPException(status_code=422, detail="Name is required and cannot be empty")
-    if not payload.surname or not payload.surname.strip():
+    if not payload.name.strip():
+        print(f"❌ Name is only whitespace: '{payload.name}'")
+        raise HTTPException(status_code=422, detail="Name is required and cannot be empty")
+    if not payload.surname:
+        print(f"❌ Surname is None or empty: '{payload.surname}'")
         raise HTTPException(status_code=422, detail="Surname is required and cannot be empty")
+    if not payload.surname.strip():
+        print(f"❌ Surname is only whitespace: '{payload.surname}'")
+        raise HTTPException(status_code=422, detail="Surname is required and cannot be empty")
+    
+    print(f"✅ Validazione campi superata")
     
     try:
         result = resolve_token_global(token)
@@ -1143,6 +1156,13 @@ def start_interview(token: str, payload: StartInterviewPayload):
     # Note: Token remains valid for the duration of the interview
     
     return {"message": message}
+    
+    except Exception as e:
+        print(f"❌ Errore durante parsing payload o validazione: {e}")
+        print(f"❌ Tipo errore: {type(e)}")
+        import traceback
+        print(f"❌ Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=422, detail=f"Invalid request data: {str(e)}")
 
 
 @app.post("/interviews/{token}/message")
@@ -1849,9 +1869,9 @@ async def startup_event():
         # Avvia scheduler per batch giornalieri
         from services.scheduler_service import get_scheduler
         scheduler = get_scheduler()
-        scheduler.schedule_daily_cv_batch(hour="19:00")
+        scheduler.schedule_daily_cv_batch(hour="15:15")
         scheduler.start()
-        print("✅ Batch scheduler inizializzato (ore 19:00)")
+        print("✅ Batch scheduler inizializzato (ore 15:15)")
         
         # Avvia batch processor per monitoring automatico
         from services.batch_processor import get_processor

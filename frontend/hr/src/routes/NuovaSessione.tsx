@@ -220,7 +220,7 @@ export function NuovaSessione() {
     })
 
   const formatDate = (dateString?: string) => {
-    if (!dateString) return 'Data non disponibile'
+    if (!dateString) return 'In attesa'
     return new Date(dateString).toLocaleDateString('it-IT', {
       day: '2-digit',
       month: '2-digit',
