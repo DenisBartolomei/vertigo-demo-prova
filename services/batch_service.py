@@ -302,7 +302,29 @@ class BatchService:
             
             print(f"OK Processati {success_count}/{len(results)} risultati")
             
-            # 5. Marca batch come processato
+            # 5. Genera token automaticamente per sessioni completate
+            print(f"[TOKEN] Generazione automatica token per {success_count} sessioni...")
+            for result in results:
+                custom_id = result.get("custom_id", "")
+                if ":" not in custom_id:
+                    continue
+                
+                tenant_id, session_id = custom_id.split(":", 1)
+                sessions_collection = db[f"{tenant_id}_sessions"]
+                
+                if result.get("response") and result["response"]["status_code"] == 200:
+                    # Genera token se non esiste
+                    from services.token_service import issue_interview_token
+                    session = sessions_collection.find_one({"_id": session_id})
+                    if session and not session.get("stages", {}).get("interview_token"):
+                        token = issue_interview_token(session_id, f"{tenant_id}_interview_links")
+                        sessions_collection.update_one(
+                            {"_id": session_id},
+                            {"$set": {"stages.interview_token": token}}
+                        )
+                        print(f"   🔑 Token generato automaticamente per sessione {session_id}")
+            
+            # 6. Marca batch come processato
             if self.batch_collection is not None:
                 self.batch_collection.update_one(
                     {"_id": batch_id},

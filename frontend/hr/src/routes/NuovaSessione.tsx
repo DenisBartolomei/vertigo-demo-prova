@@ -352,10 +352,6 @@ export function NuovaSessione() {
                   </div>
                 </div>
                 
-                <div className="card-date">
-                  {formatDate(session.batch_date || session.token_sent_at)}
-                </div>
-                
                 {(session.interview_token || session.status === 'Colloquio da completare') && (
                   <div className="card-actions">
                     {session.interview_token ? (
@@ -393,6 +389,20 @@ export function NuovaSessione() {
                         ✅ Marca Inviato
                       </button>
                     )}
+                  </div>
+                )}
+                
+                {session.token_sent && session.token_sent_by && (
+                  <div style={{
+                    marginTop: '12px',
+                    padding: '8px 12px',
+                    background: 'var(--bg-success, #d1fae5)',
+                    border: '1px solid var(--border-success, #6ee7b7)',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    color: 'var(--text-success, #065f46)'
+                  }}>
+                    ✓ Inviato da: {session.token_sent_by} alle ore {formatDate(session.token_sent_at)}
                   </div>
                 )}
               </div>

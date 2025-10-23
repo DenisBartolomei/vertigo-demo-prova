@@ -1140,41 +1140,28 @@ def start_interview(token: str, payload: StartInterviewPayload):
             
             print(f"✅ Controlli superati, procedo con l'avvio del colloquio")
             
-            # Salva nome e cognome del candidato
+            # Salva nome e cognome del candidato - sovrascrivi campo root
             full_name = f"{payload.name} {payload.surname}".strip()
-            save_stage_output_tenant(
-                session_id, 
-                "candidate_name", 
-                full_name, 
-                collections["sessions"]
-            )
-            save_stage_output_tenant(
-                session_id, 
-                "candidate_surname", 
-                payload.surname, 
-                collections["sessions"]
-            )
+            
+            # Update a livello root della sessione
+            if db is not None:
+                sessions_collection = db[f"{tenant_id}_sessions"]
+                sessions_collection.update_one(
+                    {"_id": session_id},
+                    {"$set": {
+                        "candidate_name": full_name,  # Campo root
+                        "interview_started": True,
+                        "interview_started_at": datetime.utcnow().isoformat()
+                    },
+                    "$unset": {
+                        "candidate_surname": "",  # Rimuovi campo duplicato
+                        "stages.candidate_surname": ""
+                    }}
+                )
             
             message = start_interview_for_session(session_id, tenant_id)
             
-            # Mark interview as started and save to database
-            if db is not None:
-                try:
-                    sessions_collection = db[f"sessions_{tenant_id}"]
-                    sessions_collection.update_one(
-                        {"_id": session_id}, 
-                        {"$set": {
-                            "interview_started": True, 
-                            "interview_started_at": datetime.utcnow().isoformat(),
-                            "candidate_name": full_name,
-                            "candidate_surname": payload.surname
-                        }}, 
-                        upsert=False
-                    )
-                    print(f"Interview started for session {session_id} - token marked as used")
-                except Exception as db_error:
-                    print(f"Warning: Failed to update session in database: {db_error}")
-                    # Continue anyway - the interview can still proceed
+            print(f"Interview started for session {session_id} - token marked as used")
             
             # Note: Token remains valid for the duration of the interview
             
