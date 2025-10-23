@@ -9,7 +9,7 @@ from .user_service import authenticate_user, create_user, get_user_by_email
 
 JWT_SECRET = os.getenv("JWT_SECRET", "change_me_dev_secret")
 JWT_ALG = "HS256"
-JWT_TTL_SECONDS = int(os.getenv("JWT_TTL_SECONDS", "86400"))  # 24 hours instead of 1 hour
+JWT_TTL_SECONDS = int(os.getenv("JWT_TTL_SECONDS", "3600"))  # 1 hour for automatic logout
 
 
 def authenticate_hr(email: str, password: str) -> Optional[dict]:
@@ -48,6 +48,44 @@ def verify_jwt(token: str) -> Optional[dict]:
     try:
         data = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
         return data
+    except jwt.ExpiredSignatureError:
+        # Token expired - this is expected for automatic logout
+        return None
+    except Exception:
+        return None
+
+
+def is_token_expired(token: str) -> bool:
+    """Check if token is expired without raising exception"""
+    try:
+        jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG], options={"verify_exp": False})
+        # If we get here, token is valid but we need to check expiration manually
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG], options={"verify_exp": False})
+        exp = payload.get("exp", 0)
+        return time.time() > exp
+    except Exception:
+        return True
+
+
+def refresh_jwt(token: str) -> Optional[str]:
+    """Refresh JWT token if it's still valid but close to expiration"""
+    try:
+        # Decode without verifying expiration to check if token is still valid
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG], options={"verify_exp": False})
+        
+        # Check if token is close to expiration (less than 10 minutes left)
+        exp = payload.get("exp", 0)
+        time_left = exp - time.time()
+        
+        if time_left > 0 and time_left < 600:  # Less than 10 minutes left
+            # Create new token with same payload but new expiration
+            return create_jwt(
+                sub=payload.get("sub"),
+                tenant_id=payload.get("tenant_id"),
+                role=payload.get("role", "hr")
+            )
+        
+        return None  # Token doesn't need refresh yet
     except Exception:
         return None
 

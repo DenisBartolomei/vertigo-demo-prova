@@ -38,7 +38,7 @@ from services.token_service import (
     resolve_token_global,
     mark_interview_started_global,
 )
-from services.auth_service import authenticate_hr, create_jwt, verify_jwt, get_or_create_tenant_for_email
+from services.auth_service import authenticate_hr, create_jwt, verify_jwt, get_or_create_tenant_for_email, refresh_jwt, is_token_expired
 from services.user_service import (
     create_user, get_users_by_tenant, update_user_password, 
     deactivate_user, update_user_info, create_initial_admin_user
@@ -73,6 +73,11 @@ def hr_auth(authorization: str | None = Header(default=None)):
         token_val = authorization.split(" ", 1)[1]
     if not token_val:
         raise HTTPException(status_code=401, detail="Missing token")
+    
+    # Check if token is expired
+    if is_token_expired(token_val):
+        raise HTTPException(status_code=401, detail="Token expired - please login again")
+    
     data = verify_jwt(token_val)
     if not data or data.get("role") not in ["hr", "admin"]:
         raise HTTPException(status_code=401, detail="Invalid token")
@@ -205,8 +210,37 @@ def login(payload: LoginPayload):
             "email": user.get("email"),
             "name": user.get("name"),
             "role": user.get("role")
-        }
+        },
+        "expires_in": 3600  # 1 hour in seconds
     }
+
+
+@app.post("/auth/refresh")
+def refresh_token(auth_data: dict = Depends(hr_auth)):
+    """Refresh JWT token if it's close to expiration"""
+    # Get the current token from the request
+    from fastapi import Request
+    request = Request
+    authorization = request.headers.get("authorization")
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    
+    current_token = authorization.split(" ", 1)[1]
+    new_token = refresh_jwt(current_token)
+    
+    if new_token:
+        return {
+            "token": new_token,
+            "expires_in": 3600,
+            "refreshed": True
+        }
+    else:
+        return {
+            "token": current_token,
+            "expires_in": 3600,
+            "refreshed": False,
+            "message": "Token doesn't need refresh yet"
+        }
 
 
 # Tenant Setup
@@ -1694,7 +1728,7 @@ async def bulk_upload_cvs(
             )
             
             # 5. Aggiungi metadata batch
-            if db:
+            if db is not None:
                 sessions_collection = db[collections["sessions"]]
                 sessions_collection.update_one(
                     {"_id": session_id},
@@ -1717,12 +1751,33 @@ async def bulk_upload_cvs(
             print(f"❌ Errore processing file {file.filename}: {e}")
             continue
     
+    # Processa immediatamente i CV caricati
+    print(f"[PROC] Avvio processing automatico per {len(uploaded_sessions)} CV...")
+    processed_count = 0
+    for session_info in uploaded_sessions:
+        try:
+            session_id = session_info["session_id"]
+            print(f"[PROC] Processing CV: {session_info['filename']} (session: {session_id})")
+            
+            # Esegui analisi CV con tenant isolation
+            success = run_cv_analysis_pipeline_tenant(session_id, tenant_id)
+            if success:
+                processed_count += 1
+                print(f"[OK] Analisi completata per {session_info['filename']}")
+            else:
+                print(f"[ERR] Analisi fallita per {session_info['filename']}")
+                
+        except Exception as e:
+            print(f"[ERR] Errore processing {session_info['filename']}: {e}")
+            continue
+    
     return {
-        "message": f"{len(uploaded_sessions)} CV caricati con successo",
+        "message": f"{len(uploaded_sessions)} CV caricati e {processed_count} processati con successo",
         "sessions": uploaded_sessions,
         "batch_id": batch_id,
         "batch_date": batch_date,
-        "note": "I CV verranno processati nel prossimo batch schedulato (ore 19:00)"
+        "processed_count": processed_count,
+        "note": "I CV sono stati processati immediatamente"
     }
 
 @app.post("/api/batch/trigger-manual", dependencies=[Depends(hr_auth)])

@@ -23,7 +23,8 @@ export function Login() {
     }
     const data = await resp.json()
     localStorage.setItem('hr_jwt', data.token)
-    navigate('/app/dashboard')
+    // Reload the page to initialize the new auth system
+    window.location.href = '/app/dashboard'
   }
 
   return (

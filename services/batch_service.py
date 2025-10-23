@@ -264,7 +264,7 @@ class BatchService:
                 tenant_id, session_id = custom_id.split(":", 1)
                 
                 # Verifica che il tenant esista
-                if not db:
+                if db is None:
                     continue
                     
                 sessions_collection = db[f"{tenant_id}_sessions"]
