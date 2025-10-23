@@ -2,6 +2,7 @@
 
 import json
 import re
+from datetime import datetime
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
 from difflib import SequenceMatcher
@@ -429,7 +430,37 @@ def compute_and_save_skill_relevance(session_id: str, tenant_id: str = None) -> 
         print(f"  - [SKILL SCORER] Salvato in collection standard")
     print(f"  - [SKILL SCORER] Completato e salvato per sessione {session_id}.")
     
+    # Invalida token dopo completamento intervista
+    _invalidate_interview_token(session_id, tenant_id)
+    
     # GENERAZIONE FEEDBACK TEMPORANEAMENTE DISABILITATA PER TEST
     print(f"  - [SKILL SCORER] Pipeline di feedback DISABILITATA per test")
     
     return True
+
+
+def _invalidate_interview_token(session_id: str, tenant_id: str = None):
+    """Invalida il token dell'intervista dopo il completamento"""
+    if db is None:
+        return
+    
+    try:
+        # Trova il token per questa sessione
+        if tenant_id:
+            collection_name = f"{tenant_id}_interview_links"
+        else:
+            collection_name = "interview_links"
+        
+        # Trova il token per questa sessione
+        token_doc = db[collection_name].find_one({"session_id": session_id})
+        if token_doc:
+            # Invalida il token
+            db[collection_name].update_one(
+                {"_id": token_doc["_id"]},
+                {"$set": {"revoked": True, "revoked_at": datetime.utcnow().isoformat()}}
+            )
+            print(f"  - [TOKEN INVALIDATOR] Token invalidato per sessione {session_id}")
+        else:
+            print(f"  - [TOKEN INVALIDATOR] Nessun token trovato per sessione {session_id}")
+    except Exception as e:
+        print(f"  - [TOKEN INVALIDATOR] Errore invalidando token: {e}")

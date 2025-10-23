@@ -1066,10 +1066,10 @@ def resolve_interview(token: str):
     collections = get_tenant_collections(tenant_id)
     sess = get_session_data_tenant(session_id, collections["sessions"]) or {}
     
-    # Check if evaluation is completed (has skill_summary)
+    # Check if evaluation is completed (has skill_relevance)
     stages = sess.get("stages", {})
-    skill_summary = stages.get("skill_summary")
-    if skill_summary:
+    skill_relevance = stages.get("skill_relevance")
+    if skill_relevance:
         raise HTTPException(status_code=410, detail="Interview completed and evaluation finished. Access no longer available.")
     
     pos_id = sess.get("position_id")
@@ -1128,8 +1128,8 @@ def start_interview(token: str, payload: StartInterviewPayload):
             collections = get_tenant_collections(tenant_id)
             sess = get_session_data_tenant(session_id, collections["sessions"]) or {}
             stages = sess.get("stages", {})
-            skill_summary = stages.get("skill_summary")
-            if skill_summary:
+            skill_relevance = stages.get("skill_relevance")
+            if skill_relevance:
                 print(f"❌ Colloquio già completato per session_id={session_id}")
                 raise HTTPException(status_code=410, detail="Interview completed and evaluation finished. Access no longer available.")
             
@@ -1143,19 +1143,28 @@ def start_interview(token: str, payload: StartInterviewPayload):
             # Salva nome e cognome del candidato - sovrascrivi campo root
             full_name = f"{payload.name} {payload.surname}".strip()
             
-            # Update a livello root della sessione
+            # Update a livello root della sessione - salva solo nome
             if db is not None:
                 sessions_collection = db[f"{tenant_id}_sessions"]
                 sessions_collection.update_one(
                     {"_id": session_id},
                     {"$set": {
-                        "candidate_name": full_name,  # Campo root
-                        "interview_started": True,
-                        "interview_started_at": datetime.utcnow().isoformat()
+                        "candidate_name": full_name  # Campo root
                     },
                     "$unset": {
                         "candidate_surname": "",  # Rimuovi campo duplicato
                         "stages.candidate_surname": ""
+                    }}
+                )
+            
+            # Marca intervista come avviata PRIMA di start_interview_for_session per single-use
+            if db is not None:
+                sessions_collection = db[f"{tenant_id}_sessions"]
+                sessions_collection.update_one(
+                    {"_id": session_id},
+                    {"$set": {
+                        "interview_started": True,
+                        "interview_started_at": datetime.utcnow().isoformat()
                     }}
                 )
             
@@ -1192,8 +1201,8 @@ def send_message(token: str, payload: MessagePayload):
     collections = get_tenant_collections(tenant_id)
     sess = get_session_data_tenant(session_id, collections["sessions"]) or {}
     stages = sess.get("stages", {})
-    skill_summary = stages.get("skill_summary")
-    if skill_summary:
+    skill_relevance = stages.get("skill_relevance")
+    if skill_relevance:
         raise HTTPException(status_code=410, detail="Interview completed and evaluation finished. Access no longer available.")
     
     reply = send_message_for_session(session_id, payload.text, tenant_id)

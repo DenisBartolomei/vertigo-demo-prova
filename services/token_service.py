@@ -43,9 +43,7 @@ def resolve_token(token: str, collection_name: str = COLLECTION) -> Optional[str
     if doc.get("expires_at") and datetime.utcnow() > doc["expires_at"]:
         return None
     
-    # Check if interview has started - if so, token should be expired
-    if doc.get("interview_started"):
-        return None
+    # Note: interview_started check moved to endpoint level for better control
     
     # increment uses (best-effort)
     try:
