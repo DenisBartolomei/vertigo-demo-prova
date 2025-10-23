@@ -12,8 +12,8 @@ class BatchScheduler:
         self.running = False
         self.scheduler_thread = None
     
-    def schedule_daily_cv_batch(self, hour: str = "15:30"):
-        """Schedula batch CV ogni giorno alle 15:30"""
+    def schedule_daily_cv_batch(self, hour: str = "19:00"):
+        """Schedula batch CV ogni giorno alle 19:00"""
         schedule.every().day.at(hour).do(self._run_cv_batch)
         print(f"📅 Scheduler configurato: batch CV alle {hour}")
     

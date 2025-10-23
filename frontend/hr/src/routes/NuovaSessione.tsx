@@ -193,6 +193,26 @@ export function NuovaSessione() {
     }
   }
 
+  const generateTokenForSession = async (sessionId: string) => {
+    try {
+      const resp = await fetch(`${API_BASE}/sessions/${sessionId}/generate-token`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      
+      if (resp.ok) {
+        alert('Token generato con successo!')
+        await loadSessions()
+      } else {
+        const error = await resp.json()
+        alert(`Errore: ${error.detail || 'Errore sconosciuto'}`)
+      }
+    } catch (error) {
+      console.error('Error generating token:', error)
+      alert('Errore di connessione')
+    }
+  }
+
   const getStatusColor = (status?: string) => {
     switch (status) {
       case 'initialized': return '#f59e0b'
@@ -336,17 +356,30 @@ export function NuovaSessione() {
                   {formatDate(session.batch_date || session.token_sent_at)}
                 </div>
                 
-                {session.interview_token && (
+                {(session.interview_token || session.status === 'Colloquio da completare') && (
                   <div className="card-actions">
-                    <button
-                      className="copy-token-btn"
-                      onClick={() => {
-                        navigator.clipboard.writeText(session.interview_token!)
-                        alert('Token copiato!')
-                      }}
-                    >
-                      📋 Copia Token
-                    </button>
+                    {session.interview_token ? (
+                      <button
+                        className="copy-token-btn"
+                        onClick={() => {
+                          navigator.clipboard.writeText(session.interview_token!)
+                          alert('Token copiato!')
+                        }}
+                      >
+                        📋 Copia Token
+                      </button>
+                    ) : (
+                      <button
+                        className="generate-token-btn"
+                        onClick={() => {
+                          if (confirm('Generare token per questo candidato?')) {
+                            generateTokenForSession(session.session_id)
+                          }
+                        }}
+                      >
+                        🔗 Genera Token
+                      </button>
+                    )}
                     
                     {!session.token_sent && (
                       <button

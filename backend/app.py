@@ -139,6 +139,35 @@ app.add_middleware(
 )
 
 
+@app.post("/sessions/{session_id}/generate-token")
+def generate_token_for_session(session_id: str, auth_data=Depends(hr_auth)):
+    """Generate interview token for a session that doesn't have one"""
+    collections = get_tenant_collections_from_auth(auth_data)
+    
+    # Check if session exists and has completed CV analysis
+    session_data = get_session_data_tenant(session_id, collections["sessions"])
+    if not session_data:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Check if CV analysis is completed
+    stages = session_data.get("stages", {})
+    cv_status = stages.get("cv_analysis_status")
+    if cv_status != "Completed":
+        raise HTTPException(status_code=400, detail="CV analysis not completed yet")
+    
+    # Check if token already exists
+    if stages.get("interview_token"):
+        raise HTTPException(status_code=400, detail="Token already exists for this session")
+    
+    # Generate new token
+    token = issue_interview_token(session_id, collections["interview_links"])
+    
+    # Save token to session
+    save_stage_output_tenant(session_id, "interview_token", token, collections["sessions"])
+    
+    return {"token": token, "message": "Token generated successfully"}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -1869,9 +1898,9 @@ async def startup_event():
         # Avvia scheduler per batch giornalieri
         from services.scheduler_service import get_scheduler
         scheduler = get_scheduler()
-        scheduler.schedule_daily_cv_batch(hour="15:30")
+        scheduler.schedule_daily_cv_batch(hour="19:00")
         scheduler.start()
-        print("✅ Batch scheduler inizializzato (ore 15:30)")
+        print("✅ Batch scheduler inizializzato (ore 19:00)")
         
         # Avvia batch processor per monitoring automatico
         from services.batch_processor import get_processor
