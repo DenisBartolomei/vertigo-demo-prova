@@ -1055,107 +1055,107 @@ def resolve_interview(token: str):
 @app.post("/interviews/{token}/start")
 def start_interview(token: str, payload: StartInterviewPayload):
     try:
-    print(f"Tentativo di avvio colloquio con token: {token}")
-    print(f"Payload ricevuto: name='{payload.name}', surname='{payload.surname}'")
-    print(f"Payload completo: {payload.dict()}")
-    print(f"Tipo name: {type(payload.name)}, valore: '{payload.name}'")
-    print(f"Tipo surname: {type(payload.surname)}, valore: '{payload.surname}'")
+        print(f"Tentativo di avvio colloquio con token: {token}")
+        print(f"Payload ricevuto: name='{payload.name}', surname='{payload.surname}'")
+        print(f"Payload completo: {payload.dict()}")
+        print(f"Tipo name: {type(payload.name)}, valore: '{payload.name}'")
+        print(f"Tipo surname: {type(payload.surname)}, valore: '{payload.surname}'")
     
-    # Validate required fields with detailed logging
-    if not payload.name:
-        print(f"❌ Name is None or empty: '{payload.name}'")
-        raise HTTPException(status_code=422, detail="Name is required and cannot be empty")
-    if not payload.name.strip():
-        print(f"❌ Name is only whitespace: '{payload.name}'")
-        raise HTTPException(status_code=422, detail="Name is required and cannot be empty")
-    if not payload.surname:
-        print(f"❌ Surname is None or empty: '{payload.surname}'")
-        raise HTTPException(status_code=422, detail="Surname is required and cannot be empty")
-    if not payload.surname.strip():
-        print(f"❌ Surname is only whitespace: '{payload.surname}'")
-        raise HTTPException(status_code=422, detail="Surname is required and cannot be empty")
-    
-    print(f"✅ Validazione campi superata")
-    
-    try:
-        result = resolve_token_global(token)
-        if not result:
-            print(f"Token non valido o scaduto: {token}")
-            # Debug: check if token exists in any collection
-            if db is not None:
-                collections = db.list_collection_names()
-                interview_collections = [c for c in collections if c.endswith("_interview_links")]
-                print(f"Available interview collections: {interview_collections}")
-                for coll_name in interview_collections:
-                    coll = db[coll_name]
-                    count = coll.count_documents({})
-                    print(f"Collection {coll_name}: {count} documents")
-            raise HTTPException(status_code=404, detail="Invalid or expired link")
+        # Validate required fields with detailed logging
+        if not payload.name:
+            print(f"❌ Name is None or empty: '{payload.name}'")
+            raise HTTPException(status_code=422, detail="Name is required and cannot be empty")
+        if not payload.name.strip():
+            print(f"❌ Name is only whitespace: '{payload.name}'")
+            raise HTTPException(status_code=422, detail="Name is required and cannot be empty")
+        if not payload.surname:
+            print(f"❌ Surname is None or empty: '{payload.surname}'")
+            raise HTTPException(status_code=422, detail="Surname is required and cannot be empty")
+        if not payload.surname.strip():
+            print(f"❌ Surname is only whitespace: '{payload.surname}'")
+            raise HTTPException(status_code=422, detail="Surname is required and cannot be empty")
         
-        session_id, tenant_id = result
-        print(f"✅ Token risolto: session_id={session_id}, tenant_id={tenant_id}")
+        print(f"✅ Validazione campi superata")
         
-        # Check if evaluation is completed
-        collections = get_tenant_collections(tenant_id)
-        sess = get_session_data_tenant(session_id, collections["sessions"]) or {}
-        stages = sess.get("stages", {})
-        skill_summary = stages.get("skill_summary")
-        if skill_summary:
-            print(f"❌ Colloquio già completato per session_id={session_id}")
-            raise HTTPException(status_code=410, detail="Interview completed and evaluation finished. Access no longer available.")
-        
-        # Check if interview has already been started (single-use token)
-        if sess.get("interview_started"):
-            print(f"❌ Colloquio già avviato per session_id={session_id}")
-            raise HTTPException(status_code=409, detail="Interview has already been started. Token can only be used once.")
-        
-        print(f"✅ Controlli superati, procedo con l'avvio del colloquio")
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ Errore inaspettato in start_interview: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-    
-    # Salva nome e cognome del candidato
-    full_name = f"{payload.name} {payload.surname}".strip()
-    save_stage_output_tenant(
-        session_id, 
-        "candidate_name", 
-        full_name, 
-        collections["sessions"]
-    )
-    save_stage_output_tenant(
-        session_id, 
-        "candidate_surname", 
-        payload.surname, 
-        collections["sessions"]
-    )
-    
-    message = start_interview_for_session(session_id, tenant_id)
-    
-    # Mark interview as started and save to database
-    if db is not None:
         try:
-            sessions_collection = db[f"sessions_{tenant_id}"]
-            sessions_collection.update_one(
-                {"_id": session_id}, 
-                {"$set": {
-                    "interview_started": True, 
-                    "interview_started_at": datetime.utcnow().isoformat(),
-                    "candidate_name": full_name,
-                    "candidate_surname": payload.surname
-                }}, 
-                upsert=False
+            result = resolve_token_global(token)
+            if not result:
+                print(f"Token non valido o scaduto: {token}")
+                # Debug: check if token exists in any collection
+                if db is not None:
+                    collections = db.list_collection_names()
+                    interview_collections = [c for c in collections if c.endswith("_interview_links")]
+                    print(f"Available interview collections: {interview_collections}")
+                    for coll_name in interview_collections:
+                        coll = db[coll_name]
+                        count = coll.count_documents({})
+                        print(f"Collection {coll_name}: {count} documents")
+                raise HTTPException(status_code=404, detail="Invalid or expired link")
+            
+            session_id, tenant_id = result
+            print(f"✅ Token risolto: session_id={session_id}, tenant_id={tenant_id}")
+            
+            # Check if evaluation is completed
+            collections = get_tenant_collections(tenant_id)
+            sess = get_session_data_tenant(session_id, collections["sessions"]) or {}
+            stages = sess.get("stages", {})
+            skill_summary = stages.get("skill_summary")
+            if skill_summary:
+                print(f"❌ Colloquio già completato per session_id={session_id}")
+                raise HTTPException(status_code=410, detail="Interview completed and evaluation finished. Access no longer available.")
+            
+            # Check if interview has already been started (single-use token)
+            if sess.get("interview_started"):
+                print(f"❌ Colloquio già avviato per session_id={session_id}")
+                raise HTTPException(status_code=409, detail="Interview has already been started. Token can only be used once.")
+            
+            print(f"✅ Controlli superati, procedo con l'avvio del colloquio")
+            
+            # Salva nome e cognome del candidato
+            full_name = f"{payload.name} {payload.surname}".strip()
+            save_stage_output_tenant(
+                session_id, 
+                "candidate_name", 
+                full_name, 
+                collections["sessions"]
             )
-            print(f"Interview started for session {session_id} - token marked as used")
-        except Exception as db_error:
-            print(f"Warning: Failed to update session in database: {db_error}")
-            # Continue anyway - the interview can still proceed
-    
-    # Note: Token remains valid for the duration of the interview
-    
-    return {"message": message}
+            save_stage_output_tenant(
+                session_id, 
+                "candidate_surname", 
+                payload.surname, 
+                collections["sessions"]
+            )
+            
+            message = start_interview_for_session(session_id, tenant_id)
+            
+            # Mark interview as started and save to database
+            if db is not None:
+                try:
+                    sessions_collection = db[f"sessions_{tenant_id}"]
+                    sessions_collection.update_one(
+                        {"_id": session_id}, 
+                        {"$set": {
+                            "interview_started": True, 
+                            "interview_started_at": datetime.utcnow().isoformat(),
+                            "candidate_name": full_name,
+                            "candidate_surname": payload.surname
+                        }}, 
+                        upsert=False
+                    )
+                    print(f"Interview started for session {session_id} - token marked as used")
+                except Exception as db_error:
+                    print(f"Warning: Failed to update session in database: {db_error}")
+                    # Continue anyway - the interview can still proceed
+            
+            # Note: Token remains valid for the duration of the interview
+            
+            return {"message": message}
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"❌ Errore inaspettato in start_interview: {e}")
+            raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
     
     except Exception as e:
         print(f"❌ Errore durante parsing payload o validazione: {e}")
@@ -1869,9 +1869,9 @@ async def startup_event():
         # Avvia scheduler per batch giornalieri
         from services.scheduler_service import get_scheduler
         scheduler = get_scheduler()
-        scheduler.schedule_daily_cv_batch(hour="15:15")
+        scheduler.schedule_daily_cv_batch(hour="15:30")
         scheduler.start()
-        print("✅ Batch scheduler inizializzato (ore 15:15)")
+        print("✅ Batch scheduler inizializzato (ore 15:30)")
         
         # Avvia batch processor per monitoring automatico
         from services.batch_processor import get_processor
