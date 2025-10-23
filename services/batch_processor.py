@@ -102,7 +102,7 @@ class BatchProcessor:
     def _get_in_progress_batches(self) -> list:
         """Ottieni lista batch in progress dal database"""
         try:
-            if not self.batch_service.batch_collection:
+            if self.batch_service.batch_collection is None:
                 return []
             
             # Trova batch che non sono ancora stati processati
@@ -139,7 +139,7 @@ class BatchProcessor:
     def get_monitoring_stats(self) -> dict:
         """Ottieni statistiche del monitoring"""
         try:
-            if not self.batch_service.batch_collection:
+            if self.batch_service.batch_collection is None:
                 return {"error": "Database non disponibile"}
             
             # Conta batch per status

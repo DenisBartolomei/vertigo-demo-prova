@@ -1751,34 +1751,30 @@ async def bulk_upload_cvs(
             print(f"❌ Errore processing file {file.filename}: {e}")
             continue
     
-    # Processa immediatamente i CV caricati
-    print(f"[PROC] Avvio processing automatico per {len(uploaded_sessions)} CV...")
-    processed_count = 0
-    for session_info in uploaded_sessions:
-        try:
-            session_id = session_info["session_id"]
-            print(f"[PROC] Processing CV: {session_info['filename']} (session: {session_id})")
-            
-            # Esegui analisi CV con tenant isolation
-            success = run_cv_analysis_pipeline_tenant(session_id, tenant_id)
-            if success:
-                processed_count += 1
-                print(f"[OK] Analisi completata per {session_info['filename']}")
-            else:
-                print(f"[ERR] Analisi fallita per {session_info['filename']}")
-                
-        except Exception as e:
-            print(f"[ERR] Errore processing {session_info['filename']}: {e}")
-            continue
+    # Crea automaticamente un batch job per i CV caricati
+    print(f"[BATCH] Creazione batch job per {len(uploaded_sessions)} CV...")
+    batch_service = BatchService()
+    batch_job_id = batch_service.create_cv_analysis_batch()
     
-    return {
-        "message": f"{len(uploaded_sessions)} CV caricati e {processed_count} processati con successo",
-        "sessions": uploaded_sessions,
-        "batch_id": batch_id,
-        "batch_date": batch_date,
-        "processed_count": processed_count,
-        "note": "I CV sono stati processati immediatamente"
-    }
+    if batch_job_id:
+        print(f"[OK] Batch job creato: {batch_job_id}")
+        return {
+            "message": f"{len(uploaded_sessions)} CV caricati e batch job creato con successo",
+            "sessions": uploaded_sessions,
+            "batch_id": batch_id,
+            "batch_date": batch_date,
+            "batch_job_id": batch_job_id,
+            "note": "I CV verranno processati tramite Azure OpenAI Batch API"
+        }
+    else:
+        print(f"[WARN] Nessun batch job creato - nessun CV da processare")
+        return {
+            "message": f"{len(uploaded_sessions)} CV caricati con successo",
+            "sessions": uploaded_sessions,
+            "batch_id": batch_id,
+            "batch_date": batch_date,
+            "note": "Nessun batch job creato - nessun CV da processare"
+        }
 
 @app.post("/api/batch/trigger-manual", dependencies=[Depends(hr_auth)])
 async def trigger_manual_batch(auth_data: dict = Depends(hr_auth)):
