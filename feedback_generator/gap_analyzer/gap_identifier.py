@@ -53,3 +53,31 @@ def identify_skill_gaps(report_text: str) -> GapAnalysisReport | None:
     except Exception as e:
         print(f"Errore critico durante la validazione dell'analisi dei gap: {e}")
         return None
+    
+from interviewer.llm_service import get_structured_llm_response_async
+
+async def identify_skill_gaps_async(report_text: str) -> GapAnalysisReport | None:
+    """Versione ASINCRONA: Estrae e raggruppa le carenze di skill."""
+    print("1. [Gap Analysis] Creazione del prompt...")
+    prompt = prompts_gap.create_gap_analysis_prompt(report_text)
+    
+    print(f"2. [Gap Analysis] Invio richiesta a '{GAP_ANALYZER_MODEL}'...")
+    structured_response_str = await get_structured_llm_response_async( # <-- MODIFICA: usa await
+        prompt=prompt,
+        model=GAP_ANALYZER_MODEL,
+        system_prompt=prompts_gap.SYSTEM_PROMPT,
+        tool_name="save_skill_gaps",
+        tool_schema=GapAnalysisReport.model_json_schema()
+    )
+
+    if not structured_response_str:
+        print("Errore critico: la chiamata LLM per l'analisi dei gap non ha restituito dati.")
+        return None
+
+    try:
+        validated_data = GapAnalysisReport.model_validate_json(structured_response_str)
+        print("4. [Gap Analysis] Analisi validata con successo.")
+        return validated_data
+    except Exception as e:
+        print(f"Errore critico durante la validazione dell'analisi dei gap: {e}")
+        return None

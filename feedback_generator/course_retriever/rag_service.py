@@ -4,6 +4,7 @@ import streamlit as st
 from sentence_transformers import SentenceTransformer
 # Importiamo l'oggetto 'db' dal nostro servizio dati centralizzato
 from services.data_manager import db
+import asyncio
 
 # --- Configurazione ---
 # Il modello di embedding rimane lo stesso, locale e performante
@@ -75,13 +76,25 @@ class RAGService:
         results = [self.course_map[i] for i in indices[0]]
         return results
 
-@st.cache_resource
-def get_rag_service():
-    """
-    Funzione factory cachata che crea e restituisce l'istanza di RAGService.
-    Questa è la funzione che viene chiamata dall'esterno, garantendo che il servizio
-    venga inizializzato una sola volta per sessione dell'app.
-    """
-    print("Tentativo di ottenere l'istanza di RAGService...")
-    service = RAGService()
-    return service
+    async def search_async(self, query: str, k: int = 3) -> list:
+            """
+            Versione ASINCRONA della ricerca.
+            Delega il lavoro pesante (sincrono) a un altro thread per non bloccare FastAPI.
+            """
+            print(f"Esecuzione di RAG search_async per la query: '{query[:30]}...'")
+            # Questa riga esegue il tuo vecchio metodo `search` in modo sicuro,
+            # senza bloccare il server.
+            # È la soluzione più semplice e robusta se non hai un client DB async.
+            try:
+                loop = asyncio.get_running_loop()
+                # Eseguiamo la funzione `self.search` (bloccante) in un thread separato
+                results = await loop.run_in_executor(
+                    None,      # Usa l'executor di default
+                    self.search, # La funzione da eseguire
+                    query,     # Il primo argomento di self.search
+                    k          # Il secondo argomento di self.search
+                )
+                return results
+            except Exception as e:
+                print(f"Errore in RAG search_async: {e}")
+                return []
