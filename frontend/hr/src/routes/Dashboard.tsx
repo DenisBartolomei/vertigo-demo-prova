@@ -56,6 +56,12 @@ export function Dashboard() {
       }
 
       const dashboardData = await response.json()
+      
+      // Verifica che la struttura dati sia corretta
+      if (!dashboardData || !dashboardData.metrics) {
+        throw new Error('Formato dati dashboard non valido - è necessario un redeploy del backend')
+      }
+      
       setData(dashboardData)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Errore sconosciuto')
