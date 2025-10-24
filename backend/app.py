@@ -6,6 +6,7 @@ import os
 import uuid
 import fitz  # PyMuPDF
 from datetime import datetime
+import traceback
 
 # Reuse existing services and pipelines
 from services.data_manager import (
@@ -56,17 +57,54 @@ from services.tenant_data_manager import (
 )
 from services.email_service import send_interview_link
 
+SESSION_STATUS = {
+    "CREATED": "Colloquio da preparare",
+    "PREPARED": "Colloquio pronto per il candidato",
+    "INTERVIEW_STARTED": "Colloquio in corso",
+    "INTERVIEW_COMPLETED": "Colloquio completato",
+    "EVALUATION_COMPLETED": "Pronto per generare feedback",
+    "FEEDBACK_GENERATION_IN_PROGRESS": "Generazione feedback in corso...",
+    "FEEDBACK_READY": "Feedback pronto",
+    "FEEDBACK_GENERATION_FAILED": "Errore generazione feedback"
+}
+
+
+import traceback
 
 def hr_auth(authorization: str | None = Header(default=None)):
-    token_val = None
-    if authorization and authorization.lower().startswith("bearer "):
+    """
+    Dependency function to authenticate HR and Admin users via JWT Bearer token.
+    Extracts the token from the 'Authorization' header, verifies it, and returns
+    the token payload if valid.
+    
+    Raises HTTPException for authentication errors (401).
+    """
+    try:
+        # 1. Estrae il token dall'header 'Authorization: Bearer <token>'
+        if not authorization or not authorization.lower().startswith("bearer "):
+            raise HTTPException(status_code=401, detail="Missing or invalid authentication token")
+        
         token_val = authorization.split(" ", 1)[1]
-    if not token_val:
-        raise HTTPException(status_code=401, detail="Missing token")
-    data = verify_jwt(token_val)
-    if not data or data.get("role") not in ["hr", "admin"]:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    return data
+
+        # 2. Verifica la validità del token (firma, scadenza, etc.)
+        payload = verify_jwt(token_val)
+        
+        # 3. Controlla che il payload esista e che il ruolo sia autorizzato
+        if not payload or payload.get("role") not in ["hr", "admin"]:
+            raise HTTPException(status_code=401, detail="Invalid token or insufficient permissions")
+        
+        # 4. Se tutto è valido, restituisce i dati del token
+        return payload
+
+    except HTTPException as http_exc:
+        # Rilancia le eccezioni HTTP che abbiamo generato noi, per farle gestire a FastAPI
+        raise http_exc
+    except Exception as e:
+        # Cattura qualsiasi altro errore imprevisto durante la verifica del token
+        print(f"🔥🔥🔥 UNEXPECTED ERROR in hr_auth: {e}")
+        traceback.print_exc()
+        # Invia un errore generico per non esporre dettagli interni
+        raise HTTPException(status_code=500, detail="An internal error occurred during authentication")
 
 
 def get_tenant_collections_from_auth(auth_data: dict):
@@ -637,7 +675,6 @@ def prepare_session(session_id: str, auth_data=Depends(hr_auth)):
         raise HTTPException(status_code=500, detail="Chatbot initialization failed")
     return meta
 
-
 @app.get("/sessions/completed")
 def list_completed_sessions(auth_data=Depends(hr_auth)):
     """List completed sessions for Reportistica Candidati page"""
@@ -645,38 +682,45 @@ def list_completed_sessions(auth_data=Depends(hr_auth)):
     results = list_completed_sessions_tenant(collections["sessions"])
     return {"items": results}
 
-
 @app.post("/sessions/{session_id}/generate-feedback")
 def generate_feedback(session_id: str, auth_data=Depends(hr_auth)):
-    """Generate final feedback report for a completed session"""
+    """Generate final feedback report for a completed session."""
+    
     collections = get_tenant_collections_from_auth(auth_data)
-    
-    # Check if session exists and is completed
-    session_data = get_session_data_tenant(session_id, collections["sessions"])
-    if not session_data:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    stages = session_data.get("stages", {})
-    if not (stages.get("cv_analysis_report") and stages.get("case_evaluation_report") and stages.get("skill_relevance")):
-        raise HTTPException(status_code=400, detail="Session not ready for feedback generation")
-    
-    # Check if feedback is already generated
-    if stages.get("feedback_pdf_path"):
-        return {"ok": True, "message": "Feedback already generated", "pdf_path": stages.get("feedback_pdf_path")}
+    collection_name = collections["sessions"]
     
     try:
-        # Import and run tenant-aware feedback pipeline
-        pdf_path = run_feedback_pipeline_tenant(session_id, collections["sessions"])
+        # 1. Verifica che la sessione esista
+        session_data = get_session_data_tenant(session_id, collection_name)
+        if not session_data:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # 2. Imposta lo stato su "in corso" per dare un feedback immediato all'UI
+        save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_GENERATION_IN_PROGRESS"], collection_name)
         
+        # 3. Esegui la pipeline di generazione del PDF
+        pdf_path = run_feedback_pipeline_tenant(session_id, collection_name)
+        
+        # 4. Gestisci il risultato della pipeline
         if pdf_path:
-            # Save the PDF path to the session
-            save_stage_output_tenant(session_id, "feedback_pdf_path", pdf_path, collections["sessions"])
-            return {"ok": True, "pdf_path": pdf_path}
+            save_stage_output_tenant(session_id, "feedback_pdf_path", pdf_path, collection_name)
+            save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_READY"], collection_name)
+            
+            print(f"✅ Feedback PDF generated successfully for session {session_id}")
+            return {"ok": True, "pdf_path": pdf_path, "status": SESSION_STATUS["FEEDBACK_READY"]}
         else:
-            raise HTTPException(status_code=500, detail="Feedback generation failed")
+            save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_GENERATION_FAILED"], collection_name)
+            print(f"❌ Feedback generation pipeline returned None for session {session_id}")
+            raise HTTPException(status_code=500, detail="Feedback pipeline failed to produce a PDF path.")
+
     except Exception as e:
-        print(f"Error generating feedback for session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Feedback generation failed: {str(e)}")
+        print(f"🔥🔥🔥 UNEXPECTED ERROR during feedback generation for session {session_id}: {e}")
+        traceback.print_exc()
+        
+        save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_GENERATION_FAILED"], collection_name)
+        
+        error_detail = f"An unexpected error occurred: [{type(e).__name__}] {str(e)}"
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 @app.get("/sessions/{session_id}/feedback-pdf")
@@ -1116,15 +1160,6 @@ def evaluate_session(session_id: str, _=Depends(hr_auth)):
     # Skill relevance
     _ = compute_and_save_skill_relevance(session_id=session_id)
     return {"ok": True}
-
-
-@app.post("/sessions/{session_id}/feedback")
-def generate_feedback(session_id: str, _=Depends(hr_auth)):
-    pdf_path = run_feedback_pipeline(session_id=session_id)
-    if not pdf_path:
-        raise HTTPException(status_code=500, detail="Feedback generation failed")
-    return {"pdf_path": pdf_path}
-
 
 @app.get("/sessions/{session_id}/feedback")
 def download_feedback(session_id: str, auth_data=Depends(hr_auth)):

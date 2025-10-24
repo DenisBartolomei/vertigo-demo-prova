@@ -138,7 +138,9 @@ class CVNormalizer:
                 temperature=0.0,
                 max_tokens=2000
             )
+                        
             structured_data = json.loads(raw)
+            
             if not structured_data.get("experience"):
                 print("ATTENZIONE: L'LLM non ha estratto esperienze lavorative dal testo del CV.")
                 return {}

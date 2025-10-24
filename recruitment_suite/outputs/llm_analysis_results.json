@@ -1,22 +1,47 @@
 [
   {
-    "ID": 94,
+    "ID": 38,
     "scartato": true,
-    "motivazione": "Esperienza IT, non analisi processi o project management organizzativo richiesti."
+    "motivazione": "Esperienza in digital marketing, non in IT strategy o architetture IT richieste."
   },
   {
-    "ID": 99,
+    "ID": 170,
     "scartato": true,
-    "motivazione": "Profilo data/AI, manca esperienza in analisi processi e contesto assicurativo/bancario."
+    "motivazione": "Esperienza strategica ma non in IT o architetture IT; settore moda rilevante ma non sufficiente."
   },
   {
-    "ID": 134,
-    "scartato": false,
-    "motivazione": "Esperienza project management, gestione processi e stakeholder, profilo coerente con la posizione."
+    "ID": 173,
+    "scartato": true,
+    "motivazione": "Esperienza in business strategy, manca focus su IT, architetture o digital transformation in Retail."
+  },
+  {
+    "ID": 174,
+    "scartato": true,
+    "motivazione": "Ruolo strategico in moda, ma nessuna esperienza IT o architetture applicative."
   },
   {
     "ID": 175,
     "scartato": true,
-    "motivazione": "Strategia e analisi di mercato, non esperienza in analisi processi o project management organizzativo."
+    "motivazione": "Esperto in strategia aziendale, ma nessuna esperienza IT o digital transformation."
+  },
+  {
+    "ID": 177,
+    "scartato": true,
+    "motivazione": "Esperienza in market strategy, non in IT strategy o architetture IT."
+  },
+  {
+    "ID": 182,
+    "scartato": true,
+    "motivazione": "Consulenza strategica finanziaria, manca esperienza IT e digital transformation in Retail."
+  },
+  {
+    "ID": 185,
+    "scartato": true,
+    "motivazione": "Esperienza in customer strategy, nessuna evidenza di competenze IT o architetture applicative."
+  },
+  {
+    "ID": 189,
+    "scartato": true,
+    "motivazione": "Esperienza in digital strategy, ma non in IT strategy, architetture o governance IT."
   }
 ]

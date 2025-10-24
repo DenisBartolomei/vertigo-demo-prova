@@ -441,6 +441,37 @@ export function Candidati() {
     }
   }
 
+async function handleGenerateFeedback(id: string) {
+    setRows(prevRows => prevRows.map(row => 
+        row.session_id === id ? { ...row, status: 'Generazione feedback in corso...' } : row
+    ));
+
+    try {
+        const res = await fetch(`${API_BASE}/sessions/${id}/generate-feedback`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            setRows(prevRows => prevRows.map(row => 
+                row.session_id === id ? { ...row, status: data.status || 'Feedback pronto' } : row
+            ));
+        } else {
+    const errorDetails = await res.text(); // Leggiamo il testo dell'errore inviato dal server
+    console.error(`ERRORE DAL SERVER (Status: ${res.status}):`, errorDetails);
+    
+    alert(`Errore dal server (Status: ${res.status}):\n\n${errorDetails}`);
+    
+    load();
+}
+    } catch (error) {
+        console.error('Error generating feedback:', error);
+        alert('Errore durante la generazione del feedback.');
+        load();
+    }
+}
+
   function getSecurityRiskLevel(securityReport: any): { level: string; color: string; icon: string } {
     if (!securityReport) {
       return { level: 'Unknown', color: '#6c757d', icon: '❓' }
@@ -748,47 +779,92 @@ export function Candidati() {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <select value={currentKind} onChange={e => fetchReport(r.session_id, e.target.value as 'cv' | 'case' | 'conversation')}>
-                      <option value="cv">CV ANALYSIS REPORT</option>
-                      <option value="case">CASE EVALUATION REPORT</option>
-                      <option value="conversation">CONVERSATION</option>
+                        <option value="cv">CV ANALYSIS REPORT</option>
+                        <option value="case">CASE EVALUATION REPORT</option>
+                        <option value="conversation">CONVERSATION</option>
                     </select>
                     <button onClick={() => toggle(r.session_id)}>{isExpanded ? 'Hide' : 'Show'} skills</button>
-                    
-                    {/* Feedback Download Button */}
-                    {r.status === 'Feedback ready' && (
-                      <button 
-                        onClick={() => downloadFeedback(r.session_id)}
-                        style={{
-                          padding: '6px 12px',
-                          background: '#10B981',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: 'var(--radius-md)',
-                          fontSize: '12px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}
-                      >
-                        📥 Download Feedback
-                      </button>
+                                  
+                    {/* --- NUOVO BLOCCO DI LOGICA CONDIZIONALE --- */}
+                                  
+                    {/* Stato: Pronto per generare */}
+                    {(r.status === 'Evaluation pending' || r.status === 'Feedback pending' || r.status === 'Pronto per generare feedback' || r.status === 'Evaluation completed') && (
+                        <button 
+                            onClick={() => handleGenerateFeedback(r.session_id)}
+                            style={{ padding: '6px 12px', background: '#8B5CF6', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        >
+                            🚀 Genera Feedback
+                        </button>
                     )}
+                
+                    {/* Stato: In elaborazione */}
+                    {r.status === 'Generazione feedback in corso...' && (
+                        <button 
+                            disabled 
+                            style={{ padding: '6px 12px', background: '#A5B4FC', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'not-allowed', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        >
+                            ⏳ In elaborazione...
+                        </button>
+                    )}
+                
+                    {/* Stato: Pronto per il download (CON AGGIUNTA DEL PULSANTE RIGENERA) */}
+                    {r.status === 'Feedback pronto' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {/* Pulsante di Download (già esistente) */}
+                            <button 
+                                onClick={() => downloadFeedback(r.session_id)}
+                                style={{ padding: '6px 12px', background: '#10B981', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            >
+                                📥 Download Feedback
+                            </button>
                     
-                    {/* Download Tracking Info */}
+                            {/* Pulsante di Rigenerazione (DA AGGIUNGERE) */}
+                            <button 
+                                title="Rigenera il feedback. Questa azione sovrascriverà il report esistente."
+                                onClick={() => {
+                                    if (window.confirm('Sei sicuro di voler rigenerare il feedback? Il report attuale verrà sovrascritto.')) {
+                                        handleGenerateFeedback(r.session_id);
+                                    }
+                                }}
+                                style={{ 
+                                    padding: '6px 12px',
+                                    background: 'var(--bg-secondary)', 
+                                    color: 'var(--text-secondary)', 
+                                    border: '1px solid var(--border-light)', 
+                                    borderRadius: 'var(--radius-md)', 
+                                    fontSize: '12px', 
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                }}
+                            >
+                                🔄 Rigenera
+                            </button>
+                        </div>
+                    )}
+                
+                    {/* Stato: Errore */}
+                    {r.status === 'Errore generazione feedback' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#FEE2E2', padding: '4px 8px', borderRadius: 'var(--radius-md)' }}>
+                            <span style={{ color: '#991B1B', fontSize: '12px' }}>⚠️ Errore</span>
+                            <button 
+                                onClick={() => handleGenerateFeedback(r.session_id)}
+                                style={{ fontSize: '10px', padding: '2px 6px', background: '#DC2626', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                            >
+                                Riprova
+                            </button>
+                        </div>
+                    )}
+                
+                    {/* Info sul download (se già scaricato) */}
                     {r.downloaded_at && (
-                      <div style={{
-                        fontSize: '10px',
-                        color: 'var(--text-secondary)',
-                        background: 'var(--bg-secondary)',
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        border: '1px solid var(--border-light)'
-                      }}>
-                        📥 Downloaded by {r.downloaded_by_name || r.downloaded_by} on {new Date(r.downloaded_at).toLocaleDateString('it-IT')}
+                      <div style={{ fontSize: '10px', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border-light)' }}>
+                        📥 Scaricato da {r.downloaded_by_name || r.downloaded_by} il {new Date(r.downloaded_at).toLocaleDateString('it-IT')}
                       </div>
                     )}
-                  </div>
+                </div>
+
                 </div>
                 {/* Report/Conversation Display */}
                 {(reportText[r.session_id] || conversationData[r.session_id]) && (

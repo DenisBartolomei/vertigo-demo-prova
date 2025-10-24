@@ -3,7 +3,7 @@ Tenant-aware data manager functions
 """
 import os
 from services.data_manager import db
-
+from datetime import datetime
 
 def create_or_update_position_tenant(position_id: str, payload: dict, collection_name: str) -> bool:
     """Create or update position in tenant-specific collection"""
@@ -27,13 +27,15 @@ def create_new_session_tenant(session_id: str, position_id: str, candidate_name:
     if db is None:
         return False
     try:
+        from backend.app import SESSION_STATUS  # Importa gli stati
         collection = db[collection_name]
         new_document = {
             "_id": session_id, 
             "position_id": position_id, 
             "candidate_name": candidate_name, 
-            "status": "initialized", 
-            "stages": {}
+            "status": SESSION_STATUS["CREATED"],  # <-- MODIFICA QUI
+            "stages": {},
+            "created_at": datetime.utcnow() # Aggiungiamo un timestamp di creazione
         }
         collection.insert_one(new_document)
         print(f"📄 Session created in tenant collection: {collection_name} with ID: {session_id}")
@@ -42,21 +44,25 @@ def create_new_session_tenant(session_id: str, position_id: str, candidate_name:
         print(f"Error during session creation {session_id}: {e}")
         return False
 
-
 def save_stage_output_tenant(session_id: str, stage_name: str, data_content: dict | str, collection_name: str):
-    """Save stage output in tenant-specific collection"""
+    """Save stage output in tenant-specific collection. Handles 'status' as a special top-level field."""
     if db is None:
         return
     try:
         collection = db[collection_name]
         
-        # Convert ObjectId objects to strings if present in data_content
         if isinstance(data_content, dict):
             data_content = _convert_objectids_to_strings(data_content)
         
-        update_query = {"$set": {f"stages.{stage_name}": data_content}}
+        update_field = ""
+        if stage_name == "status":
+            update_field = "status"
+        else:
+            update_field = f"stages.{stage_name}"
+        
+        update_query = {"$set": {update_field: data_content}}
         collection.update_one({"_id": session_id}, update_query)
-        print(f"💾 Stage '{stage_name}' data saved for session {session_id} in tenant collection: {collection_name}")
+        
     except Exception as e:
         print(f"Error saving stage '{stage_name}': {e}")
 
@@ -169,14 +175,17 @@ def list_sessions_tenant(collection_name: str):
 
 
 def list_completed_sessions_tenant(collection_name: str) -> list:
-    """List only sessions that have completed the full interview (have skill summaries) for Reportistica Candidati"""
+    """List sessions that are ready for the HR report page, with robust status detection."""
     try:
         if db is None:
             return []
         
-        sessions = list(db[collection_name].find({}))
-        results = []
+        from backend.app import SESSION_STATUS
+
+        query = {"stages.case_evaluation_report": {"$exists": True}}
+        sessions = list(db[collection_name].find(query))
         
+        results = []
         for s in sessions:
             pid = s.get("position_id")
             pname = None
@@ -184,40 +193,33 @@ def list_completed_sessions_tenant(collection_name: str) -> list:
                 p = get_single_position_data_tenant(pid, collection_name.replace("_sessions", "_positions_data"))
                 pname = (p or {}).get("position_name")
             
-            # Check if interview is fully completed (has skill relevance)
             stages = s.get("stages", {})
-            cv_status = stages.get("cv_analysis_status")
-            conversation = stages.get("conversation")
-            case_evaluation = stages.get("case_evaluation_report")
-            skill_relevance = stages.get("skill_relevance")  # This indicates full completion
-            feedback_pdf_path = stages.get("feedback_pdf_path")
+            download_info = stages.get("feedback_download", {})
             
-            # Only include sessions that have completed the full interview
-            if cv_status == "Completed" and conversation and case_evaluation and skill_relevance:
-                # Determine status based on feedback generation
-                if feedback_pdf_path:
-                    status = "Feedback ready"
-                else:
-                    status = "Feedback pending"
-                
-                # Get download information
-                download_info = stages.get("feedback_download", {})
-                
-                results.append({
-                    "session_id": s.get("_id"),
-                    "candidate_name": s.get("candidate_name"),
-                    "position_id": pid,
-                    "position_name": pname,
-                    "status": status,
-                    "interview_token": stages.get("interview_token"),
-                    "feedback_pdf_path": feedback_pdf_path,
-                    "downloaded_at": download_info.get("downloaded_at"),
-                    "downloaded_by": download_info.get("downloaded_by"),
-                    "downloaded_by_name": download_info.get("downloaded_by_name"),
-                })
+            final_status = s.get("status") # Partiamo dallo stato salvato
+
+            # Se il PDF esiste, lo stato DEVE essere "Feedback pronto", indipendentemente da tutto il resto.
+            if stages.get("feedback_pdf_path"):
+                final_status = SESSION_STATUS["FEEDBACK_READY"] # "Feedback pronto"
+
+            elif stages.get("case_evaluation_report") and (not final_status or final_status in ["initialized", SESSION_STATUS["CREATED"], SESSION_STATUS["INTERVIEW_COMPLETED"]]):
+                final_status = SESSION_STATUS["EVALUATION_COMPLETED"] # "Pronto per generare feedback"
+
+            results.append({
+                "session_id": s.get("_id"),
+                "candidate_name": s.get("candidate_name"),
+                "position_id": pid,
+                "position_name": pname,
+                "status": final_status, # Usiamo lo stato finale che abbiamo determinato
+                "downloaded_at": download_info.get("downloaded_at"),
+                "downloaded_by": download_info.get("downloaded_by"),
+                "downloaded_by_name": download_info.get("downloaded_by_name"),
+            })
+        
         return results
     except Exception as e:
-        print(f"Error listing completed sessions from tenant collection: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
