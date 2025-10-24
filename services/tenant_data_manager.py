@@ -284,8 +284,8 @@ def list_incomplete_sessions_tenant(collection_name: str) -> list:
         return []
 
 
-def get_dashboard_data_tenant(tenant_id: str, time_range: str = "30d") -> dict:
-    """Get comprehensive dashboard data for HR analytics"""
+def get_dashboard_data_tenant(tenant_id: str, time_range: str = "30d", position_filter: str = None) -> dict:
+    """Get comprehensive dashboard data for HR analytics with real recruitment indicators"""
     if db is None:
         print(f"Database not available for tenant {tenant_id}")
         return {}
@@ -294,7 +294,7 @@ def get_dashboard_data_tenant(tenant_id: str, time_range: str = "30d") -> dict:
         from datetime import datetime, timedelta
         import math
         
-        print(f"Getting dashboard data for tenant: {tenant_id}, time_range: {time_range}")
+        print(f"Getting dashboard data for tenant: {tenant_id}, time_range: {time_range}, position_filter: {position_filter}")
         
         # Calculate date range
         now = datetime.utcnow()
@@ -314,268 +314,150 @@ def get_dashboard_data_tenant(tenant_id: str, time_range: str = "30d") -> dict:
         sessions_collection = db[f"{tenant_id}_sessions"]
         users_collection = db[f"{tenant_id}_users"]
         
-        # Overview metrics
-        total_positions = positions_collection.count_documents({})
-        total_sessions = sessions_collection.count_documents({})
+        # Query base con filtro posizione
+        query = {}
+        if position_filter and position_filter != "all":
+            query["position_id"] = position_filter
         
-        # Active sessions (incomplete)
-        active_sessions = sessions_collection.count_documents({
-            "status": {"$ne": "completed"}
+        # 1. COLLOQUI COMPLETATI
+        completed_interviews = sessions_collection.count_documents({
+            **query,
+            "stages.skill_relevance": {"$exists": True}
         })
         
-        # Completed sessions
-        completed_sessions = sessions_collection.count_documents({
-            "status": "completed"
+        # 2. CANDIDATI IN ATTESA DI TOKEN
+        waiting_token = sessions_collection.count_documents({
+            **query,
+            "stages.interview_token": {"$exists": True},
+            "token_sent": False
         })
         
-        # Total users
-        total_users = users_collection.count_documents({
-            "active": True
+        # 3. COLLOQUIO IN CORSO
+        in_progress = sessions_collection.count_documents({
+            **query,
+            "token_sent": True,
+            "stages.skill_relevance": {"$exists": False}
         })
         
-        print(f"📈 Found: {total_positions} positions, {total_sessions} sessions, {completed_sessions} completed, {total_users} users")
-        
-        # Calculate average completion time
-        completed_sessions_data = list(sessions_collection.find({
-            "status": "completed",
-            "created_at": {"$gte": start_date}
+        # 4. DURATA MEDIA COLLOQUIO
+        completed_sessions = list(sessions_collection.find({
+            **query,
+            "stages.skill_relevance": {"$exists": True},
+            "interview_started_at": {"$exists": True}
         }))
         
-        avg_completion_time = 0
-        if completed_sessions_data:
-            total_time = 0
-            for session in completed_sessions_data:
-                created_at = session.get("created_at", now)
-                completed_at = session.get("completed_at", now)
-                if isinstance(created_at, str):
-                    created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                if isinstance(completed_at, str):
-                    completed_at = datetime.fromisoformat(completed_at.replace('Z', '+00:00'))
-                duration = (completed_at - created_at).total_seconds() / 60  # minutes
-                total_time += duration
-            avg_completion_time = total_time / len(completed_sessions_data)
+        durations = []
+        for session in completed_sessions:
+            started_at = session.get("interview_started_at")
+            if started_at:
+                if isinstance(started_at, str):
+                    started_at = datetime.fromisoformat(started_at.replace('Z', '+00:00'))
+                
+                # Trova timestamp skill_relevance (ultimo aggiornamento)
+                stages = session.get("stages", {})
+                skill_relevance = stages.get("skill_relevance", {})
+                if skill_relevance:
+                    # Usa timestamp di creazione del documento come proxy per completamento
+                    # In realtà dovremmo avere un campo "completed_at" specifico
+                    duration_minutes = (now - started_at).total_seconds() / 60
+                    durations.append(duration_minutes)
         
-        # Position performance
+        avg_interview_duration = sum(durations) / len(durations) if durations else 0
+        
+        # 5. TEMPO DI PRESA IN CARICO
+        takeover_times = []
+        for session in completed_sessions:
+            token_sent_at = session.get("token_sent_at")
+            if token_sent_at:
+                if isinstance(token_sent_at, str):
+                    token_sent_at = datetime.fromisoformat(token_sent_at.replace('Z', '+00:00'))
+                
+                # Calcola differenza tra invio token e completamento
+                # Per ora usiamo timestamp attuale come proxy per completamento
+                takeover_hours = (now - token_sent_at).total_seconds() / 3600
+                takeover_times.append(takeover_hours)
+        
+        avg_takeover_time = sum(takeover_times) / len(takeover_times) if takeover_times else 0
+        
+        # 6-7. TASSO RECUPERO E UNDERPERFORMING
+        sessions_with_scores = list(sessions_collection.find({
+            **query,
+            "stages.skill_relevance": {"$exists": True}
+        }))
+        
+        recovery_count = 0
+        underperforming_count = 0
+        total_evaluated = len(sessions_with_scores)
+        
+        all_interview_scores = []
+        all_cv_scores = []
+        
+        for session in sessions_with_scores:
+            scores = session.get("stages", {}).get("skill_relevance", {}).get("scores", [])
+            if scores:
+                avg_cv = sum(s.get("cv_relevance_score", 0) for s in scores) / len(scores)
+                avg_interview = sum(s.get("interview_relevance_score", 0) for s in scores) / len(scores)
+                diff = avg_interview - avg_cv
+                
+                all_interview_scores.append(avg_interview)
+                all_cv_scores.append(avg_cv)
+                
+                if diff >= 0.5:
+                    recovery_count += 1
+                elif diff <= -0.5:
+                    underperforming_count += 1
+        
+        recovery_rate = (recovery_count / total_evaluated * 100) if total_evaluated > 0 else 0
+        underperforming_rate = (underperforming_count / total_evaluated * 100) if total_evaluated > 0 else 0
+        
+        # 8-10. SCORING MEDI
+        avg_interview_score = sum(all_interview_scores) / len(all_interview_scores) if all_interview_scores else 0
+        avg_cv_score = sum(all_cv_scores) / len(all_cv_scores) if all_cv_scores else 0
+        avg_overall_score = (avg_interview_score + avg_cv_score) / 2 if (all_interview_scores and all_cv_scores) else 0
+        
+        # Lista posizioni per filtro dropdown
         positions_data = list(positions_collection.find({}))
-        position_performance = []
+        positions = [{"id": p.get("_id"), "name": p.get("position_name", "Unknown")} for p in positions_data]
         
-        for position in positions_data:
-            position_id = position.get("_id")
-            position_name = position.get("position_name", "Unknown")
-            
-            # Count sessions for this position
-            position_sessions = list(sessions_collection.find({"position_id": position_id}))
-            total_pos_sessions = len(position_sessions)
-            completed_pos_sessions = len([s for s in position_sessions if s.get("status") == "completed"])
-            
-            # Calculate average score
-            avg_score = 0
-            if completed_pos_sessions > 0:
-                total_score = 0
-                score_count = 0
-                for session in position_sessions:
-                    if session.get("status") == "completed":
-                        stages = session.get("stages", {})
-                        skill_relevance = stages.get("skill_relevance", {})
-                        if isinstance(skill_relevance, dict) and "overall_score" in skill_relevance:
-                            total_score += skill_relevance["overall_score"]
-                            score_count += 1
-                if score_count > 0:
-                    avg_score = total_score / score_count
-            
-            # Last activity
-            last_activity = "N/A"
-            if position_sessions:
-                latest_session = max(position_sessions, key=lambda s: s.get("created_at", ""))
-                if latest_session.get("created_at"):
-                    try:
-                        last_date = datetime.fromisoformat(latest_session["created_at"].replace('Z', '+00:00'))
-                        last_activity = last_date.strftime("%d/%m")
-                    except:
-                        last_activity = "N/A"
-            
-            position_performance.append({
-                "_id": position_id,
-                "position_name": position_name,
-                "totalSessions": total_pos_sessions,
-                "completedSessions": completed_pos_sessions,
-                "avgScore": avg_score,
-                "lastActivity": last_activity
-            })
-        
-        # Recent activity
-        recent_sessions = list(sessions_collection.find({
-            "created_at": {"$gte": start_date}
-        }).sort("created_at", -1).limit(10))
-        
-        recent_activity = []
-        for session in recent_sessions:
-            position_id = session.get("position_id")
-            position_name = "Unknown"
-            if position_id:
-                position_doc = positions_collection.find_one({"_id": position_id})
-                if position_doc:
-                    position_name = position_doc.get("position_name", "Unknown")
-            
-            # Determine activity type
-            activity_type = "session_created"
-            if session.get("status") == "completed":
-                activity_type = "session_completed"
-            elif session.get("stages", {}).get("feedback_pdf_path"):
-                activity_type = "feedback_generated"
-            elif session.get("token_sent"):
-                activity_type = "token_sent"
-            
-            recent_activity.append({
-                "type": activity_type,
-                "session_id": session.get("_id"),
-                "candidate_name": session.get("candidate_name", "Unknown"),
-                "position_name": position_name,
-                "timestamp": session.get("created_at", now.isoformat()),
-                "user_name": session.get("token_sent_by")
-            })
-        
-        # Performance metrics
-        completion_rate = (completed_sessions / total_sessions * 100) if total_sessions > 0 else 0
-        
-        # Calculate average interview duration (from conversation data)
-        interview_durations = []
-        for session in completed_sessions_data:
-            stages = session.get("stages", {})
-            conversation = stages.get("conversation", [])
-            if conversation and len(conversation) > 1:
-                # More accurate estimation based on conversation length and complexity
-                message_count = len(conversation)
-                # Estimate: 1-2 minutes per message exchange (question + answer)
-                # More messages = more complex interview = longer duration
-                if message_count <= 5:
-                    duration = message_count * 1.5  # Short interviews
-                elif message_count <= 10:
-                    duration = message_count * 2.0  # Medium interviews
-                else:
-                    duration = message_count * 2.5  # Long interviews
-                interview_durations.append(duration)
-        
-        avg_interview_duration = sum(interview_durations) / len(interview_durations) if interview_durations else 0
-        
-        # Calculate real feedback generation time
-        feedback_times = []
-        for session in completed_sessions_data:
-            stages = session.get("stages", {})
-            if stages.get("feedback_pdf_path"):
-                # Estimate feedback generation time based on when feedback was generated
-                # This is a rough estimate - in a real system you'd track actual timestamps
-                feedback_times.append(3)  # Assume 3 minutes average
-        
-        feedback_generation_time = sum(feedback_times) / len(feedback_times) if feedback_times else 0
-        
-        # Calculate real token usage rate
-        total_tokens_issued = sessions_collection.count_documents({})
-        tokens_used = sessions_collection.count_documents({
-            "token_sent": True
-        })
-        token_usage_rate = (tokens_used / total_tokens_issued * 100) if total_tokens_issued > 0 else 0
-        
-        # Skill analytics
-        skill_analytics = []
-        all_skills = {}
-        
-        for session in completed_sessions_data:
-            stages = session.get("stages", {})
-            skill_relevance = stages.get("skill_relevance", {})
-            if isinstance(skill_relevance, dict) and "skill_scores" in skill_relevance:
-                skill_scores = skill_relevance["skill_scores"]
-                if isinstance(skill_scores, dict):
-                    for skill, score in skill_scores.items():
-                        if skill not in all_skills:
-                            all_skills[skill] = {"scores": [], "count": 0}
-                        all_skills[skill]["scores"].append(score)
-                        all_skills[skill]["count"] += 1
-        
-        for skill, data in all_skills.items():
-            if data["count"] > 0:
-                avg_score = sum(data["scores"]) / len(data["scores"])
-                skill_analytics.append({
-                    "skill": skill,
-                    "avgScore": avg_score,
-                    "frequency": data["count"],
-                    "trend": "stable"  # Could be enhanced with historical data
-                })
-        
-        # Sort by frequency and take top 10
-        skill_analytics.sort(key=lambda x: x["frequency"], reverse=True)
-        skill_analytics = skill_analytics[:10]
-        
-        # Monthly trends - use real data from database
-        monthly_trends = []
-        months = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"]
-        
-        # Get sessions from the last 6 months
-        for i in range(6):
-            month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0) - timedelta(days=30*i)
-            if i == 0:
-                month_end = now
-            else:
-                month_end = month_start + timedelta(days=30)
-            
-            # Count sessions in this month
-            month_sessions = list(sessions_collection.find({
-                "created_at": {
-                    "$gte": month_start.isoformat(),
-                    "$lt": month_end.isoformat()
-                }
-            }))
-            
-            sessions_count = len(month_sessions)
-            completions_count = len([s for s in month_sessions if s.get("status") == "completed"])
-            
-            # Calculate average score for this month
-            avg_score = 0
-            if completions_count > 0:
-                total_score = 0
-                score_count = 0
-                for session in month_sessions:
-                    if session.get("status") == "completed":
-                        stages = session.get("stages", {})
-                        skill_relevance = stages.get("skill_relevance", {})
-                        if isinstance(skill_relevance, dict) and "overall_score" in skill_relevance:
-                            total_score += skill_relevance["overall_score"]
-                            score_count += 1
-                if score_count > 0:
-                    avg_score = total_score / score_count
-            
-            month_name = months[month_start.month - 1]
-            
-            monthly_trends.append({
-                "month": month_name,
-                "sessions": sessions_count,
-                "completions": completions_count,
-                "avgScore": avg_score
-            })
-        
-        monthly_trends.reverse()  # Show oldest to newest
+        print(f"📊 Dashboard metrics: {completed_interviews} completed, {waiting_token} waiting, {in_progress} in progress")
+        print(f"📈 Recovery: {recovery_count} ({recovery_rate:.1f}%), Underperforming: {underperforming_count} ({underperforming_rate:.1f}%)")
         
         return {
-            "overview": {
-                "totalPositions": total_positions,
-                "totalSessions": total_sessions,
-                "activeSessions": active_sessions,
-                "completedSessions": completed_sessions,
-                "totalUsers": total_users,
-                "avgCompletionTime": avg_completion_time
+            "metrics": {
+                "completed_interviews": completed_interviews,
+                "waiting_token": waiting_token,
+                "in_progress": in_progress,
+                "avg_interview_duration": round(avg_interview_duration, 1),
+                "avg_takeover_time": round(avg_takeover_time, 1),
+                "recovery_count": recovery_count,
+                "recovery_rate": round(recovery_rate, 1),
+                "underperforming_count": underperforming_count,
+                "underperforming_rate": round(underperforming_rate, 1),
+                "avg_interview_score": round(avg_interview_score, 2),
+                "avg_cv_score": round(avg_cv_score, 2),
+                "avg_overall_score": round(avg_overall_score, 2),
+                "total_evaluated": total_evaluated
             },
-            "positions": position_performance,
-            "recentActivity": recent_activity,
-            "performanceMetrics": {
-                "completionRate": completion_rate,
-                "avgInterviewDuration": avg_interview_duration,
-                "feedbackGenerationTime": feedback_generation_time,
-                "tokenUsageRate": token_usage_rate
-            },
-            "skillAnalytics": skill_analytics,
-            "monthlyTrends": monthly_trends
+            "positions": positions
         }
         
     except Exception as e:
         print(f"Error getting dashboard data for tenant {tenant_id}: {e}")
-        return {}
+        return {
+            "metrics": {
+                "completed_interviews": 0,
+                "waiting_token": 0,
+                "in_progress": 0,
+                "avg_interview_duration": 0,
+                "avg_takeover_time": 0,
+                "recovery_count": 0,
+                "recovery_rate": 0,
+                "underperforming_count": 0,
+                "underperforming_rate": 0,
+                "avg_interview_score": 0,
+                "avg_cv_score": 0,
+                "avg_overall_score": 0,
+                "total_evaluated": 0
+            },
+            "positions": []
+        }

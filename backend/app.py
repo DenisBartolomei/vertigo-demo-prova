@@ -976,9 +976,10 @@ def get_user_info(auth_data=Depends(hr_auth)):
 @app.get("/dashboard/data")
 def get_dashboard_data(
     timeRange: str = "30d",
+    positionFilter: str = "all",
     auth_data=Depends(hr_auth)
 ):
-    """Get comprehensive dashboard data for HR analytics"""
+    """Get comprehensive dashboard data for HR analytics with real recruitment indicators"""
     tenant_id = auth_data.get("tenant_id")
     
     if not tenant_id:
@@ -989,7 +990,11 @@ def get_dashboard_data(
     if timeRange not in valid_ranges:
         timeRange = "30d"
     
-    dashboard_data = get_dashboard_data_tenant(tenant_id, timeRange)
+    # Validate position filter
+    if positionFilter not in ["all"] and not positionFilter:
+        positionFilter = "all"
+    
+    dashboard_data = get_dashboard_data_tenant(tenant_id, timeRange, positionFilter)
     
     if not dashboard_data:
         raise HTTPException(status_code=500, detail="Failed to retrieve dashboard data")
