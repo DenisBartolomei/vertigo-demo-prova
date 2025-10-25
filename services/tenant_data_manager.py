@@ -4,6 +4,17 @@ Tenant-aware data manager functions
 import os
 from services.data_manager import db
 
+SESSION_STATUS = {
+    "CREATED": "Colloquio da preparare",
+    "PREPARED": "Colloquio pronto per il candidato",
+    "INTERVIEW_STARTED": "Colloquio in corso",
+    "INTERVIEW_COMPLETED": "Colloquio completato",
+    "EVALUATION_COMPLETED": "Pronto per generare feedback",
+    "FEEDBACK_GENERATION_IN_PROGRESS": "Generazione feedback in corso...",
+    "FEEDBACK_READY": "Feedback pronto",
+    "FEEDBACK_GENERATION_FAILED": "Errore generazione feedback"
+}
+
 
 def create_or_update_position_tenant(position_id: str, payload: dict, collection_name: str) -> bool:
     """Create or update position in tenant-specific collection"""
@@ -170,14 +181,16 @@ def list_sessions_tenant(collection_name: str):
 
 
 def list_completed_sessions_tenant(collection_name: str) -> list:
-    """List only sessions that have completed the full interview (have skill summaries) for Reportistica Candidati"""
+    """List sessions that are ready for the HR report page, with robust status detection."""
     try:
         if db is None:
             return []
         
-        sessions = list(db[collection_name].find({}))
-        results = []
+        # Filtra solo le sessioni che hanno completato almeno la valutazione del caso
+        query = {"stages.case_evaluation_report": {"$exists": True}}
+        sessions = list(db[collection_name].find(query))
         
+        results = []
         for s in sessions:
             pid = s.get("position_id")
             pname = None
@@ -185,41 +198,36 @@ def list_completed_sessions_tenant(collection_name: str) -> list:
                 p = get_single_position_data_tenant(pid, collection_name.replace("_sessions", "_positions_data"))
                 pname = (p or {}).get("position_name")
             
-            # Check if interview is fully completed (has skill relevance)
             stages = s.get("stages", {})
-            cv_status = stages.get("cv_analysis_status")
-            conversation = stages.get("conversation")
-            case_evaluation = stages.get("case_evaluation_report")
-            skill_relevance = stages.get("skill_relevance")  # This indicates full completion
-            feedback_pdf_path = stages.get("feedback_pdf_path")
+            download_info = stages.get("feedback_download", {})
             
-            # Only include sessions that have completed the full interview
-            if cv_status == "Completed" and conversation and case_evaluation and skill_relevance:
-                # Determine status based on feedback generation
-                if feedback_pdf_path:
-                    status = "Feedback ready"
-                else:
-                    status = "Feedback pending"
-                
-                # Get download information
-                download_info = stages.get("feedback_download", {})
-                
-                results.append({
-                    "session_id": s.get("_id"),
-                    "candidate_name": s.get("candidate_name"),
-                    "candidate_email": s.get("candidate_email"),
-                    "position_id": pid,
-                    "position_name": pname,
-                    "status": status,
-                    "interview_token": stages.get("interview_token"),
-                    "feedback_pdf_path": feedback_pdf_path,
-                    "downloaded_at": download_info.get("downloaded_at"),
-                    "downloaded_by": download_info.get("downloaded_by"),
-                    "downloaded_by_name": download_info.get("downloaded_by_name"),
-                })
+            # 1. Partiamo dallo stato già salvato nel database
+            final_status = s.get("status") 
+
+            # 2. Logica di correzione per garantire coerenza
+            # Se il PDF esiste, lo stato DEVE essere "Feedback pronto", indipendentemente da tutto.
+            if stages.get("feedback_pdf_path"):
+                final_status = SESSION_STATUS["FEEDBACK_READY"] # "Feedback pronto"
+            # Se la valutazione c'è, ma lo stato è ancora vecchio, aggiorniamolo.
+            elif stages.get("case_evaluation_report") and (not final_status or final_status in [SESSION_STATUS["CREATED"], SESSION_STATUS["INTERVIEW_COMPLETED"], "initialized"]):
+                final_status = SESSION_STATUS["EVALUATION_COMPLETED"] # "Pronto per generare feedback"
+
+            results.append({
+                "session_id": s.get("_id"),
+                "candidate_name": s.get("candidate_name"),
+                "candidate_email": s.get("candidate_email"), # Assicurati che il campo esista
+                "position_id": pid,
+                "position_name": pname,
+                "status": final_status, # Usiamo lo stato finale che abbiamo determinato
+                "downloaded_at": download_info.get("downloaded_at"),
+                "downloaded_by": download_info.get("downloaded_by"),
+                "downloaded_by_name": download_info.get("downloaded_by_name"),
+            })
+        
         return results
     except Exception as e:
-        print(f"Error listing completed sessions from tenant collection: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 

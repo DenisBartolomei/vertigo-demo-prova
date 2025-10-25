@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8001'
 
 interface DashboardData {
   metrics: {
@@ -30,6 +30,7 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null)
   const [selectedTimeRange, setSelectedTimeRange] = useState<'7d' | '30d' | '90d' | '1y'>('30d')
   const [selectedPosition, setSelectedPosition] = useState<string>("all")
+  const [isDownloading, setIsDownloading] = useState(false) // NUOVO STATO
 
   useEffect(() => {
     loadDashboardData()
@@ -57,7 +58,6 @@ export function Dashboard() {
 
       const dashboardData = await response.json()
       
-      // Verifica che la struttura dati sia corretta
       if (!dashboardData || !dashboardData.metrics) {
         throw new Error('Formato dati dashboard non valido - è necessario un redeploy del backend')
       }
@@ -69,6 +69,49 @@ export function Dashboard() {
       setLoading(false)
     }
   }
+
+  // --- NUOVA FUNZIONE PER SCARICARE IL REPORT ---
+  async function downloadDashboardReport() {
+    setIsDownloading(true);
+    const token = localStorage.getItem('hr_jwt');
+    if (!token) {
+      alert('Errore: Token di autenticazione non trovato.');
+      setIsDownloading(false);
+      return;
+    }
+
+    try {
+      // Costruisce l'URL con i filtri correnti. L'endpoint /dashboard/report/pdf è ipotetico
+      // e dovrà essere implementato nel backend.
+      const reportUrl = `${API_BASE}/dashboard/report/pdf?timeRange=${selectedTimeRange}&positionFilter=${selectedPosition}`;
+      
+      const response = await fetch(reportUrl, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Errore dal server (${response.status}): ${errorText || 'Impossibile generare il report.'}`);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Report_Dashboard_${selectedPosition}_${new Date().toLocaleDateString('it-IT')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+    } catch (error) {
+      console.error('Errore nel download del report:', error);
+      alert(error instanceof Error ? error.message : 'Si è verificato un errore imprevisto durante il download.');
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
 
   if (loading) {
     return (
@@ -199,6 +242,29 @@ export function Dashboard() {
               ))}
             </select>
           </div>
+
+          {/* --- NUOVO PULSANTE DI DOWNLOAD --- */}
+          <button
+            onClick={downloadDashboardReport}
+            disabled={isDownloading}
+            style={{
+              padding: '8px 16px',
+              background: 'var(--primary-purple)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: isDownloading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              opacity: isDownloading ? 0.7 : 1,
+              fontSize: '14px',
+              fontWeight: '500',
+              marginLeft: '8px'
+            }}
+          >
+            {isDownloading ? '📥 In download...' : '📥 Scarica Report'}
+          </button>
         </div>
       </div>
 

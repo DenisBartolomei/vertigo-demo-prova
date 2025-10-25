@@ -1,22 +1,47 @@
 [
   {
-    "ID": 94,
+    "ID": 38,
     "scartato": true,
-    "motivazione": "Esperienza IT, non analisi processi o project management organizzativo richiesti."
+    "motivazione": "Esperienza in digital marketing, non in IT strategy o consulenza IT."
   },
   {
-    "ID": 99,
+    "ID": 170,
     "scartato": true,
-    "motivazione": "Profilo data/AI, manca esperienza in analisi processi e contesto assicurativo/bancario."
+    "motivazione": "Esperienza in analisi strategica moda, manca background IT richiesto."
   },
   {
-    "ID": 134,
-    "scartato": false,
-    "motivazione": "Esperienza project management, gestione processi e stakeholder, profilo coerente con la posizione."
+    "ID": 173,
+    "scartato": true,
+    "motivazione": "Esperienza in business strategy, non in consulenza IT o architetture ICT."
+  },
+  {
+    "ID": 174,
+    "scartato": true,
+    "motivazione": "Profilo simile al 170, manca esperienza IT e architetture ICT."
   },
   {
     "ID": 175,
     "scartato": true,
-    "motivazione": "Strategia e analisi di mercato, non esperienza in analisi processi o project management organizzativo."
+    "motivazione": "Esperienza in strategia aziendale, non in IT strategy o consulenza IT."
+  },
+  {
+    "ID": 177,
+    "scartato": true,
+    "motivazione": "Esperienza in market strategy, non in consulenza IT o architetture ICT."
+  },
+  {
+    "ID": 182,
+    "scartato": true,
+    "motivazione": "Consulenza strategica finanziaria, non esperienza in IT strategy o architetture ICT."
+  },
+  {
+    "ID": 185,
+    "scartato": true,
+    "motivazione": "Esperienza in customer strategy, non in IT strategy o consulenza IT."
+  },
+  {
+    "ID": 189,
+    "scartato": true,
+    "motivazione": "Esperienza in digital strategy, manca background tecnico IT richiesto."
   }
 ]

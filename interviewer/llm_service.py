@@ -116,3 +116,92 @@ def get_structured_llm_response(
     except Exception as e:
         print(f"Errore nella chiamata LLM strutturata: {e}")
         return None
+    
+from openai import AsyncAzureOpenAI
+client_async = AsyncAzureOpenAI(
+        api_key=AZURE_API_KEY,
+        api_version=AZURE_API_VERSION,
+        azure_endpoint=AZURE_ENDPOINT
+    )
+
+# <-- MODIFICA: Tutta la funzione è ora 'async def' e usa 'await' -->
+async def get_llm_response_async(prompt: str, model: str, system_prompt: str, **kwargs) -> str:
+    """
+    Versione ASINCRONA: Invia un prompt per una risposta testuale semplice.
+    """
+    if client_async is None:
+        return "Errore: Il servizio LLM non è configurato a causa di una chiave API mancante."
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": prompt}
+    ]
+    try:
+        # La chiamata al client ora è asincrona
+        response = client.chat.completions.create(
+            model=AZURE_DEPLOYMENT_NAME,  # Usa il deployment name per Azure
+            messages=messages,
+            **kwargs 
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Errore nella chiamata LLM testuale asincrona: {e}")
+        return f"Errore: {e}"
+
+# <-- MODIFICA: Tutta la funzione è ora 'async def' e usa 'await' -->
+async def get_structured_llm_response_async(
+    prompt: str, 
+    model: str, 
+    system_prompt: str, 
+    tool_name: str, 
+    tool_schema: dict,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None
+) -> Optional[str]:
+    """
+    Versione ASINCRONA: Invia un prompt forzando un output strutturato.
+    """
+    if client_async is None:
+        print("Errore: Il servizio LLM non è configurato a causa di una chiave API mancante.")
+        return None
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": prompt}
+    ]
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": tool_name,
+                "description": f"Salva i dati strutturati per {tool_name}",
+                "parameters": tool_schema
+            }
+        }
+    ]
+    
+    api_kwargs = {
+        "model": AZURE_DEPLOYMENT_NAME,  # Usa il deployment name per Azure
+        "messages": messages,
+        "tools": tools,
+        "tool_choice": {"type": "function", "function": {"name": tool_name}}
+    }
+    
+    if temperature is not None:
+        api_kwargs['temperature'] = temperature
+    if max_tokens is not None:
+        api_kwargs['max_tokens'] = max_tokens
+        
+    try:
+        # La chiamata al client ora è asincrona
+        response = await client_async.chat.completions.create(**api_kwargs)
+        
+        if response.choices and response.choices[0].message.tool_calls:
+            arguments = response.choices[0].message.tool_calls[0].function.arguments
+            return arguments
+        else:
+            print("Errore: La risposta dell'LLM non ha chiamato la funzione richiesta o è vuota.")
+            return None
+    except Exception as e:
+        print(f"Errore nella chiamata LLM strutturata asincrona: {e}")
+        return None

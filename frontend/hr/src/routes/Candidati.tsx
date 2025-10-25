@@ -491,6 +491,51 @@ export function Candidati() {
     }
   }
 
+  async function handleGenerateFeedback(id: string) {
+      // Salva lo stato precedente in caso di errore
+      const originalRows = [...rows];
+      const originalStatus = rows.find(row => row.session_id === id)?.status;
+
+      // Aggiornamento ottimistico dell'UI
+      setRows(prevRows => prevRows.map(row => 
+          row.session_id === id ? { ...row, status: 'Generazione feedback in corso...' } : row
+      ));
+
+      try {
+          const res = await fetch(`${API_BASE}/sessions/${id}/generate-feedback`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}` }
+          });
+
+          if (res.ok) {
+              const data = await res.json();
+              // L'UI è già in "corso...", il backend si occuperà di aggiornare lo stato finale.
+              // Possiamo aggiornare l'UI con lo stato restituito per coerenza.
+              setRows(prevRows => prevRows.map(row => 
+                  row.session_id === id ? { ...row, status: data.status || 'Generazione feedback in corso...' } : row
+              ));
+              // Potresti voler avviare un polling o attendere un WebSocket per l'aggiornamento finale,
+              // ma per ora lasciare che l'utente aggiorni manualmente la pagina è accettabile.
+          } else {
+              // GESTIONE ERRORE MIGLIORATA
+              const errorDetails = await res.text();
+              console.error(`ERRORE DAL SERVER (Status: ${res.status}):`, errorDetails);
+              alert(`Errore dal server (Status: ${res.status}):\n\n${errorDetails}`);
+              
+              // Ripristina lo stato solo per la riga fallita, invece di ricaricare tutto
+              setRows(prevRows => prevRows.map(row =>
+                row.session_id === id ? { ...row, status: originalStatus || 'Errore generazione feedback' } : row
+              ));
+          }
+      } catch (error) {
+          console.error('Error generating feedback:', error);
+          alert('Errore di rete durante la generazione del feedback.');
+          
+          // Ripristina lo stato originale in caso di errore di rete
+          setRows(originalRows);
+      }
+  }
+
   function getSecurityRiskLevel(securityReport: any): { level: string; color: string; icon: string } {
     if (!securityReport) {
       return { level: 'Unknown', color: '#6c757d', icon: '❓' }
@@ -670,6 +715,7 @@ export function Candidati() {
         <div style={{ display: 'grid', gap: 12 }}>
           {filteredAndSortedRows.map((r) => {
             const isExpanded = expanded === r.session_id
+            console.log(`Candidato: ${r.candidate_name}, Stato ricevuto: '${r.status}'`);
             const currentKind = reportKind[r.session_id] || 'cv'
             return (
               <div key={r.session_id} className="card">
@@ -754,16 +800,14 @@ export function Candidati() {
                         fontSize: '12px',
                         fontWeight: '500',
                         marginTop: '4px',
-                        background: r.status === 'Feedback ready' ? '#D1FAE5' : 
-                                   r.status === 'Feedback pending' ? '#FEF3C7' :
-                                   r.status === 'Interview completed' ? '#DBEAFE' :
-                                   r.status === 'Colloquio da completare' ? '#DBEAFE' :
-                                   r.status === 'CV analysis failed' ? '#FEE2E2' : '#F3F4F6',
-                        color: r.status === 'Feedback ready' ? '#065F46' :
-                               r.status === 'Feedback pending' ? '#92400E' :
-                               r.status === 'Interview completed' ? '#1E40AF' :
-                               r.status === 'Colloquio da completare' ? '#1E40AF' :
-                               r.status === 'CV analysis failed' ? '#991B1B' : '#374151'
+                        background: r.status === 'Feedback pronto' ? '#D1FAE5' : 
+                                    r.status === 'Pronto per generare feedback' ? '#FEF3C7' :
+                                    r.status === 'Colloquio completato' ? '#DBEAFE' :
+                                    r.status === 'Errore generazione feedback' ? '#FEE2E2' : '#F3F4F6',
+                        color: r.status === 'Feedback pronto' ? '#065F46' :
+                               r.status === 'Pronto per generare feedback' ? '#92400E' :
+                               r.status === 'Colloquio completato' ? '#1E40AF' :
+                               r.status === 'Errore generazione feedback' ? '#991B1B' : '#374151'
                       }}>
                         {r.status}
                       </div>
@@ -832,41 +876,86 @@ export function Candidati() {
                     </select>
                     <button onClick={() => toggle(r.session_id)}>{isExpanded ? 'Hide' : 'Show'} skills</button>
                     
-                    {/* Feedback Download Button */}
-                    {r.status === 'Feedback ready' && (
-                      <button 
-                        onClick={() => downloadFeedback(r.session_id)}
-                        style={{
-                          padding: '6px 12px',
-                          background: '#10B981',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: 'var(--radius-md)',
-                          fontSize: '12px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}
-                      >
-                        📥 Download Feedback
-                      </button>
+                                
+                    {/* --- BLOCCO DI LOGICA RIPRISTINATO DAL VECCHIO FILE --- */}
+                                  
+                    {/* Stato: Pronto per generare */}
+                    {(r.status === 'Evaluation pending' || r.status === 'Feedback pending' || r.status === 'Pronto per generare feedback' || r.status === 'Evaluation completed') && (
+                        <button 
+                            onClick={() => handleGenerateFeedback(r.session_id)}
+                            style={{ padding: '6px 12px', background: '#8B5CF6', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        >
+                            🚀 Genera Feedback
+                        </button>
                     )}
+                
+                    {/* Stato: In elaborazione */}
+                    {r.status === 'Generazione feedback in corso...' && (
+                        <button 
+                            disabled 
+                            style={{ padding: '6px 12px', background: '#A5B4FC', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'not-allowed', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        >
+                            ⏳ In elaborazione...
+                        </button>
+                    )}
+                
+                    {/* Stato: Pronto per il download (CON AGGIUNTA DEL PULSANTE RIGENERA) */}
+                    {(r.status === 'Feedback pronto' || r.status === 'Feedback ready') && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {/* Pulsante di Download (già esistente) */}
+                            <button 
+                                onClick={() => downloadFeedback(r.session_id)}
+                                style={{ padding: '6px 12px', background: '#10B981', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            >
+                                📥 Download Feedback
+                            </button>
                     
-                    {/* Download Tracking Info */}
+                            {/* Pulsante di Rigenerazione (con stile originale) */}
+                            <button 
+                                title="Rigenera il feedback. Questa azione sovrascriverà il report esistente."
+                                onClick={() => {
+                                    if (window.confirm('Sei sicuro di voler rigenerare il feedback? Il report attuale verrà sovrascritto.')) {
+                                        handleGenerateFeedback(r.session_id);
+                                    }
+                                }}
+                                style={{ 
+                                    padding: '6px 12px',
+                                    background: 'var(--bg-secondary)', 
+                                    color: 'var(--text-secondary)', 
+                                    border: '1px solid var(--border-light)', 
+                                    borderRadius: 'var(--radius-md)', 
+                                    fontSize: '12px', 
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                }}
+                            >
+                                🔄 Rigenera
+                            </button>
+                        </div>
+                    )}
+                
+                    {/* Stato: Errore */}
+                    {r.status === 'Errore generazione feedback' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#FEE2E2', padding: '4px 8px', borderRadius: 'var(--radius-md)' }}>
+                            <span style={{ color: '#991B1B', fontSize: '12px' }}>⚠️ Errore</span>
+                            <button 
+                                onClick={() => handleGenerateFeedback(r.session_id)}
+                                style={{ fontSize: '10px', padding: '2px 6px', background: '#DC2626', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                            >
+                                Riprova
+                            </button>
+                        </div>
+                    )}
+                
+                    {/* Info sul download (se già scaricato) */}
                     {r.downloaded_at && (
-                      <div style={{
-                        fontSize: '10px',
-                        color: 'var(--text-secondary)',
-                        background: 'var(--bg-secondary)',
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        border: '1px solid var(--border-light)'
-                      }}>
-                        📥 Downloaded by {r.downloaded_by_name || r.downloaded_by} on {new Date(r.downloaded_at).toLocaleDateString('it-IT')}
+                      <div style={{ fontSize: '10px', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border-light)' }}>
+                        📥 Scaricato da {r.downloaded_by_name || r.downloaded_by} il {new Date(r.downloaded_at).toLocaleDateString('it-IT')}
                       </div>
                     )}
-                  </div>
+                </div>
                 </div>
                 {/* Report/Conversation Display */}
                 {(reportText[r.session_id] || conversationData[r.session_id]) && (

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Header, Request
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Header, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
@@ -7,6 +7,10 @@ import os
 import uuid
 import fitz  # PyMuPDF
 from datetime import datetime
+import asyncio
+import json
+import traceback
+from bson import ObjectId
 
 # Reuse existing services and pipelines
 from services.data_manager import (
@@ -54,7 +58,8 @@ from services.tenant_data_manager import (
     list_sessions_tenant,
     list_completed_sessions_tenant,
     list_incomplete_sessions_tenant,
-    get_dashboard_data_tenant
+    get_dashboard_data_tenant,
+    SESSION_STATUS
 )
 from services.batch_service import BatchService
 from services.email_parser import extract_email_from_text
@@ -65,6 +70,18 @@ from services.interview_config_service import (
     InterviewConfig,
 )
 from services.email_service import send_interview_link
+
+# Async imports for feedback generation
+from feedback_generator.report_consolidator.consolidator import create_consolidated_report_async
+from feedback_generator.gap_analyzer.gap_identifier import identify_skill_gaps_async
+from feedback_generator.pathway_architect.architect import create_final_feedback_content_async
+from feedback_generator.market_integration import run_market_benchmark_from_text_async
+from feedback_generator.course_retriever.prompts_retriever import create_query_refinement_prompt
+from feedback_generator.course_retriever.rag_service import RAGService
+from recruitment_suite.app.core.pipeline import RecruitmentPipeline
+from recruitment_suite.app.core.normalizer import CVNormalizer
+
+
 
 
 def hr_auth(authorization: str | None = Header(default=None)):
@@ -129,6 +146,11 @@ class StartInterviewPayload(BaseModel):
 
 
 app = FastAPI(title="Vertigo AI Backend", version="0.1.0")
+
+# Global instances for heavy services (initialized once at startup)
+rag_service_instance: RAGService | None = None
+recruitment_pipeline_instance: RecruitmentPipeline | None = None
+cv_normalizer_instance: CVNormalizer | None = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -729,6 +751,176 @@ def save_pdf_report_tenant(pdf_bytes: bytes, session_id: str, collection_name: s
         print(f"Errore durante il salvataggio del PDF: {e}")
         return ""
 
+
+# Async Optimized Feedback Pipeline
+class ObjectIdEncoder(json.JSONEncoder):
+    """Custom JSON encoder to handle ObjectId serialization"""
+    def default(self, obj):
+        if isinstance(obj, ObjectId):
+            return str(obj)
+        return super().default(obj)
+
+
+async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: str) -> str | None:
+    """
+    Versione ASINCRONA e OTTIMIZZATA del pipeline di feedback.
+    Esegue in parallelo l'analisi dei gap e il benchmark di mercato.
+    """
+    #from feedback_generator.report_consolidator.consolidator import create_consolidated_report
+    #from feedback_generator.gap_analyzer.gap_identifier import identify_skill_gaps
+    from feedback_generator.course_retriever.prompts_retriever import create_query_refinement_prompt
+    #from feedback_generator.pathway_architect.architect import create_final_feedback_content
+    from feedback_generator.pathway_architect.pdf_service import create_feedback_pdf
+    #from feedback_generator.market_integration import run_market_benchmark_from_text
+    #from interviewer.llm_service import get_llm_response
+    print(f"--- [PIPELINE ASYNC] Avvio Generazione Feedback per sessione: {session_id} ---")
+    
+    try:
+        session_data = get_session_data_tenant(session_id, collection_name)
+        if not session_data:
+            print(f"Errore: Dati di sessione non trovati per l'ID: {session_id}")
+            raise ValueError("Session data not found")
+        
+        candidate_name = session_data.get("candidate_name", "Candidato")
+        target_role_id = session_data.get("position_id", "Ruolo non specificato")
+        stages_data = session_data.get("stages", {})
+        original_cv_report = stages_data.get("cv_analysis_report")
+        case_eval_report = stages_data.get("case_evaluation_report")
+
+        # STEP 1: Consolidamento (rimane sequenziale)
+        consolidated_report = stages_data.get("consolidated_report")
+        if not consolidated_report:
+            print("\n[STEP 1/6] Generazione report consolidato...")
+            if not original_cv_report or not case_eval_report:
+                raise ValueError("Report di analisi CV o valutazione del caso mancanti.")
+            consolidated_report = await create_consolidated_report_async(original_cv_report, case_eval_report)
+            if not consolidated_report: 
+                raise ValueError("Fallimento nella generazione del report consolidato.")
+            save_stage_output_tenant(session_id, "consolidated_report", consolidated_report, collection_name)
+        else:
+            print("\n[STEP 1/6] Report consolidato già presente.")
+    
+        # --- INIZIO PARALLELIZZAZIONE PESANTE ---
+        print("\n[STEP 2 & 4] Avvio in parallelo di Gap Analysis e Market Benchmark...")
+        position_data = get_single_position_data_tenant(target_role_id, collection_name.replace("_sessions", "_positions_data"))
+        jd_text = position_data.get("job_description", "") if position_data else ""
+        role_title = position_data.get("position_name", target_role_id) if position_data else target_role_id
+        
+        gap_task = asyncio.create_task(identify_skill_gaps_async(consolidated_report))
+        market_task = asyncio.create_task(
+            run_market_benchmark_from_text_async(
+                job_description_text=jd_text,
+                cv_text=original_cv_report or "",
+                offer_title=role_title,
+                db=db
+            )
+        )
+
+        results = await asyncio.gather(gap_task, market_task, return_exceptions=True)
+        
+        gap_analysis = results[0]
+        if isinstance(gap_analysis, Exception) or not gap_analysis:
+            raise ValueError(f"Errore critico durante l'analisi dei gap: {gap_analysis}")
+        save_stage_output_tenant(session_id, "gap_analysis", gap_analysis.model_dump(), collection_name)
+        print("[STEP 2/6] Analisi gap completata.")
+
+        market_results = results[1]
+        qualitative_text, chart_cat_b64, market_skills_list = None, None, None
+        if isinstance(market_results, Exception):
+            print(f"Avviso: Benchmark di mercato fallito: {market_results}")
+        elif market_results:
+            qualitative_text, chart_cat_b64, market_skills_list = market_results
+            if qualitative_text: save_stage_output_tenant(session_id, "market_benchmark_text", qualitative_text, collection_name)
+            if chart_cat_b64: save_stage_output_tenant(session_id, "market_chart_categories_base64", chart_cat_b64, collection_name)
+            if market_skills_list: save_stage_output_tenant(session_id, "market_chart_skills_base64", market_skills_list, collection_name)
+        print("[STEP 4/6] Benchmark di mercato completato.")
+
+        # STEP 3: Recupero Corsi (parallelizzato al suo interno)
+        print("\n[STEP 3/6] Recupero corsi in parallelo...")
+        rag_service = rag_service_instance 
+
+        if not rag_service:
+            raise RuntimeError("Errore Critico: RAG Service non è stato inizializzato.")
+
+        async def get_courses_for_family(family):
+            skill_gaps = [gap.skill_gap for gap in family.skill_gaps]
+            refined_query = create_query_refinement_prompt(family.skill_family_gap, skill_gaps)
+            courses = await rag_service.search_async(refined_query, k=3) 
+            return {
+                "skill_family_gap": family.skill_family_gap,
+                "skill_gaps": [gap.model_dump() for gap in family.skill_gaps],
+                "suggested_courses": courses
+            }
+        
+        course_tasks = [get_courses_for_family(family) for family in gap_analysis.skill_families]
+        enriched_skill_families = await asyncio.gather(*course_tasks)
+
+        enriched_gaps_content_str = json.dumps(enriched_skill_families, ensure_ascii=False, indent=2, cls=ObjectIdEncoder)
+        save_stage_output_tenant(session_id, "enriched_gaps", enriched_gaps_content_str, collection_name)
+        print("[STEP 3/6] Recupero corsi completato.")
+
+        # STEP 5: Creazione Contenuto Report
+        print("\n[STEP 5/6] Creazione contenuto report PDF...")
+        final_report_content = await create_final_feedback_content_async(
+            cv_analysis_report=original_cv_report,
+            case_evaluation_report=case_eval_report,
+            enriched_gaps_json_str=enriched_gaps_content_str,
+            candidate_name=candidate_name,
+            target_role=role_title
+        )
+        if not final_report_content: 
+            raise ValueError("Fallimento nella creazione del contenuto del report finale.")
+        if qualitative_text:
+            final_report_content.market_benchmark = qualitative_text
+
+        # STEP 6: Generazione PDF
+        print("\n[STEP 6/6] Generazione del file PDF...")
+        temp_dir = "temp_pdf"
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_pdf_path = os.path.join(temp_dir, f"{session_id}.pdf")
+        
+        create_feedback_pdf(
+            report_content=final_report_content,
+            output_path=temp_pdf_path,
+            market_benchmark_text=qualitative_text,
+            market_chart_categories_base64=chart_cat_b64,
+            market_skills_list=market_skills_list 
+        )
+        
+        pdf_path = ""
+        if os.path.exists(temp_pdf_path):
+            with open(temp_pdf_path, "rb") as f:
+                pdf_bytes = f.read()
+            pdf_path = save_pdf_report_tenant(pdf_bytes, session_id, collection_name)
+            os.remove(temp_pdf_path)
+            
+        print(f"--- [PIPELINE ASYNC] Generazione Feedback completata per {session_id}. PDF Path: {pdf_path} ---")
+        return pdf_path
+
+    except Exception as e:
+        print(f"🔥🔥🔥 ERRORE NEL PIPELINE ASINCRONO per sessione {session_id}: {e}")
+        traceback.print_exc()
+        raise
+
+
+async def run_and_update_feedback_status(session_id: str, collection_name: str):
+    """
+    Funzione wrapper per eseguire il pipeline in background e aggiornare lo stato 
+    della sessione in modo sicuro (successo o fallimento).
+    """
+    try:
+        pdf_path = await run_feedback_pipeline_tenant_async(session_id, collection_name)
+            
+        if pdf_path:
+            save_stage_output_tenant(session_id, "feedback_pdf_path", pdf_path, collection_name)
+            save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_READY"], collection_name)
+            print(f"✅ Feedback PDF generato con successo per sessione {session_id}")
+        else:
+            raise ValueError("Il pipeline non ha prodotto un percorso PDF valido.")
+    except Exception as e:
+        print(f"❌ Errore nella generazione del feedback per sessione {session_id}: {e}")
+        save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_GENERATION_FAILED"], collection_name)
+
 # Sessions (HR)
 @app.post("/sessions")
 async def create_session(position_id: str = Form(...), cv_file: UploadFile = File(...), candidate_email: str = Form(None), frontend_base_url: str = Form("") , auth_data=Depends(hr_auth)):
@@ -793,36 +985,45 @@ def list_completed_sessions(auth_data=Depends(hr_auth)):
 
 
 @app.post("/sessions/{session_id}/generate-feedback")
-def generate_feedback(session_id: str, auth_data=Depends(hr_auth)):
-    """Generate final feedback report for a completed session"""
+async def generate_feedback(session_id: str, background_tasks: BackgroundTasks, auth_data=Depends(hr_auth)):
+    """
+    Avvia la generazione del feedback report in background e restituisce una risposta immediata.
+    """
     collections = get_tenant_collections_from_auth(auth_data)
+    collection_name = collections["sessions"]
     
-    # Check if session exists and is completed
-    session_data = get_session_data_tenant(session_id, collections["sessions"])
+    # 1. Verifica che la sessione esista e non sia già in elaborazione
+    session_data = get_session_data_tenant(session_id, collection_name)
     if not session_data:
         raise HTTPException(status_code=404, detail="Session not found")
     
     stages = session_data.get("stages", {})
+    
+    # Check if session is ready for feedback generation
     if not (stages.get("cv_analysis_report") and stages.get("case_evaluation_report") and stages.get("skill_relevance")):
         raise HTTPException(status_code=400, detail="Session not ready for feedback generation")
     
     # Check if feedback is already generated
-    if stages.get("feedback_pdf_path"):
-        return {"ok": True, "message": "Feedback already generated", "pdf_path": stages.get("feedback_pdf_path")}
+    #if stages.get("feedback_pdf_path"):
+    #    return {"ok": True, "message": "Feedback already generated", "pdf_path": stages.get("feedback_pdf_path")}
     
-    try:
-        # Import and run tenant-aware feedback pipeline GENERAZIONE FEEDBACK DISABILITATA
-#        pdf_path = run_feedback_pipeline_tenant(session_id, collections["sessions"])
-        
-        if pdf_path:
-            # Save the PDF path to the session
-            save_stage_output_tenant(session_id, "feedback_pdf_path", pdf_path, collections["sessions"])
-            return {"ok": True, "pdf_path": pdf_path}
-        else:
-            raise HTTPException(status_code=500, detail="Feedback generation failed")
-    except Exception as e:
-        print(f"Error generating feedback for session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Feedback generation failed: {str(e)}")
+    # Check if already in progress
+    #current_status = stages.get("status")
+    #if current_status == SESSION_STATUS["FEEDBACK_GENERATION_IN_PROGRESS"]:
+    #    raise HTTPException(status_code=409, detail="Feedback generation is already in progress for this session.")
+
+    # 2. Imposta lo stato su "in corso" per dare un feedback immediato all'UI
+    save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_GENERATION_IN_PROGRESS"], collection_name)
+    
+    # 3. Aggiungi il compito pesante al background
+    background_tasks.add_task(run_and_update_feedback_status, session_id, collection_name)
+    
+    # 4. Restituisci una risposta immediata
+    return {
+        "ok": True, 
+        "message": "Feedback generation started. The process will run in the background.",
+        "status": SESSION_STATUS["FEEDBACK_GENERATION_IN_PROGRESS"]
+    }
 
 
 @app.get("/sessions/{session_id}/feedback-pdf")
@@ -830,7 +1031,6 @@ def download_feedback_pdf(session_id: str, auth_data=Depends(hr_auth)):
     """Download the feedback PDF for a completed session"""
     collections = get_tenant_collections_from_auth(auth_data)
     
-    # Check if session exists
     session_data = get_session_data_tenant(session_id, collections["sessions"])
     if not session_data:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -839,24 +1039,25 @@ def download_feedback_pdf(session_id: str, auth_data=Depends(hr_auth)):
     pdf_path = stages.get("feedback_pdf_path")
     
     if not pdf_path:
-        raise HTTPException(status_code=404, detail="Feedback PDF not found")
+        raise HTTPException(status_code=404, detail="Feedback PDF not found for this session")
+        
+    normalized_path = pdf_path.replace("\\", "/")
     
     try:
         import os
-        if not os.path.exists(pdf_path):
-            raise HTTPException(status_code=404, detail="PDF file not found on disk")
+        if not os.path.exists(normalized_path):
+            print(f"🔥🔥🔥 PDF NOT FOUND AT PATH: {normalized_path}. Current working directory: {os.getcwd()}")
+            raise HTTPException(status_code=404, detail=f"PDF file not found on disk.")
         
-        with open(pdf_path, "rb") as pdf_file:
+        with open(normalized_path, "rb") as pdf_file:
             pdf_content = pdf_file.read()
         
-        # Track download information
         download_info = {
             "downloaded_at": datetime.utcnow().isoformat(),
-            "downloaded_by": auth_data.get("sub"),  # User email
+            "downloaded_by": auth_data.get("sub"),
             "downloaded_by_name": auth_data.get("name", auth_data.get("sub", "Unknown"))
         }
         
-        # Update session with download tracking
         save_stage_output_tenant(session_id, "feedback_download", download_info, collections["sessions"])
         
         candidate_name = session_data.get("candidate_name", "Candidate")
@@ -866,11 +1067,12 @@ def download_feedback_pdf(session_id: str, auth_data=Depends(hr_auth)):
         return Response(
             content=pdf_content,
             media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
+            headers={"Content-Disposition": f"attachment; filename=\"{filename}\""}
         )
     except Exception as e:
         print(f"Error downloading feedback PDF for session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error downloading PDF: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal server error while reading the PDF file.")
 
 
 @app.get("/sessions/{session_id}")
@@ -1568,15 +1770,6 @@ def evaluate_session(session_id: str, _=Depends(hr_auth)):
     _ = compute_and_save_skill_relevance(session_id=session_id)
     return {"ok": True}
 
-#GENERAZIONE FEEDBACK DISABILITATA
-@app.post("/sessions/{session_id}/feedback")
-def generate_feedback(session_id: str, _=Depends(hr_auth)):
-#    pdf_path = run_feedback_pipeline(session_id=session_id)
-    if not pdf_path:
-        raise HTTPException(status_code=500, detail="Feedback generation failed")
-    return {"pdf_path": pdf_path}
-
-
 @app.get("/sessions/{session_id}/feedback")
 def download_feedback(session_id: str, auth_data=Depends(hr_auth)):
     collections = get_tenant_collections_from_auth(auth_data)
@@ -1891,16 +2084,26 @@ async def list_batches(auth_data: dict = Depends(hr_auth)):
         print(f"❌ Traceback completo: {traceback.format_exc()}")
         return {"batches": [], "error": str(e)}
 
-@app.get("/health")
-def health_check():
-    """Health check endpoint for Cloud Run"""
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
-
 # Startup events per scheduler e batch processor
 @app.on_event("startup")
 async def startup_event():
-    """Inizializzazione app con scheduler e batch processor"""
+    """Inizializzazione app con scheduler, batch processor e servizi pesanti"""
+    global rag_service_instance, recruitment_pipeline_instance, cv_normalizer_instance
+    
     try:
+        # Initialize heavy services once at startup
+        print("🚀 [STARTUP] Inizializzazione RAGService...")
+        rag_service_instance = RAGService()
+        print("✅ [STARTUP] RAGService pronto.")
+        
+        print("🚀 [STARTUP] Inizializzazione RecruitmentPipeline...")
+        recruitment_pipeline_instance = RecruitmentPipeline() 
+        print("✅ [STARTUP] RecruitmentPipeline pronto.")
+        
+        print("🚀 [STARTUP] Inizializzazione CVNormalizer (potrebbe essere lento)...")
+        cv_normalizer_instance = CVNormalizer()
+        print("✅ [STARTUP] CVNormalizer pronto.")
+        
         # Avvia scheduler per batch giornalieri
         from services.scheduler_service import get_scheduler
         scheduler = get_scheduler()
@@ -1915,7 +2118,7 @@ async def startup_event():
         print("✅ Batch processor avviato (controllo ogni 5 minuti)")
         
     except Exception as e:
-        print(f"❌ Errore inizializzazione batch services: {e}")
+        print(f"❌ Errore inizializzazione servizi: {e}")
         import traceback
         traceback.print_exc()
 

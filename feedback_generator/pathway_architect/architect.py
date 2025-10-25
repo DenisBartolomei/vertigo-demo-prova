@@ -83,3 +83,42 @@ def create_final_feedback_content(
     except Exception as e:
         print(f"Errore critico durante la validazione del report finale: {e}")
         return None
+    
+from interviewer.llm_service import get_structured_llm_response_async
+
+async def create_final_feedback_content_async(
+    cv_analysis_report: str, 
+    case_evaluation_report: str, 
+    enriched_gaps_json_str: str, 
+    candidate_name: str, 
+    target_role: str
+) -> FinalReportContent | None:
+    """Versione ASINCRONA: Genera il contenuto testuale e strutturato per il report finale."""
+    print("1. [Report Finale] Creazione del prompt...")
+    prompt = prompts_pathway.create_final_report_prompt(
+        cv_analysis_report, 
+        case_evaluation_report, 
+        enriched_gaps_json_str, 
+        candidate_name, 
+        target_role
+    )
+    
+    print(f"2. [Report Finale] Invio richiesta a '{ARCHITECT_MODEL}' per creare il percorso...")
+    structured_response_str = await get_structured_llm_response_async( # <-- MODIFICA: usa await
+        prompt=prompt,
+        model=ARCHITECT_MODEL,
+        system_prompt=prompts_pathway.SYSTEM_PROMPT,
+        tool_name="save_final_feedback_report",
+        tool_schema=FinalReportContent.model_json_schema()
+    )
+
+    if not structured_response_str:
+        return None
+
+    try:
+        validated_data = FinalReportContent.model_validate_json(structured_response_str)
+        print("4. [Report Finale] Contenuto generato e validato.")
+        return validated_data
+    except Exception as e:
+        print(f"Errore critico durante la validazione del report finale: {e}")
+        return None
