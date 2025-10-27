@@ -52,7 +52,29 @@ In questo paragrafo valuterai l’allineamento tra i requisiti richiesti dall'an
 Valuta allineamenti e disallineamenti tra le attività e/o responsabilità scritte nell’annuncio di lavoro (solo se presenti) rispetto a quanto riportato nel CV, seguendo lo schema di seguito:
     o	Responsabilità principali e attività operative di pertinenza della posizione vs Responsabilità e attività presenti nel CV.
     o	Contesto organizzativo: affinità del team di appartenenza e ruolo del team in azienda con le attività, i ruoli e i team riportati nel CV (se desumibile).
----
+
+3. Il tuo compito adesso è estrarre le esperienze lavorative dal testo fornito e restituirle in un formato JSON strutturato.
+Segui queste regole in modo RIGOROSO:
+    o  **FORMATO DATE**: Le date `start_date` e `end_date` DEVONO essere nel formato numerico **YYYY-MM-DD**.
+        - Se il giorno non è specificato nel CV, usa sempre '01'.
+        - Esempio: "Settembre 2022" deve diventare "2022-09-01". "Dal 2020" deve diventare "2020-01-01".
+    o  **DATA FINE**: Se l'esperienza è ancora in corso (es. "Presente", "Oggi", "in corso"), il valore di `end_date` deve essere la stringa esatta "present".
+    o  **CONTENUTO**: Estrai SOLO le esperienze lavorative. IGNORA completamente istruzione, certificazioni, volontariato, hobby e qualsiasi dato personale (nome, telefono, email, indirizzo).
+    o  **OUTPUT**: Restituisci ESCLUSIVAMENTE l'oggetto JSON, senza alcun testo o spiegazione prima o dopo.
+
+    Ecco la struttura JSON che DEVI seguire:
+    {{
+      "current_position": "Titolo della posizione lavorativa più recente",
+      "experience": [
+        {{
+          "title": "Titolo della posizione",
+          "start_date": "YYYY-MM-DD",
+          "end_date": "YYYY-MM-DD o present",
+          "description": "Descrizione sintetica delle responsabilità e dei risultati."
+        }}
+      ]
+    }}
+    ---
 DATI DI INPUT DA ANALIZZARE:
 
 [ANNUNCIO DI LAVORO]

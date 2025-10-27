@@ -106,72 +106,6 @@ class CVNormalizer:
         except Exception as e:
             print(f"Si è verificato un errore: {e}")
 
-    def _extract_from_cv(self, cv_path: str) -> dict:
-        print(f"1. Estrazione testo da '{cv_path}'...")
-        try:
-            with fitz.open(cv_path) as doc:
-                full_text = "".join(page.get_text() for page in doc)
-            raw = get_llm_response(
-                prompt=f"Testo del CV:\n{full_text}",
-                model=settings.LLM_MODEL,
-                system_prompt=settings.LLM_PROMPT_CV_EXTRACTION_NORM,
-                temperature=0.0,
-                max_tokens=2000
-            )
-            structured_data = json.loads(raw)
-            if not structured_data.get("experience"):
-                print("ATTENZIONE: L'LLM non ha estratto esperienze lavorative dal CV.")
-                return {}
-            print("Estrazione LLM completata con successo.")
-            return structured_data
-        except Exception as e:
-            print(f"ERRORE CRITICO durante l'estrazione dal CV: {e}")
-            return {}
-
-    def _extract_from_text(self, cv_text: str) -> dict:
-        print("1. Estrazione strutturata dal testo del CV (senza file PDF)...")
-        try:
-            raw = get_llm_response(
-                prompt=f"Testo del CV:\n{cv_text}",
-                model=settings.LLM_MODEL,
-                system_prompt=settings.LLM_PROMPT_CV_EXTRACTION_NORM,
-                temperature=0.0,
-                max_tokens=2000
-            )
-                        
-            structured_data = json.loads(raw)
-            
-            if not structured_data.get("experience"):
-                print("ATTENZIONE: L'LLM non ha estratto esperienze lavorative dal testo del CV.")
-                return {}
-            print("Estrazione LLM da testo completata con successo.")
-            return structured_data
-        except Exception as e:
-            print(f"ERRORE CRITICO durante l'estrazione dal testo CV: {e}")
-            return {}
-
-    def run_normalization_from_text(self, cv_text: str) -> list | None:
-        """
-        Esegue la normalizzazione partendo dal testo del CV (evita di salvare/leggere file).
-        """
-        print("\n" + "="*60 + "\n--- ESECUZIONE NORMALIZZAZIONE DA TESTO CV ---\n" + "="*60)
-        structured_data = self._extract_from_text(cv_text)
-        if not structured_data:
-            return None
-
-        experiences = structured_data.get('experience', [])
-        valid_experiences = self._parse_and_filter_experiences(experiences)
-        if not valid_experiences:
-            print("ERRORE: Nessuna esperienza lavorativa valida trovata dopo il filtraggio (da testo).")
-            return None
-        print(f"Trovate {len(valid_experiences)} esperienze valide da normalizzare (da testo).")
-
-        normalized_experiences_list = self._normalize_experiences(valid_experiences)
-
-        profile_id = "cv_from_text"
-        final_result = [{"profile_id": profile_id, "normalized_experiences": normalized_experiences_list}]
-        return final_result
-
     def _parse_and_filter_experiences(self, experiences: list) -> list:
         """Filtra le esperienze per parole chiave e durata minima."""
         
@@ -233,28 +167,46 @@ class CVNormalizer:
                 print(f"  - ERRORE durante l'arricchimento/matching per '{exp['title']}': {e}")
         return normalized_list
 
-    def run_normalization(self, cv_path: str) -> list | None:
-        print("\n" + "="*60 + "\n--- ESECUZIONE NORMALIZZAZIONE PER CV SINGOLO ---\n" + "="*60)
-        
-        structured_data = self._extract_from_cv(cv_path)
-        if not structured_data: return None
+    def run_normalization(self, parsed_experiences: list, profile_id: str = "cv_profile") -> list | None:
+        """
+        Esegue la normalizzazione partendo da una lista di esperienze lavorative
+        già estratte e parsate.
 
-        experiences = structured_data.get('experience', [])
-        valid_experiences = self._parse_and_filter_experiences(experiences)
+        Args:
+            parsed_experiences (list): Lista di dizionari, ognuno rappresentante un'esperienza.
+                                       Formato atteso: [{'title': '...', 'start_date': '...', ...}]
+            profile_id (str): Un identificatore per il profilo del candidato (es. session_id).
+        """
+        print("\n" + "="*60 + f"\n--- ESECUZIONE NORMALIZZAZIONE PER PROFILO: {profile_id} ---\n" + "="*60)
+        
+        if not parsed_experiences:
+            print("ERRORE: La lista di esperienze fornita è vuota.")
+            return None
+
+        # Il vecchio metodo run_normalization_from_text non serve più, 
+        # perché questo metodo fa già tutto partendo dai dati.
+        
+        # 3. La logica di parsing e filtraggio ora lavora sui dati in input
+        valid_experiences = self._parse_and_filter_experiences(parsed_experiences)
+        
         if not valid_experiences:
             print("ERRORE: Nessuna esperienza lavorativa valida trovata dopo il filtraggio.")
             return None
         print(f"Trovate {len(valid_experiences)} esperienze valide da normalizzare.")
 
+        # 4. La normalizzazione vera e propria rimane la stessa
         normalized_experiences_list = self._normalize_experiences(valid_experiences)
 
-        profile_id = os.path.splitext(os.path.basename(cv_path))[0]
+        # 5. Costruisce il risultato finale
         final_result = [{"profile_id": profile_id, "normalized_experiences": normalized_experiences_list}]
         
+        print(f"\nNormalizzazione completata per il profilo {profile_id}.")
+        # Opzionale: puoi rimuovere il salvataggio su file se non è più necessario
         try:
-            with open(settings.OUTPUT_JSON_FILE_NORM, 'w', encoding='utf-8') as f: 
+            output_file = f"temp_normalization_{profile_id}.json"
+            with open(output_file, 'w', encoding='utf-8') as f: 
                 json.dump(final_result, f, ensure_ascii=False, indent=2)
-            print(f"\nNormalizzazione CV completata. Risultato salvato in '{settings.OUTPUT_JSON_FILE_NORM}'.")
+            print(f"Risultato di debug salvato in '{output_file}'.")
         except Exception as e:
             print(f"Errore durante il salvataggio del file di normalizzazione: {e}")
 

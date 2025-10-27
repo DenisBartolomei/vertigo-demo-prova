@@ -1,7 +1,7 @@
 import json
 from typing import List, Literal
 from pydantic import BaseModel, Field
-from interviewer.llm_service import get_structured_llm_response
+from interviewer.llm_service import get_structured_llm_response, AZURE_DEPLOYMENT_NAME
 from . import prompts_gap
 
 # --- 1. Definizione dello Schema Dati con Pydantic ---
@@ -21,7 +21,7 @@ class GapAnalysisReport(BaseModel):
 
 # --- 2. Logica di Generazione ---
 
-GAP_ANALYZER_MODEL = "gpt-4.1-2025-04-14"
+GAP_ANALYZER_MODEL = AZURE_DEPLOYMENT_NAME #"gpt-4.1-2025-04-14"
 
 def identify_skill_gaps(report_text: str) -> GapAnalysisReport | None:
     """

@@ -20,7 +20,7 @@ import asyncio
 
 def run_market_benchmark_from_text(
     job_description_text: str,
-    cv_text: str,
+    parsed_experiences: str,
     offer_title: str
 ) -> tuple[str | None, str | None, list[str] | None]:
     """
@@ -62,13 +62,15 @@ def run_market_benchmark_from_text(
     
     # La logica che usa chart_path è stata rimossa, non serve più.
 
-    # --- 2. Normalizzazione del CV della sessione (invariata) ---
+    # --- 2. Normalizzazione del CV della sessione (aggiornata) ---
     candidate_json = {}
     try:
         normalizer = CVNormalizer()
-        normalized_candidate_data = normalizer.run_normalization_from_text(cv_text)
+        normalized_candidate_data = normalizer.run_normalization(
+            parsed_experiences=parsed_experiences,
+            profile_id="current_candidate"
+        )
         if normalized_candidate_data and normalized_candidate_data[0].get('normalized_experiences'):
-            # ... (la tua logica per creare candidate_json rimane la stessa) ...
             candidate_past_experiences = normalized_candidate_data[0]['normalized_experiences'][:]
             candidate_json = {
                 exp['original_title']: {
@@ -103,7 +105,7 @@ from recruitment_suite.app.reporting.qualitative import generate_qualitative_llm
 
 async def run_market_benchmark_from_text_async(
     job_description_text: str,
-    cv_text: str,
+    parsed_experiences: str,
     offer_title: str,
     db: Database
 ) -> tuple[str | None, str | None, list[str] | None]:
@@ -181,7 +183,10 @@ async def run_market_benchmark_from_text_async(
         # Anche la normalizzazione è CPU-bound, eseguiamola in un thread
         loop = asyncio.get_running_loop()
         normalized_candidate_data = await loop.run_in_executor(
-            None, normalizer.run_normalization_from_text, cv_text
+            None,
+            normalizer.run_normalization,    # Il nuovo metodo
+            parsed_experiences,              # Il nuovo argomento
+            "current_candidate"              # Il profile_id
         )
 
         if normalized_candidate_data and normalized_candidate_data[0].get('normalized_experiences'):

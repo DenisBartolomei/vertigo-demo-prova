@@ -1,28 +1,90 @@
-from interviewer.llm_service import get_llm_response 
+# Nel file analyzer/run_analyzer.py (o dove si trova)
+import json
+import re  # Importiamo il modulo per le espressioni regolari
+
+from interviewer.llm_service import get_llm_response, AZURE_DEPLOYMENT_NAME
 from .prompts_analyzer import create_cv_analysis_prompt
-from interviewer.llm_service import AZURE_DEPLOYMENT_NAME
-# Modello LLM
+
 ANALYZER_MODEL = AZURE_DEPLOYMENT_NAME 
 
-def analyze_cv(cv_text: str, job_description_text: str, hr_special_needs: str = "") -> str:
+def parse_mixed_llm_response(response_text: str) -> dict:
     """
-    Esegue l'analisi completa del CV contro la Job Description.
+    Parser robusto per estrarre il report testuale e la parte JSON da una stringa mista.
     """
-    print("1. Creazione del prompt di analisi...")
+    report_text = ""
+    structured_experience = []
+
+    # Cerchiamo il blocco JSON. L'espressione regolare cerca una '{' che apre un JSON
+    # e lo cattura fino alla sua corrispondente '}' di chiusura.
+    # re.DOTALL fa sì che '.' includa anche i caratteri di nuova riga.
+    json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+    
+    if json_match:
+        json_str = json_match.group(0)
+        # Il report è tutto ciò che precede l'inizio del blocco JSON
+        report_text = response_text[:json_match.start()].strip()
+        
+        try:
+            # Proviamo a parsare il blocco JSON trovato
+            parsed_json = json.loads(json_str)
+            if isinstance(parsed_json, dict) and "experience" in parsed_json:
+                structured_experience = parsed_json["experience"]
+                print("Parser: Blocco JSON estratto e parsato con successo.")
+            else:
+                print("Parser: JSON trovato ma non contiene la chiave 'experience'.")
+                # Aggiungiamo il JSON "malformato" al report per non perdere l'informazione
+                report_text += f"\n\n--- BLOCCO JSON NON VALIDO RICEVUTO ---\n{json_str}"
+
+        except json.JSONDecodeError:
+            print("Parser: Trovato un blocco che sembra JSON, ma il parsing è fallito.")
+            # Se il parsing fallisce, lo trattiamo come testo normale e lo aggiungiamo al report.
+            report_text += f"\n\n--- BLOCCO JSON NON PARSABILE RICEVUTO ---\n{json_str}"
+    else:
+        # Se non troviamo nessun blocco JSON, l'intera risposta è considerata il report
+        print("Parser: Nessun blocco JSON trovato nella risposta. Tratto tutto come report testuale.")
+        report_text = response_text.strip()
+        
+    # Pulizia finale del report: se inizia con "REPORT.", lo rimuoviamo per coerenza
+    if report_text.upper().startswith("REPORT."):
+        report_text = report_text[len("REPORT."):].strip()
+
+    return {
+        "report_text": report_text,
+        "structured_experience": structured_experience
+    }
+
+
+def analyze_cv(cv_text: str, job_description_text: str, hr_special_needs: str = "") -> dict:
+    """
+    Esegue l'analisi unificata del CV usando un singolo prompt che richiede un output misto.
+    Utilizza un parser robusto per separare il report testuale dal JSON delle esperienze.
+    """
+    print("1. Creazione del prompt unificato...")
+    # Qui usiamo la TUA nuova funzione create_cv_analysis_prompt
     analysis_prompt = create_cv_analysis_prompt(cv_text, job_description_text, hr_special_needs)
     
-    print(f"2. Invio della richiesta al modello '{ANALYZER_MODEL}'...")
+    print(f"2. Invio della richiesta al modello '{ANALYZER_MODEL}' per output misto...")
     
-    # Definiamo un system prompt specifico per questo task
-    analyzer_system_prompt = "Agisci come un recruiter aziendale esperto. Il tuo compito è valutare un CV in modo critico rispetto a un annuncio di lavoro. L'obiettivo è produrre un report professionale, chiaro e leggibile velocemente, che evidenzi i punti di allineamento e le carenze del profilo."
+    # Un system prompt che incoraggia il formato corretto
+    analyzer_system_prompt = "Agisci come un recruiter AI. Il tuo compito è seguire SCRUPOLOSAMENTE le istruzioni e il formato di output richiesto nel prompt dell'utente, producendo prima il report testuale e poi il blocco JSON."
 
-    report = get_llm_response(
+    # Aumentiamo i token per contenere sia il testo che il JSON
+    raw_response = get_llm_response(
         prompt=analysis_prompt,
         model=ANALYZER_MODEL,
         system_prompt=analyzer_system_prompt,
-        max_tokens=2000,
-        temperature=0.4
+        max_tokens=3500,
+        temperature=0.2
     )
     
-    print("3. Analisi completata.")
-    return report
+    if not raw_response:
+        print("Errore: La chiamata all'LLM non ha restituito una risposta.")
+        return {"report_text": "Errore durante l'analisi del CV.", "structured_experience": []}
+    
+    print("3. Risposta ricevuta dall'LLM. Avvio del parsing robusto...")
+    
+    # Usiamo la nostra nuova funzione di parsing per separare i dati
+    parsed_data = parse_mixed_llm_response(raw_response)
+    
+    print("4. Parsing completato.")
+    return parsed_data

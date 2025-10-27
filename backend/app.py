@@ -807,10 +807,15 @@ async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: s
         role_title = position_data.get("position_name", target_role_id) if position_data else target_role_id
         
         gap_task = asyncio.create_task(identify_skill_gaps_async(consolidated_report))
+        parsed_experiences = stages_data.get("parsed_experience", [])
+        if not parsed_experiences:
+            print("ATTENZIONE: Esperienze parsate non trovate. Il benchmark di mercato potrebbe essere incompleto.")
+            # Continuiamo comunque, ma il report qualitativo non avrà i dati del candidato
+        
         market_task = asyncio.create_task(
             run_market_benchmark_from_text_async(
                 job_description_text=jd_text,
-                cv_text=original_cv_report or "",
+                parsed_experiences=parsed_experiences,  # <-- MODIFICA QUI
                 offer_title=role_title,
                 db=db
             )
