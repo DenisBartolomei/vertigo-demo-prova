@@ -121,16 +121,12 @@ export function InterviewSetup() {
       {/* Box 1: Configurazione Interviste */}
       <div className="card fade-in">
         <div style={{ 
-          background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-          color: 'white',
-          padding: '20px',
-          borderRadius: '12px',
           marginBottom: '24px'
         }}>
-          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: 'white' }}>
+          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: 'var(--primary-purple)' }}>
             Configurazione Interviste
           </h2>
-          <p style={{ margin: '8px 0 0 0', opacity: 0.9, fontSize: '14px' }}>
+          <p style={{ margin: '8px 0 0 0', fontSize: '14px', color: 'var(--text-secondary)' }}>
             Personalizza la durata e la complessità dei colloqui
           </p>
         </div>
@@ -209,25 +205,25 @@ export function InterviewSetup() {
 
           {/* Stime Calcolate */}
           <div style={{ 
-            background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
-            color: 'white',
             padding: '20px',
-            borderRadius: '12px'
+            borderRadius: '12px',
+            border: '1px solid var(--border-light)',
+            background: 'var(--bg-secondary)'
           }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600' }}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>
               📊 Stime Calcolate
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
-                <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '4px' }}>Durata Stimata</div>
-                <div style={{ fontSize: '24px', fontWeight: '700' }}>{config.estimated_duration_minutes} min</div>
+                <div style={{ fontSize: '12px', marginBottom: '4px', color: 'var(--text-secondary)' }}>Durata Stimata</div>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-primary)' }}>{config.estimated_duration_minutes} min</div>
               </div>
               <div>
-                <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '4px' }}>Domande Massime</div>
-                <div style={{ fontSize: '24px', fontWeight: '700' }}>{config.max_questions}</div>
+                <div style={{ fontSize: '12px', marginBottom: '4px', color: 'var(--text-secondary)' }}>Domande Massime</div>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-primary)' }}>{config.max_questions}</div>
               </div>
             </div>
-            <p style={{ fontSize: '12px', opacity: 0.8, marginTop: '12px', margin: '12px 0 0 0' }}>
+            <p style={{ fontSize: '12px', marginTop: '12px', margin: '12px 0 0 0', color: 'var(--text-secondary)' }}>
               * Stima basata su 1.5 minuti per tentativo + 5 minuti per setup iniziale
             </p>
           </div>

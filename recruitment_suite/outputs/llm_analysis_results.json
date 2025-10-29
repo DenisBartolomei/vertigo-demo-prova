@@ -2,27 +2,27 @@
   {
     "ID": 38,
     "scartato": true,
-    "motivazione": "Esperienza solo in marketing digitale, nessuna evidenza di consulenza IT o architetture ICT."
+    "motivazione": "Esperienza solo in digital marketing, nessuna evidenza di consulenza IT o architetture ICT."
   },
   {
     "ID": 170,
     "scartato": true,
-    "motivazione": "Esperienza in analisi strategica moda, manca background IT e consulenza tecnologica."
+    "motivazione": "Esperienza strategica in moda/retail, ma nessuna evidenza di IT, architetture o digital transformation."
   },
   {
     "ID": 173,
     "scartato": true,
-    "motivazione": "Esperienza in business strategy, nessuna evidenza di consulenza IT o architetture ICT."
+    "motivazione": "Esperienza in business strategy, ma nessuna evidenza di consulenza IT o architetture ICT."
   },
   {
     "ID": 174,
     "scartato": true,
-    "motivazione": "Profilo identico al candidato 2, manca esperienza IT e consulenza tecnologica."
+    "motivazione": "Profilo identico al candidato 2, manca esperienza IT o architetturale."
   },
   {
     "ID": 175,
     "scartato": true,
-    "motivazione": "Esperienza in strategia aziendale, nessuna evidenza di consulenza IT o architetture ICT."
+    "motivazione": "Esperienza in strategia aziendale, ma nessuna evidenza di IT, architetture o digital transformation."
   },
   {
     "ID": 177,
@@ -32,7 +32,7 @@
   {
     "ID": 182,
     "scartato": true,
-    "motivazione": "Consulenza strategica finanziaria, manca esperienza in IT strategy e architetture ICT."
+    "motivazione": "Consulenza strategica in ambito finanziario, nessuna esperienza IT o architetture ICT."
   },
   {
     "ID": 185,
@@ -42,6 +42,6 @@
   {
     "ID": 189,
     "scartato": true,
-    "motivazione": "Esperienza in digital strategy, manca esperienza specifica in consulenza IT e architetture ICT."
+    "motivazione": "Esperienza in digital strategy, ma nessuna evidenza di consulenza IT o architetture ICT."
   }
 ]

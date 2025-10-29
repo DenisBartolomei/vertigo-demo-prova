@@ -240,11 +240,11 @@ def _canonical_skilllist_as_json(canonical_skills: List[dict]) -> str:
 
 # ----- Scoring -----
 
-def _score_cv_relevance(cv_text: str, canonical_skills: List[dict]) -> Dict[str, dict]:
+def _score_cv_relevance(cv_text: str, canonical_skills: List[dict], seniority_level: str = "Mid-Level") -> Dict[str, dict]:
     if not cv_text or not canonical_skills:
         return {}
     skill_list_json = _canonical_skilllist_as_json(canonical_skills)
-    prompt = create_cv_scoring_prompt(skill_list_json, cv_text)
+    prompt = create_cv_scoring_prompt(skill_list_json, cv_text, seniority_level)
 
     tool_args = get_structured_llm_response(
         prompt=prompt,
@@ -273,12 +273,12 @@ def _score_cv_relevance(cv_text: str, canonical_skills: List[dict]) -> Dict[str,
         print(f"  - [Skill Scorer] Errore validando CV score: {e}")
         return {}
 
-def _score_interview_relevance(conversation_json: List[dict], canonical_skills: List[dict], case_map_text: str) -> Dict[str, dict]:
+def _score_interview_relevance(conversation_json: List[dict], canonical_skills: List[dict], case_map_text: str, seniority_level: str = "Mid-Level") -> Dict[str, dict]:
     if not conversation_json or not canonical_skills:
         return {}
     conversation_text = _format_conversation(conversation_json)
     skill_list_json = _canonical_skilllist_as_json(canonical_skills)
-    prompt = create_interview_scoring_prompt(skill_list_json, conversation_text, case_map_text)
+    prompt = create_interview_scoring_prompt(skill_list_json, conversation_text, case_map_text, seniority_level)
 
     tool_args = get_structured_llm_response(
         prompt=prompt,
@@ -394,10 +394,14 @@ def compute_and_save_skill_relevance(session_id: str, tenant_id: str = None) -> 
         print("  - ERRORE: 'evaluation_criteria.evaluation_schema' non trovato o vuoto. Impossibile stabilire le skill canoniche.")
         return False
 
+    # Estrai il seniority level dalla posizione
+    seniority_level = position_data.get("seniority_level", "Mid-Level")
+    print(f"  - [SKILL SCORER] Seniority level: {seniority_level}")
+
     # Scoring CV
-    cv_scores_map = _score_cv_relevance(cv_text, canonical_skills) if cv_text else {}
+    cv_scores_map = _score_cv_relevance(cv_text, canonical_skills, seniority_level) if cv_text else {}
     # Scoring colloquio
-    interview_scores_map = _score_interview_relevance(conversation_json, canonical_skills, case_map_text) if conversation_json else {}
+    interview_scores_map = _score_interview_relevance(conversation_json, canonical_skills, case_map_text, seniority_level) if conversation_json else {}
 
     # Merge risultati in ordine canonico
     final_scores: List[SkillScore] = []

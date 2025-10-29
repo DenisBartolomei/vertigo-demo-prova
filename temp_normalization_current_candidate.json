@@ -1,0 +1,43 @@
+[
+  {
+    "profile_id": "current_candidate",
+    "normalized_experiences": [
+      {
+        "original_title": "Senior Strategy Consultant",
+        "duration_months": 18,
+        "esco_matches": [
+          {
+            "esco_title": "responsabile della pianificazione strategica",
+            "similarity": "0.8200"
+          },
+          {
+            "esco_title": "responsabile strategico/responsabile strategica",
+            "similarity": "0.7683"
+          },
+          {
+            "esco_title": "consulente di gestione aziendale",
+            "similarity": "0.7217"
+          }
+        ]
+      },
+      {
+        "original_title": "IT Strategy Consultant",
+        "duration_months": 19,
+        "esco_matches": [
+          {
+            "esco_title": "analista di sistemi TIC",
+            "similarity": "0.8991"
+          },
+          {
+            "esco_title": "responsabile dell’analisi commerciale TIC",
+            "similarity": "0.8857"
+          },
+          {
+            "esco_title": "consulente informatico",
+            "similarity": "0.8848"
+          }
+        ]
+      }
+    ]
+  }
+]

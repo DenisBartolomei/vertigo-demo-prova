@@ -64,10 +64,6 @@ export function App() {
             />
           </h3>
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <Link to="/app/dashboard">
-              <span style={{ fontSize: '18px' }}>📊</span>
-              Dashboard
-            </Link>
             <Link to="/app/positions">
               <span style={{ fontSize: '18px' }}>📋</span>
               Annunci

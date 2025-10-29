@@ -50,93 +50,148 @@ function formatReport(reportText: string, kind: 'cv' | 'case' | 'conversation') 
 function formatCVAnalysisReport(reportText: string) {
   const lines = reportText.split('\n')
   const sections = []
-  let currentSection = { title: '', content: '', type: 'text' }
+  let currentSection = { title: '', items: [] as string[], type: 'text' }
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
+    if (!line) continue
     
-    // Detect section headers
+    // Detect main sections (numbered like "1. " or "REPORT")
     if (line.match(/^\d+\.?\s+[A-Z]/) || line.includes('Analisi') || line.includes('REPORT')) {
-      if (currentSection.title) {
-        sections.push({ ...currentSection })
+      if (currentSection.title || currentSection.items.length > 0) {
+        sections.push({ ...currentSection, items: [...currentSection.items] })
       }
-      currentSection = { title: line, content: '', type: 'section' }
-    } else if (line.match(/^\d+\.\d+\.?\s+/) || line.includes('Verifica') || line.includes('Requirements')) {
-      if (currentSection.title) {
-        sections.push({ ...currentSection })
+      currentSection = { title: line.replace(/^[\d\.]+\s*/, ''), items: [], type: 'section' }
+    } 
+    // Detect subsections (numbered like "2.1 ")
+    else if (line.match(/^\d+\.\d+\.?\s+/) || (line.includes('Verifica') && line.includes('/'))) {
+      if (currentSection.title || currentSection.items.length > 0) {
+        sections.push({ ...currentSection, items: [...currentSection.items] })
       }
-      currentSection = { title: line, content: '', type: 'subsection' }
-    } else if (line.startsWith('•') || line.startsWith('-') || line.startsWith('o')) {
-      if (currentSection.title) {
-        sections.push({ ...currentSection })
+      currentSection = { title: line.replace(/^[\d\.]+\s*/, ''), items: [], type: 'subsection' }
+    } 
+    // Detect bullet points
+    else if (line.match(/^[-•o]\s+/)) {
+      currentSection.items.push(line.replace(/^[-•o]\s+/, ''))
+    }
+    // Detect header text (like "Requisiti tecnici richiesti:")
+    else if (line.endsWith(':')) {
+      if (currentSection.title || currentSection.items.length > 0) {
+        sections.push({ ...currentSection, items: [...currentSection.items] })
       }
-      currentSection = { title: line, content: '', type: 'bullet' }
-    } else if (line) {
-      currentSection.content += (currentSection.content ? '\n' : '') + line
+      currentSection = { title: line, items: [], type: 'header' }
+    }
+    // Regular text content
+    else {
+      currentSection.items.push(line)
     }
   }
   
-  if (currentSection.title) {
+  if (currentSection.title || currentSection.items.length > 0) {
     sections.push(currentSection)
   }
   
+  // Helper function to highlight important keywords
+  const highlightKeywords = (text: string) => {
+    const keywords = [
+      'soddisfatto', 'non soddisfatto', 'pienamente', 'requisito', 
+      'esperienza', 'competenze', 'certificazioni', 'laurea',
+      'ben documentate', 'non menzionata', 'non esplicita', 'assente'
+    ]
+    
+    let highlighted = text
+    keywords.forEach(keyword => {
+      const regex = new RegExp(`(${keyword})`, 'gi')
+      if (keyword.includes('non') || keyword === 'assente') {
+        highlighted = highlighted.replace(regex, '<strong style="color: #ef4444">$1</strong>')
+      } else if (keyword.includes('soddisfatto') || keyword === 'pienamente' || keyword.includes('ben')) {
+        highlighted = highlighted.replace(regex, '<strong style="color: #10b981">$1</strong>')
+      } else {
+        highlighted = highlighted.replace(regex, '<strong>$1</strong>')
+      }
+    })
+    return highlighted
+  }
+  
   return (
-    <div style={{ lineHeight: '1.6' }}>
+    <div style={{ lineHeight: '1.8', fontSize: '14px' }}>
       {sections.map((section, index) => (
-        <div key={index} style={{ marginBottom: '16px' }}>
+        <div key={index} style={{ marginBottom: '24px' }}>
+          {/* Main Section Header */}
           {section.type === 'section' && (
             <div style={{
-              fontSize: '16px',
+              fontSize: '18px',
               fontWeight: '700',
               color: 'var(--primary-purple)',
-              marginBottom: '8px',
-              paddingBottom: '4px',
-              borderBottom: '2px solid var(--primary-purple)'
+              marginBottom: '16px',
+              paddingBottom: '8px',
+              borderBottom: '3px solid var(--primary-purple)',
+              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(167, 139, 250, 0.05))',
+              padding: '12px 16px',
+              borderRadius: '8px 8px 0 0'
             }}>
               📋 {section.title}
             </div>
           )}
+          
+          {/* Subsection Header */}
           {section.type === 'subsection' && (
             <div style={{
-              fontSize: '14px',
+              fontSize: '15px',
               fontWeight: '600',
               color: 'var(--text-primary)',
-              marginBottom: '6px',
-              paddingLeft: '12px',
-              borderLeft: '3px solid var(--accent-purple)'
+              marginBottom: '12px',
+              paddingLeft: '16px',
+              paddingTop: '8px',
+              paddingBottom: '8px',
+              borderLeft: '4px solid var(--accent-purple)',
+              background: 'rgba(139, 92, 246, 0.03)',
+              borderRadius: '0 6px 6px 0'
             }}>
               📌 {section.title}
             </div>
           )}
-          {section.type === 'bullet' && (
+          
+          {/* Header Text */}
+          {section.type === 'header' && (
             <div style={{
-              fontSize: '13px',
-              fontWeight: '500',
+              fontSize: '14px',
+              fontWeight: '600',
               color: 'var(--text-primary)',
-              marginBottom: '4px',
-              paddingLeft: '16px',
-              position: 'relative'
+              marginBottom: '10px',
+              marginTop: '12px'
             }}>
-              <span style={{
-                position: 'absolute',
-                left: '0',
-                color: 'var(--primary-purple)',
-                fontWeight: 'bold'
-              }}>•</span>
               {section.title}
             </div>
           )}
-          {section.content && (
+          
+          {/* Content Items */}
+          {section.items.length > 0 && (
             <div style={{
-              fontSize: '13px',
-              color: 'var(--text-secondary)',
-              paddingLeft: section.type === 'section' ? '0' : '16px',
-              marginTop: '4px',
-              lineHeight: '1.5'
+              paddingLeft: section.type === 'section' ? '16px' : section.type === 'subsection' ? '24px' : '0'
             }}>
-              {section.content.split('\n').map((paragraph, pIndex) => (
-                <div key={pIndex} style={{ marginBottom: '8px' }}>
-                  {paragraph}
+              {section.items.map((item, itemIndex) => (
+                <div 
+                  key={itemIndex} 
+                  style={{
+                    marginBottom: '12px',
+                    paddingLeft: '20px',
+                    position: 'relative',
+                    lineHeight: '1.7',
+                    color: 'var(--text-secondary)',
+                    wordWrap: 'break-word',
+                    overflowWrap: 'break-word'
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute',
+                    left: '0',
+                    top: '2px',
+                    color: 'var(--primary-purple)',
+                    fontWeight: 'bold',
+                    fontSize: '16px'
+                  }}>•</span>
+                  <span dangerouslySetInnerHTML={{ __html: highlightKeywords(item) }} />
                 </div>
               ))}
             </div>

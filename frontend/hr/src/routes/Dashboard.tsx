@@ -311,20 +311,6 @@ export function Dashboard() {
           tooltip="Tempo medio che intercorre tra il completamento dell'intervista e l'invio del link al candidato"
         />
         <MetricCard
-          title="Tasso di Recupero"
-          value={`${data.metrics.recovery_count} (${data.metrics.recovery_rate.toFixed(1)}%)`}
-          icon="📈"
-          color="#10b981"
-          tooltip="Candidati che hanno dimostrato competenze superiori durante il colloquio rispetto a quanto emerge dal CV (miglioramento di almeno mezzo punto)"
-        />
-        <MetricCard
-          title="Underperforming"
-          value={`${data.metrics.underperforming_count} (${data.metrics.underperforming_rate.toFixed(1)}%)`}
-          icon="📉"
-          color="#ef4444"
-          tooltip="Candidati che hanno dimostrato competenze inferiori durante il colloquio rispetto a quanto emerge dal CV (peggioramento di almeno mezzo punto)"
-        />
-        <MetricCard
           title="Scoring Medio Colloqui"
           value={data.metrics.avg_interview_score.toFixed(2)}
           icon="🎯"
@@ -344,6 +330,15 @@ export function Dashboard() {
           icon="⭐"
           color="#6366f1"
           tooltip="Punteggio medio complessivo che combina la valutazione del CV e della performance in intervista"
+        />
+      </div>
+
+      {/* Grafico a Torta Performance */}
+      <div style={{ marginTop: '32px' }}>
+        <PerformancePieChart
+          recoveryCount={data.metrics.recovery_count}
+          underperformingCount={data.metrics.underperforming_count}
+          totalEvaluated={data.metrics.total_evaluated}
         />
       </div>
 
@@ -368,8 +363,7 @@ function MetricCard({ title, value, icon, color, tooltip }: {
       padding: '24px',
       boxShadow: 'var(--shadow-sm)',
       border: '1px solid var(--border-light)',
-      position: 'relative',
-      overflow: 'hidden'
+      position: 'relative'
     }}>
       <div style={{
         position: 'absolute',
@@ -379,7 +373,9 @@ function MetricCard({ title, value, icon, color, tooltip }: {
         height: '100px',
         background: `linear-gradient(135deg, ${color}20, ${color}10)`,
         borderRadius: '50%',
-        transform: 'translate(30px, -30px)'
+        transform: 'translate(30px, -30px)',
+        pointerEvents: 'none',
+        overflow: 'hidden'
       }} />
       
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
@@ -420,20 +416,20 @@ function MetricCard({ title, value, icon, color, tooltip }: {
               </span>
               {showTooltip && (
                 <div style={{
-                  position: 'absolute',
-                  top: '-10px',
-                  left: '25px',
-                  transform: 'translateY(-100%)',
+                  position: 'fixed',
                   background: 'rgba(0,0,0,0.95)',
                   color: 'white',
                   padding: '10px 14px',
                   borderRadius: '8px',
                   fontSize: '13px',
                   lineHeight: '1.4',
-                  width: '280px',
-                  zIndex: 1000,
+                  maxWidth: '280px',
+                  zIndex: 10000,
                   boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                  whiteSpace: 'normal'
+                  whiteSpace: 'normal',
+                  pointerEvents: 'none',
+                  marginTop: '-8px',
+                  marginLeft: '8px'
                 }}>
                   {tooltip}
                 </div>
@@ -451,6 +447,173 @@ function MetricCard({ title, value, icon, color, tooltip }: {
             {value}
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// Performance Pie Chart Component
+function PerformancePieChart({ 
+  recoveryCount, 
+  underperformingCount, 
+  totalEvaluated 
+}: {
+  recoveryCount: number
+  underperformingCount: number
+  totalEvaluated: number
+}) {
+  const neutralCount = totalEvaluated - recoveryCount - underperformingCount
+  const total = totalEvaluated || 1 // Evita divisione per zero
+
+  const recoveryPercent = (recoveryCount / total) * 100
+  const underperformingPercent = (underperformingCount / total) * 100
+  const neutralPercent = (neutralCount / total) * 100
+
+  // Calcola gli angoli per il grafico a torta
+  const recoveryAngle = (recoveryPercent / 100) * 360
+  const underperformingAngle = (underperformingPercent / 100) * 360
+  const neutralAngle = (neutralPercent / 100) * 360
+
+  // Funzione per creare il path SVG di uno spicchio
+  const createSlice = (startAngle: number, endAngle: number, color: string) => {
+    const radius = 80
+    const centerX = 100
+    const centerY = 100
+
+    const startRad = (startAngle - 90) * (Math.PI / 180)
+    const endRad = (endAngle - 90) * (Math.PI / 180)
+
+    const x1 = centerX + radius * Math.cos(startRad)
+    const y1 = centerY + radius * Math.sin(startRad)
+    const x2 = centerX + radius * Math.cos(endRad)
+    const y2 = centerY + radius * Math.sin(endRad)
+
+    const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0
+
+    return {
+      path: `M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`,
+      color
+    }
+  }
+
+  const slices = []
+  let currentAngle = 0
+
+  if (recoveryPercent > 0) {
+    slices.push({
+      ...createSlice(currentAngle, currentAngle + recoveryAngle, '#10b981'),
+      label: 'Recupero',
+      count: recoveryCount,
+      percent: recoveryPercent
+    })
+    currentAngle += recoveryAngle
+  }
+
+  if (neutralPercent > 0) {
+    slices.push({
+      ...createSlice(currentAngle, currentAngle + neutralAngle, '#94a3b8'),
+      label: 'Neutri',
+      count: neutralCount,
+      percent: neutralPercent
+    })
+    currentAngle += neutralAngle
+  }
+
+  if (underperformingPercent > 0) {
+    slices.push({
+      ...createSlice(currentAngle, currentAngle + underperformingAngle, '#ef4444'),
+      label: 'Underperforming',
+      count: underperformingCount,
+      percent: underperformingPercent
+    })
+  }
+
+  return (
+    <div style={{
+      background: 'white',
+      borderRadius: '16px',
+      padding: '24px',
+      boxShadow: 'var(--shadow-sm)',
+      border: '1px solid var(--border-light)',
+      gridColumn: 'span 2',
+      minWidth: '280px'
+    }}>
+      <h3 style={{ 
+        fontSize: '16px', 
+        fontWeight: '600', 
+        color: 'var(--text-primary)',
+        marginBottom: '20px',
+        textAlign: 'center'
+      }}>
+        📊 Distribuzione Performance Candidati
+      </h3>
+
+      <div style={{ 
+        display: 'flex', 
+        gap: '32px', 
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexWrap: 'wrap'
+      }}>
+        {/* Grafico a torta SVG */}
+        <svg width="200" height="200" viewBox="0 0 200 200">
+          {slices.map((slice, index) => (
+            <path
+              key={index}
+              d={slice.path}
+              fill={slice.color}
+              stroke="white"
+              strokeWidth="2"
+            />
+          ))}
+        </svg>
+
+        {/* Leggenda */}
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '12px' 
+        }}>
+          {slices.map((slice, index) => (
+            <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '16px',
+                height: '16px',
+                borderRadius: '4px',
+                background: slice.color,
+                flexShrink: 0
+              }} />
+              <div>
+                <div style={{ 
+                  fontSize: '14px', 
+                  fontWeight: '600', 
+                  color: 'var(--text-primary)' 
+                }}>
+                  {slice.label}
+                </div>
+                <div style={{ 
+                  fontSize: '12px', 
+                  color: 'var(--text-secondary)' 
+                }}>
+                  {slice.count} candidati ({slice.percent.toFixed(1)}%)
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ 
+        marginTop: '16px', 
+        paddingTop: '16px', 
+        borderTop: '1px solid var(--border-light)',
+        fontSize: '13px',
+        color: 'var(--text-secondary)',
+        textAlign: 'center'
+      }}>
+        <strong>Recupero:</strong> Candidati che hanno performato meglio in colloquio rispetto al CV (miglioramento ≥0.5 punti)<br/>
+        <strong>Underperforming:</strong> Candidati che hanno performato peggio in colloquio rispetto al CV (peggioramento ≥0.5 punti)<br/>
+        <strong>Neutri:</strong> Candidati con performance allineata tra CV e colloquio
       </div>
     </div>
   )

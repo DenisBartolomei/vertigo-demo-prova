@@ -130,19 +130,6 @@ export function UserManagement() {
         <p className="muted">Gestisci gli utenti e il loro accesso al sistema di reclutamento della tua organizzazione.</p>
       </div>
 
-      {/* Debug info for admin detection */}
-      {import.meta.env.DEV && (
-        <div style={{ 
-          padding: '12px', 
-          background: '#F3F4F6', 
-          borderRadius: '8px', 
-          fontSize: '12px',
-          color: '#6B7280'
-        }}>
-          Debug: isAdmin = {isAdmin.toString()}, currentUser = {JSON.stringify(currentUser)}
-        </div>
-      )}
-
       {/* Admin role warning */}
       {currentUser && currentUser.role !== 'admin' && (
         <div style={{ 

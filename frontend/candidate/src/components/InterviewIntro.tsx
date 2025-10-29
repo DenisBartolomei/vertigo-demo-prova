@@ -37,6 +37,8 @@ export function InterviewIntro({ positionName, candidateName, onStart, onAcceptT
             <li>There's no time limit, but we use time to monitor your activity</li>
             <li>We recommend to use Chrome and not to use any AI tools: they will be detected and will penalize your score</li>
             <li>Feel free to ask questions if you need clarification</li>
+            <li>Be sure not to use supplemental screens, shortcuts</li>
+            <li>Do not exit / switch the interview window</li>
           </ul>
         </div>
 

@@ -13,6 +13,7 @@ export function Positions() {
   const [editedCriteria, setEditedCriteria] = useState<Record<string, any>>({})
   const [savingCriteria, setSavingCriteria] = useState(false)
   const [isPreparing, setIsPreparing] = useState(false)
+  const [isCreateFormExpanded, setIsCreateFormExpanded] = useState(true)
   const token = localStorage.getItem('hr_jwt')
 
   async function load() {
@@ -281,24 +282,48 @@ export function Positions() {
       
       {/* Form */}
       <div className="card fade-in">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-          <div style={{ 
-            width: '40px', 
-            height: '40px', 
-            borderRadius: '50%', 
-            background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontSize: '18px'
-          }}>
-            📋
+        <div 
+          onClick={() => setIsCreateFormExpanded(!isCreateFormExpanded)}
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            marginBottom: isCreateFormExpanded ? '24px' : '0',
+            cursor: 'pointer',
+            padding: '4px',
+            borderRadius: '8px',
+            transition: 'background 0.2s ease'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ 
+              width: '40px', 
+              height: '40px', 
+              borderRadius: '50%', 
+              background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontSize: '18px'
+            }}>
+              📋
+            </div>
+            <h3>Crea Nuova Posizione</h3>
           </div>
-          <h3>Crea Nuova Posizione</h3>
+          <div style={{ 
+            fontSize: '20px',
+            transform: isCreateFormExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 0.3s ease'
+          }}>
+            ▼
+          </div>
         </div>
         
-        <div style={{ display: 'grid', gap: '20px' }}>
+        {isCreateFormExpanded && (
+          <div style={{ display: 'grid', gap: '20px' }}>
           <div>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: 'var(--text-primary)' }}>
               ID Posizione
@@ -404,7 +429,8 @@ export function Positions() {
           >
             💾 Salva Posizione & Avvia Preparazione Dati
           </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Existing Positions */}
