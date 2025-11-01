@@ -377,7 +377,32 @@ export function Candidati() {
   const [reportExpanded, setReportExpanded] = useState<Record<string, boolean>>({})
   const [securityReports, setSecurityReports] = useState<Record<string, any>>({})
   const [showSecurityReport, setShowSecurityReport] = useState<string | null>(null)
+  const [expandedSkills, setExpandedSkills] = useState<Record<string, Set<number>>>({})
   const token = localStorage.getItem('hr_jwt')
+
+  // Toggle skill expansion
+  const toggleSkillExpansion = (sessionId: string, skillIndex: number) => {
+    setExpandedSkills(prev => {
+      const sessionSkills = prev[sessionId] || new Set<number>()
+      const newSet = new Set(sessionSkills)
+      
+      if (newSet.has(skillIndex)) {
+        newSet.delete(skillIndex)
+      } else {
+        newSet.add(skillIndex)
+      }
+      
+      return {
+        ...prev,
+        [sessionId]: newSet
+      }
+    })
+  }
+
+  // Check if skill is expanded
+  const isSkillExpanded = (sessionId: string, skillIndex: number): boolean => {
+    return expandedSkills[sessionId]?.has(skillIndex) || false
+  }
 
   async function load() {
     setLoading(true)
@@ -924,12 +949,50 @@ export function Candidati() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <select value={currentKind} onChange={e => fetchReport(r.session_id, e.target.value as 'cv' | 'case' | 'conversation')}>
+                    <select 
+                      value={currentKind} 
+                      onChange={e => fetchReport(r.session_id, e.target.value as 'cv' | 'case' | 'conversation')}
+                      style={{
+                        width: '240px',
+                        padding: '6px 8px',
+                        fontSize: '12px',
+                        fontWeight: '500',
+                        border: '1px solid rgba(139, 92, 246, 0.3)',
+                        borderRadius: '6px',
+                        background: 'white',
+                        color: 'var(--text-primary)',
+                        cursor: 'pointer',
+                        outline: 'none'
+                      }}
+                    >
                       <option value="cv">CV ANALYSIS REPORT</option>
                       <option value="case">CASE EVALUATION REPORT</option>
                       <option value="conversation">CONVERSATION</option>
                     </select>
-                    <button onClick={() => toggle(r.session_id)}>{isExpanded ? 'Hide' : 'Show'} skills</button>
+                    <button 
+                      onClick={() => toggle(r.session_id)}
+                      style={{
+                        width: '70px',
+                        height: '60px',
+                        padding: '8px 6px',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        border: '1px solid rgba(139, 92, 246, 0.3)',
+                        borderRadius: '6px',
+                        background: 'var(--primary-purple)',
+                        color: 'white',
+                        cursor: 'pointer',
+                        lineHeight: '1.3',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        textAlign: 'center',
+                        whiteSpace: 'normal',
+                        wordBreak: 'break-word'
+                      }}
+                    >
+                      {isExpanded ? 'Hide skills' : 'Show skills'}
+                    </button>
                     
                                 
                     {/* --- BLOCCO DI LOGICA RIPRISTINATO DAL VECCHIO FILE --- */}
@@ -938,9 +1001,28 @@ export function Candidati() {
                     {(r.status === 'Evaluation pending' || r.status === 'Feedback pending' || r.status === 'Pronto per generare feedback' || r.status === 'Evaluation completed') && (
                         <button 
                             onClick={() => handleGenerateFeedback(r.session_id)}
-                            style={{ padding: '6px 12px', background: '#8B5CF6', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            style={{ 
+                              width: '85px',
+                              height: '60px',
+                              padding: '8px 6px', 
+                              background: '#8B5CF6', 
+                              color: 'white', 
+                              border: 'none', 
+                              borderRadius: 'var(--radius-md)', 
+                              fontSize: '11px', 
+                              fontWeight: '600',
+                              cursor: 'pointer', 
+                              display: 'flex', 
+                              flexDirection: 'column',
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              gap: '3px',
+                              lineHeight: '1.3',
+                              textAlign: 'center'
+                            }}
                         >
-                            🚀 Genera Feedback
+                            <span>🚀</span>
+                            <span>Genera Feedback</span>
                         </button>
                     )}
                 
@@ -948,56 +1030,79 @@ export function Candidati() {
                     {r.status === 'Generazione feedback in corso...' && (
                         <button 
                             disabled 
-                            style={{ padding: '6px 12px', background: '#A5B4FC', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'not-allowed', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            style={{ 
+                              width: '85px',
+                              height: '60px',
+                              padding: '8px 6px', 
+                              background: '#A5B4FC', 
+                              color: 'white', 
+                              border: 'none', 
+                              borderRadius: 'var(--radius-md)', 
+                              fontSize: '11px', 
+                              fontWeight: '600',
+                              cursor: 'not-allowed', 
+                              display: 'flex', 
+                              flexDirection: 'column',
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              gap: '3px',
+                              lineHeight: '1.3',
+                              textAlign: 'center'
+                            }}
                         >
-                            ⏳ In elaborazione...
+                            <span>⏳</span>
+                            <span>In elaborazione</span>
                         </button>
                     )}
                 
-                    {/* Stato: Pronto per il download (CON AGGIUNTA DEL PULSANTE RIGENERA) */}
+                    {/* Stato: Pronto per il download */}
                     {(r.status === 'Feedback pronto' || r.status === 'Feedback ready') && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            {/* Pulsante di Download (già esistente) */}
-                            <button 
-                                onClick={() => downloadFeedback(r.session_id)}
-                                style={{ padding: '6px 12px', background: '#10B981', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                            >
-                                📥 Download Feedback
-                            </button>
-                    
-                            {/* Pulsante di Rigenerazione (con stile originale) */}
-                            <button 
-                                title="Rigenera il feedback. Questa azione sovrascriverà il report esistente."
-                                onClick={() => {
-                                    if (window.confirm('Sei sicuro di voler rigenerare il feedback? Il report attuale verrà sovrascritto.')) {
-                                        handleGenerateFeedback(r.session_id);
-                                    }
-                                }}
-                                style={{ 
-                                    padding: '6px 12px',
-                                    background: 'var(--bg-secondary)', 
-                                    color: 'var(--text-secondary)', 
-                                    border: '1px solid var(--border-light)', 
-                                    borderRadius: 'var(--radius-md)', 
-                                    fontSize: '12px', 
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                }}
-                            >
-                                🔄 Rigenera
-                            </button>
-                        </div>
+                        <button 
+                            onClick={() => downloadFeedback(r.session_id)}
+                            style={{ 
+                              width: '85px',
+                              height: '60px',
+                              padding: '8px 6px', 
+                              background: '#10B981', 
+                              color: 'white', 
+                              border: 'none', 
+                              borderRadius: 'var(--radius-md)', 
+                              fontSize: '11px', 
+                              fontWeight: '600',
+                              cursor: 'pointer', 
+                              display: 'flex', 
+                              flexDirection: 'column',
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              gap: '3px',
+                              lineHeight: '1.3',
+                              textAlign: 'center'
+                            }}
+                        >
+                            <span>📥</span>
+                            <span>Download Feedback</span>
+                        </button>
                     )}
                 
                     {/* Stato: Errore */}
                     {r.status === 'Errore generazione feedback' && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#FEE2E2', padding: '4px 8px', borderRadius: 'var(--radius-md)' }}>
-                            <span style={{ color: '#991B1B', fontSize: '12px' }}>⚠️ Errore</span>
+                        <div style={{ 
+                          width: '85px',
+                          height: '60px',
+                          display: 'flex', 
+                          flexDirection: 'column',
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          gap: '4px', 
+                          background: '#FEE2E2', 
+                          padding: '8px 6px', 
+                          borderRadius: 'var(--radius-md)',
+                          textAlign: 'center'
+                        }}>
+                            <span style={{ color: '#991B1B', fontSize: '11px', fontWeight: '600' }}>⚠️ Errore</span>
                             <button 
                                 onClick={() => handleGenerateFeedback(r.session_id)}
-                                style={{ fontSize: '10px', padding: '2px 6px', background: '#DC2626', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                style={{ fontSize: '10px', padding: '4px 8px', background: '#DC2626', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '600' }}
                             >
                                 Riprova
                             </button>
@@ -1006,8 +1111,28 @@ export function Candidati() {
                 
                     {/* Info sul download (se già scaricato) */}
                     {r.downloaded_at && (
-                      <div style={{ fontSize: '10px', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border-light)' }}>
-                        📥 Scaricato da {r.downloaded_by_name || r.downloaded_by} il {new Date(r.downloaded_at).toLocaleDateString('it-IT')}
+                      <div style={{ 
+                        width: '95px',
+                        minHeight: '60px',
+                        fontSize: '9px', 
+                        fontWeight: '600',
+                        color: 'var(--text-secondary)', 
+                        background: 'var(--bg-secondary)', 
+                        padding: '8px 6px', 
+                        borderRadius: '6px', 
+                        border: '1px solid var(--border-light)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        textAlign: 'center',
+                        lineHeight: '1.3',
+                        gap: '2px'
+                      }}>
+                        <span>📥</span>
+                        <span>Scaricato da</span>
+                        <span style={{ fontWeight: '700' }}>{r.downloaded_by_name || r.downloaded_by}</span>
+                        <span style={{ fontSize: '8px' }}>il {new Date(r.downloaded_at).toLocaleDateString('it-IT')}</span>
                       </div>
                     )}
                 </div>
@@ -1112,7 +1237,7 @@ export function Candidati() {
                         }}>
                           <div style={{
                             display: 'grid',
-                            gridTemplateColumns: '1fr 120px 120px',
+                            gridTemplateColumns: '1fr 120px 120px 40px',
                             gap: '12px',
                             padding: '12px 16px',
                             background: 'var(--primary-purple)',
@@ -1125,97 +1250,98 @@ export function Candidati() {
                             <div>Competenza</div>
                             <div style={{ textAlign: 'center' }}>CV</div>
                             <div style={{ textAlign: 'center' }}>Colloquio</div>
+                            <div style={{ textAlign: 'center', fontSize: '11px' }}>Info</div>
                           </div>
-                          <div style={{ display: 'grid', gap: '8px' }}>
-                          {(skills[r.session_id] || []).map((s: any, i: number) => (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          {(skills[r.session_id] || []).map((s: any, i: number) => {
+                            const isExpanded = isSkillExpanded(r.session_id, i)
+                            const hasNotes = s.notes_cv || s.notes_interview
+                            
+                            return (
                               <div key={i} style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '8px',
-                                padding: '16px',
                                 background: i % 2 === 0 ? 'rgba(255, 255, 255, 0.8)' : 'rgba(255, 255, 255, 0.6)',
-                                borderRadius: 'var(--radius-lg)',
+                                borderRadius: 'var(--radius-md)',
                                 border: '1px solid rgba(139, 92, 246, 0.1)',
-                                transition: 'all 0.2s ease'
+                                transition: 'all 0.2s ease',
+                                overflow: 'hidden'
                               }}>
-                                {/* Skill Name */}
-                                <div style={{ 
-                                  fontWeight: '600', 
-                                  color: 'var(--text-primary)',
-                                  fontSize: '14px',
-                                  lineHeight: '1.4',
-                                  marginBottom: '8px'
-                                }}>
-                                  {s.skill_name}
-                                </div>
-                                
-                                {/* Ratings Row */}
+                                {/* Compact Header Row */}
                                 <div style={{
                                   display: 'grid',
-                                  gridTemplateColumns: '1fr 120px 120px',
+                                  gridTemplateColumns: '1fr 120px 120px 40px',
                                   gap: '12px',
-                                  alignItems: 'center'
+                                  alignItems: 'center',
+                                  padding: '12px 16px'
                                 }}>
+                                  {/* Skill Name */}
                                   <div style={{ 
-                                    fontSize: '12px', 
-                                    color: 'var(--text-secondary)',
-                                    fontWeight: '500'
+                                    fontWeight: '600', 
+                                    color: 'var(--text-primary)',
+                                    fontSize: '14px',
+                                    lineHeight: '1.3'
                                   }}>
-                                    Valutazione
+                                    {s.skill_name}
                                   </div>
                                   
                                   {/* CV Rating */}
                                   <div style={{ 
                                     display: 'flex', 
-                                    flexDirection: 'column',
+                                    justifyContent: 'center',
                                     alignItems: 'center',
-                                    gap: '6px'
+                                    gap: '2px'
                                   }}>
-                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '2px' }}>
-                                      {renderStars(s.cv_0_4)}
-                                    </div>
-                                    <div style={{
-                                      fontSize: '11px',
-                                      fontWeight: '600',
-                                      color: 'var(--primary-purple)',
-                                      background: 'rgba(139, 92, 246, 0.1)',
-                                      padding: '2px 6px',
-                                      borderRadius: '4px'
-                                    }}>
-                                      CV
-                                    </div>
+                                    {renderStars(s.cv_0_4)}
                                   </div>
                                   
                                   {/* Interview Rating */}
                                   <div style={{ 
                                     display: 'flex', 
-                                    flexDirection: 'column',
+                                    justifyContent: 'center',
                                     alignItems: 'center',
-                                    gap: '6px'
+                                    gap: '2px'
                                   }}>
-                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '2px' }}>
-                                      {renderStars(s.interview_0_4)}
-                                    </div>
-                                    <div style={{
-                                      fontSize: '11px',
-                                      fontWeight: '600',
-                                      color: 'var(--primary-purple)',
-                                      background: 'rgba(139, 92, 246, 0.1)',
-                                      padding: '2px 6px',
-                                      borderRadius: '4px'
-                                    }}>
-                                      Colloquio
-                                    </div>
+                                    {renderStars(s.interview_0_4)}
                                   </div>
+                                  
+                                  {/* Expand/Collapse Button */}
+                                  {hasNotes && (
+                                    <button
+                                      onClick={() => toggleSkillExpansion(r.session_id, i)}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        width: '32px',
+                                        height: '32px',
+                                        border: 'none',
+                                        background: isExpanded ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        fontSize: '16px',
+                                        transition: 'all 0.2s ease',
+                                        color: 'var(--primary-purple)'
+                                      }}
+                                      onMouseOver={(e) => {
+                                        e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)'
+                                      }}
+                                      onMouseOut={(e) => {
+                                        e.currentTarget.style.background = isExpanded ? 'rgba(139, 92, 246, 0.1)' : 'transparent'
+                                      }}
+                                      title={isExpanded ? "Nascondi dettagli" : "Mostra dettagli"}
+                                    >
+                                      {isExpanded ? '▼' : '▶'}
+                                    </button>
+                                  )}
                                 </div>
                                 
-                                {/* Justifications */}
-                                {(s.notes_cv || s.notes_interview) && (
+                                {/* Expanded Justifications */}
+                                {isExpanded && hasNotes && (
                                   <div style={{
                                     display: 'grid',
-                                    gridTemplateColumns: '1fr 1fr',
+                                    gridTemplateColumns: s.notes_cv && s.notes_interview ? '1fr 1fr' : '1fr',
                                     gap: '12px',
-                                    marginTop: '8px'
+                                    padding: '0 16px 12px 16px',
+                                    borderTop: '1px solid rgba(139, 92, 246, 0.1)'
                                   }}>
                                     {/* CV Justification */}
                                     {s.notes_cv && (
@@ -1226,7 +1352,7 @@ export function Candidati() {
                                         border: '1px solid rgba(139, 92, 246, 0.1)'
                                       }}>
                                         <div style={{
-                                          fontSize: '12px',
+                                          fontSize: '11px',
                                           fontWeight: '600',
                                           color: 'var(--primary-purple)',
                                           marginBottom: '6px',
@@ -1237,7 +1363,7 @@ export function Candidati() {
                                           📄 CV
                                         </div>
                                         <div style={{
-                                          fontSize: '13px',
+                                          fontSize: '12px',
                                           color: 'var(--text-secondary)',
                                           lineHeight: '1.5'
                                         }}>
@@ -1255,7 +1381,7 @@ export function Candidati() {
                                         border: '1px solid rgba(34, 197, 94, 0.1)'
                                       }}>
                                         <div style={{
-                                          fontSize: '12px',
+                                          fontSize: '11px',
                                           fontWeight: '600',
                                           color: '#22c55e',
                                           marginBottom: '6px',
@@ -1266,7 +1392,7 @@ export function Candidati() {
                                           💬 Colloquio
                                         </div>
                                         <div style={{
-                                          fontSize: '13px',
+                                          fontSize: '12px',
                                           color: 'var(--text-secondary)',
                                           lineHeight: '1.5'
                                         }}>
@@ -1277,7 +1403,8 @@ export function Candidati() {
                                   </div>
                                 )}
                               </div>
-                            ))}
+                            )
+                          })}
                           </div>
                           
                           {/* Overall Means Section */}

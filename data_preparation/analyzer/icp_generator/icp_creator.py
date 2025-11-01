@@ -18,18 +18,18 @@ def _extract_icp_from_full_response(full_response: str) -> str:
         print(f"  - Errore durante l'estrazione dell'ICP: {e}")
         return full_response
 
-def generate_and_extract_icp(job_description_text: str, hr_special_needs: str = "") -> str | None:
+def generate_and_extract_icp(job_description_text: str, hr_special_needs: str = "", language: str = "it") -> str | None:
     """
     Genera l'ICP dalla JD e lo estrae. Integra le Indicazioni Speciali HR.
     """
     print("  - [Agente ICP] Creazione del prompt...")
-    icp_prompt = prompts_icp.create_icp_generation_prompt(job_description_text, hr_special_needs)
+    icp_prompt = prompts_icp.create_icp_generation_prompt(job_description_text, hr_special_needs, language)
 
     print(f"  - [Agente ICP] Invio della richiesta al modello '{ICP_MODEL}'...")
     full_llm_output = get_llm_response(
         prompt=icp_prompt,
         model=ICP_MODEL,
-        system_prompt=prompts_icp.SYSTEM_PROMPT,
+        system_prompt=prompts_icp.SYSTEM_PROMPT[language],
         max_tokens=2500,
         temperature=0.4 
     )

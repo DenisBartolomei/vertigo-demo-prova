@@ -236,17 +236,23 @@ elif st.session_state.page == "position_setup":
         if not position_id or not position_name or not job_description:
             st.error("Compila almeno ID posizione, Titolo Posizione e Job Description.")
         else:
+            # Detect language from job description
+            from services.language_detector import detect_language
+            detected_language = detect_language(job_description)
+            
             payload = {
                 "position_name": position_name,
                 "job_description": job_description,
                 "knowledge_base": kb_docs,
                 "seniority_level": seniority_level,
-                "hr_special_needs": hr_special_needs
+                "hr_special_needs": hr_special_needs,
+                "language": detected_language
             }
             ok = create_or_update_position(position_id, payload)
             if not ok:
                 st.error("Errore durante il salvataggio della posizione su MongoDB.")
             else:
+                st.info(f"Lingua rilevata: {'Italiano' if detected_language == 'it' else 'English'}")
                 with st.spinner("Esecuzione pipeline di preparazione dati..."):
                     pipeline_ok = run_full_generation_pipeline(position_id)
                 if pipeline_ok:

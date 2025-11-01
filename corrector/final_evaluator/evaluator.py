@@ -18,17 +18,30 @@ def evaluate_candidate_performance(
     all_cases_text: str, 
     evaluation_criteria_text: str, 
     seniority_level: str,
-    case_map_text: str
+    case_map_text: str,
+    language: str = "it"
 ) -> str:
     """
     Genera un report di valutazione completo sulla performance del candidato.
+    
+    Args:
+        icp_text: Il testo dell'ICP
+        conversation_json_data: La cronologia della conversazione
+        all_cases_text: Testo dei case
+        evaluation_criteria_text: Criteri di valutazione
+        seniority_level: Livello di seniority
+        case_map_text: Mappa del case con gli step
+        language: Lingua del prompt ("it" o "en")
+    
+    Returns:
+        Report di valutazione nella lingua specificata
     """
     # Ora formattiamo i dati passati direttamente
     conversation_text = _format_conversation(conversation_json_data)
 
     print("1. Creazione del prompt per la valutazione finale...")
     prompt = prompts_final_eval.create_final_evaluation_prompt(
-        icp_text, conversation_text, all_cases_text, evaluation_criteria_text, seniority_level, case_map_text
+        icp_text, conversation_text, all_cases_text, evaluation_criteria_text, seniority_level, case_map_text, language
     )
     
     print(f"2. Invio della richiesta al modello '{EVALUATION_MODEL}' per la valutazione...")
@@ -36,7 +49,7 @@ def evaluate_candidate_performance(
     evaluation_report = get_llm_response(
         prompt=prompt,
         model=EVALUATION_MODEL,
-        system_prompt=prompts_final_eval.SYSTEM_PROMPT,
+        system_prompt=prompts_final_eval.SYSTEM_PROMPT[language],
         max_tokens=1500,
         temperature=0.8
     )

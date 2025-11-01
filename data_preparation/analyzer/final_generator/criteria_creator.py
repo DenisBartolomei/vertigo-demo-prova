@@ -19,19 +19,19 @@ class CriteriaCollection(BaseModel):
 
 FINAL_MODEL = AZURE_DEPLOYMENT_NAME
 
-def generate_final_criteria(icp_text: str, cases_json_str: str, seniority_level: str, hr_special_needs: str = "") -> CriteriaCollection | None:
+def generate_final_criteria(icp_text: str, cases_json_str: str, seniority_level: str, hr_special_needs: str = "", language: str = "it") -> CriteriaCollection | None:
     """
     Genera accomplishment criteria per tutti gli step/casi, integrando le Indicazioni HR.
     """
     print("1. Creazione del prompt per la generazione dei criteri...")
-    final_prompt = prompts_criteria.create_criteria_generation_prompt(icp_text, cases_json_str, seniority_level, hr_special_needs)
+    final_prompt = prompts_criteria.create_criteria_generation_prompt(icp_text, cases_json_str, seniority_level, hr_special_needs, language)
 
     print(f"2. Invio della richiesta al modello '{FINAL_MODEL}' per la generazione dei criteri...")
 
     tool_call_args = get_structured_llm_response(
         prompt=final_prompt,
         model=FINAL_MODEL,
-        system_prompt=prompts_criteria.SYSTEM_PROMPT,
+        system_prompt=prompts_criteria.SYSTEM_PROMPT[language],
         tool_name="save_generated_criteria",
         tool_schema=CriteriaCollection.model_json_schema()
     )

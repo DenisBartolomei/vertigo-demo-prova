@@ -163,12 +163,11 @@ def _extract_skills_from_case(caso_svolto_data: dict, position_data: dict) -> Li
         if exact_match:
             # Match esatto trovato
             crit = exact_match.get("criteria", {})
-            c1 = crit.get("evaluation_criteria_1") or ""
-            c2 = crit.get("evaluation_criteria_2") or ""
+            c1 = crit.get("evaluation_criteria") or ""
             canonical.append({
                 "skill_id": _slugify(skill_name),
                 "skill_name": skill_name,
-                "criteria_texts": [c1, c2]
+                "criteria_texts": [c1]
             })
             matched_skills.add(skill_name)
             print(f"    ✓ Match esatto: '{skill_name}' -> '{exact_match.get('requirement')}'")
@@ -180,12 +179,11 @@ def _extract_skills_from_case(caso_svolto_data: dict, position_data: dict) -> Li
                 for item in schema:
                     if item.get("requirement", "").strip() == best_match_req:
                         crit = item.get("criteria", {})
-                        c1 = crit.get("evaluation_criteria_1") or ""
-                        c2 = crit.get("evaluation_criteria_2") or ""
+                        c1 = crit.get("evaluation_criteria") or ""
                         canonical.append({
                             "skill_id": _slugify(skill_name),
                             "skill_name": skill_name,
-                            "criteria_texts": [c1, c2]
+                            "criteria_texts": [c1]
                         })
                         matched_skills.add(skill_name)
                         print(f"    ✓ Match fuzzy: '{skill_name}' -> '{best_match_req}'")
@@ -195,7 +193,7 @@ def _extract_skills_from_case(caso_svolto_data: dict, position_data: dict) -> Li
                 canonical.append({
                     "skill_id": _slugify(skill_name),
                     "skill_name": skill_name,
-                    "criteria_texts": ["", ""]
+                    "criteria_texts": [""]
                 })
                 unmatched_skills.append(skill_name)
                 print(f"    ⚠ Nessun match: '{skill_name}' (inclusa con criteri vuoti)")
@@ -209,7 +207,7 @@ def _extract_skills_from_case(caso_svolto_data: dict, position_data: dict) -> Li
 def _extract_canonical_skills(position_data: dict) -> List[dict]:
     """
     Estrae la lista canonica delle skill dai criteri di valutazione finali (evaluation_criteria.evaluation_schema).
-    Ogni item contiene: skill_id, skill_name, criteria_texts (lista con 2 stringhe).
+    Ogni item contiene: skill_id, skill_name, criteria_texts (lista con 1 stringa).
     
     DEPRECATED: Usa _extract_skills_from_case per estrarre solo le skill testate nel caso.
     """
@@ -219,41 +217,51 @@ def _extract_canonical_skills(position_data: dict) -> List[dict]:
     for item in schema:
         req = item.get("requirement") or ""
         crit = item.get("criteria", {})
-        c1 = crit.get("evaluation_criteria_1") or ""
-        c2 = crit.get("evaluation_criteria_2") or ""
+        c1 = crit.get("evaluation_criteria") or ""
         if not req:
             continue
         canonical.append({
             "skill_id": _slugify(req),
             "skill_name": req,
-            "criteria_texts": [c1, c2]
+            "criteria_texts": [c1]
         })
     return canonical
 
 def _canonical_skilllist_as_json(canonical_skills: List[dict]) -> str:
     """
     Prepara un JSON compatto con campi necessari al prompt:
-    - skill_id, skill_name, criteria_texts[2]
+    - skill_id, skill_name, criteria_texts[1]
     """
     payload = {"skills": canonical_skills}
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 # ----- Scoring -----
 
-def _score_cv_relevance(cv_text: str, canonical_skills: List[dict], seniority_level: str = "Mid-Level") -> Dict[str, dict]:
+def _score_cv_relevance(cv_text: str, canonical_skills: List[dict], seniority_level: str = "Mid-Level", language: str = "it") -> Dict[str, dict]:
     if not cv_text or not canonical_skills:
         return {}
     skill_list_json = _canonical_skilllist_as_json(canonical_skills)
-    prompt = create_cv_scoring_prompt(skill_list_json, cv_text, seniority_level)
+    prompt = create_cv_scoring_prompt(skill_list_json, cv_text, seniority_level, language)
 
+    system_prompts = {
+        "it": (
+            "Sei un valutatore HR rigoroso. Applica sempre la stessa rubrica e restituisci un output JSON per TUTTE le skill, "
+            "senza ometterne nessuna e mantenendo l'ordine. Vietato inventare evidenze. "
+            "Usa il 'criterio di valutazione' (derivato dalla rubrica ufficiale) come standard oggettivo e imparziale per guidare la tua valutazione. "
+            "Confronta le evidenze trovate con il criterio fornito."
+        ),
+        "en": (
+            "You are a rigorous HR evaluator. Always apply the same rubric and return a JSON output for ALL skills, "
+            "without omitting any and maintaining the order. Inventing evidence is forbidden. "
+            "Use the 'evaluation criterion' (derived from the official rubric) as an objective and impartial standard to guide your evaluation. "
+            "Compare the evidence found with the provided criterion."
+        )
+    }
+    
     tool_args = get_structured_llm_response(
         prompt=prompt,
         model=SKILL_SCORER_MODEL,
-        system_prompt=(
-            "Sei un valutatore HR rigoroso. Applica sempre la stessa rubrica e restituisci un output JSON per TUTTE le skill, "
-            "senza ometterne nessuna e mantenendo l'ordine. Vietato inventare evidenze. "
-            "Usa i 'criteria_texts' come estratti dalla rubrica 'evaluation_criteria'; se mancanti per una skill, valuta comunque."
-        ),
+        system_prompt=system_prompts.get(language, system_prompts["it"]),
         tool_name="save_cv_skill_scores",
         tool_schema=CVScoreCollection.model_json_schema(),
         temperature=SKILL_SCORING_TEMPERATURE,
@@ -273,21 +281,32 @@ def _score_cv_relevance(cv_text: str, canonical_skills: List[dict], seniority_le
         print(f"  - [Skill Scorer] Errore validando CV score: {e}")
         return {}
 
-def _score_interview_relevance(conversation_json: List[dict], canonical_skills: List[dict], case_map_text: str, seniority_level: str = "Mid-Level") -> Dict[str, dict]:
+def _score_interview_relevance(conversation_json: List[dict], canonical_skills: List[dict], case_map_text: str, seniority_level: str = "Mid-Level", language: str = "it") -> Dict[str, dict]:
     if not conversation_json or not canonical_skills:
         return {}
     conversation_text = _format_conversation(conversation_json)
     skill_list_json = _canonical_skilllist_as_json(canonical_skills)
-    prompt = create_interview_scoring_prompt(skill_list_json, conversation_text, case_map_text, seniority_level)
+    prompt = create_interview_scoring_prompt(skill_list_json, conversation_text, case_map_text, seniority_level, language)
 
+    system_prompts = {
+        "it": (
+            "Sei un valutatore HR rigoroso. Applica sempre la stessa rubrica e restituisci un output JSON per TUTTE le skill, "
+            "senza ometterne nessuna e mantenendo l'ordine. Pesa gli step che testano esplicitamente la skill. Vietato inventare evidenze. "
+            "Usa il 'criterio di valutazione' (derivato dalla rubrica ufficiale) come standard oggettivo e imparziale per guidare la tua valutazione. "
+            "Confronta le evidenze trovate con il criterio fornito."
+        ),
+        "en": (
+            "You are a rigorous HR evaluator. Always apply the same rubric and return a JSON output for ALL skills, "
+            "without omitting any and maintaining the order. Weight the steps that explicitly test the skill. Inventing evidence is forbidden. "
+            "Use the 'evaluation criterion' (derived from the official rubric) as an objective and impartial standard to guide your evaluation. "
+            "Compare the evidence found with the provided criterion."
+        )
+    }
+    
     tool_args = get_structured_llm_response(
         prompt=prompt,
         model=SKILL_SCORER_MODEL,
-        system_prompt=(
-            "Sei un valutatore HR rigoroso. Applica sempre la stessa rubrica e restituisci un output JSON per TUTTE le skill, "
-            "senza ometterne nessuna e mantenendo l'ordine. Pesa gli step che testano esplicitamente la skill. Vietato inventare evidenze. "
-            "Usa i 'criteria_texts' come estratti dalla rubrica 'evaluation_criteria'; se mancanti per una skill, valuta comunque."
-        ),
+        system_prompt=system_prompts.get(language, system_prompts["it"]),
         tool_name="save_interview_skill_scores",
         tool_schema=InterviewScoreCollection.model_json_schema(),
         temperature=SKILL_SCORING_TEMPERATURE,
@@ -353,6 +372,8 @@ def compute_and_save_skill_relevance(session_id: str, tenant_id: str = None) -> 
     
     print(f"  - [SKILL SCORER] Position data trovata: {position_data.get('_id', 'N/A')}")
     eval_criteria = position_data.get("evaluation_criteria", {})
+    language = position_data.get("language", "it")  # Get language, default to Italian
+    print(f"  - [SKILL SCORER] Language: {language}")
     print(f"  - [SKILL SCORER] Evaluation criteria presente: {bool(eval_criteria)}")
     if eval_criteria:
         schema = eval_criteria.get("evaluation_schema", [])
@@ -398,10 +419,10 @@ def compute_and_save_skill_relevance(session_id: str, tenant_id: str = None) -> 
     seniority_level = position_data.get("seniority_level", "Mid-Level")
     print(f"  - [SKILL SCORER] Seniority level: {seniority_level}")
 
-    # Scoring CV
-    cv_scores_map = _score_cv_relevance(cv_text, canonical_skills, seniority_level) if cv_text else {}
-    # Scoring colloquio
-    interview_scores_map = _score_interview_relevance(conversation_json, canonical_skills, case_map_text, seniority_level) if conversation_json else {}
+    # Scoring CV con lingua
+    cv_scores_map = _score_cv_relevance(cv_text, canonical_skills, seniority_level, language) if cv_text else {}
+    # Scoring colloquio con lingua
+    interview_scores_map = _score_interview_relevance(conversation_json, canonical_skills, case_map_text, seniority_level, language) if conversation_json else {}
 
     # Merge risultati in ordine canonico
     final_scores: List[SkillScore] = []

@@ -54,19 +54,32 @@ def parse_mixed_llm_response(response_text: str) -> dict:
     }
 
 
-def analyze_cv(cv_text: str, job_description_text: str, hr_special_needs: str = "") -> dict:
+def analyze_cv(cv_text: str, job_description_text: str, hr_special_needs: str = "", language: str = "it") -> dict:
     """
     Esegue l'analisi unificata del CV usando un singolo prompt che richiede un output misto.
     Utilizza un parser robusto per separare il report testuale dal JSON delle esperienze.
+    
+    Args:
+        cv_text: Testo del CV
+        job_description_text: Testo della job description
+        hr_special_needs: Indicazioni speciali HR
+        language: Lingua del prompt ("it" o "en")
+    
+    Returns:
+        Dizionario con report_text e structured_experience
     """
     print("1. Creazione del prompt unificato...")
-    # Qui usiamo la TUA nuova funzione create_cv_analysis_prompt
-    analysis_prompt = create_cv_analysis_prompt(cv_text, job_description_text, hr_special_needs)
+    # Qui usiamo la TUA nuova funzione create_cv_analysis_prompt con language
+    analysis_prompt = create_cv_analysis_prompt(cv_text, job_description_text, hr_special_needs, language)
     
     print(f"2. Invio della richiesta al modello '{ANALYZER_MODEL}' per output misto...")
     
-    # Un system prompt che incoraggia il formato corretto
-    analyzer_system_prompt = "Agisci come un recruiter AI. Il tuo compito è seguire SCRUPOLOSAMENTE le istruzioni e il formato di output richiesto nel prompt dell'utente, producendo prima il report testuale e poi il blocco JSON."
+    # Un system prompt che incoraggia il formato corretto (bilingue)
+    system_prompts = {
+        "it": "Agisci come un recruiter AI. Il tuo compito è seguire SCRUPOLOSAMENTE le istruzioni e il formato di output richiesto nel prompt dell'utente, producendo prima il report testuale e poi il blocco JSON.",
+        "en": "Act as an AI recruiter. Your task is to SCRUPULOUSLY follow the instructions and the output format required in the user prompt, producing first the textual report and then the JSON block."
+    }
+    analyzer_system_prompt = system_prompts.get(language, system_prompts["it"])
 
     # Aumentiamo i token per contenere sia il testo che il JSON
     raw_response = get_llm_response(

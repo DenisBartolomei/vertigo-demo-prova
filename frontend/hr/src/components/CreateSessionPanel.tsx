@@ -109,7 +109,7 @@ export function CreateSessionPanel({
             <div className="upload-section">
               <div className="section-header">
                 <h4>Upload Massivo CV</h4>
-                <p>Carica centinaia di CV e processali automaticamente alle 19:00</p>
+                <p>Carica centinaia di CV e processali automaticamente</p>
               </div>
               
               <div className="form-group">
@@ -143,7 +143,7 @@ export function CreateSessionPanel({
               </button>
               
               <div className="info-box">
-                ℹ️ I CV verranno processati automaticamente alle 19:00 di ogni giorno
+                ℹ️ I CV vengono inviati immediatamente a OpenAI Batch API per l'elaborazione
               </div>
             </div>
           )}

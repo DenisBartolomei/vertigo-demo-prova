@@ -23,19 +23,26 @@ class GapAnalysisReport(BaseModel):
 
 GAP_ANALYZER_MODEL = AZURE_DEPLOYMENT_NAME #"gpt-4.1-2025-04-14"
 
-def identify_skill_gaps(report_text: str) -> GapAnalysisReport | None:
+def identify_skill_gaps(report_text: str, language: str = "it") -> GapAnalysisReport | None:
     """
     Estrae e raggruppa le carenze di skill da un report di analisi.
+    
+    Args:
+        report_text: Report consolidato da analizzare
+        language: Lingua del prompt ("it" o "en")
+    
+    Returns:
+        Oggetto GapAnalysisReport validato o None
     """
     print("1. Creazione del prompt per l'analisi dei gap...")
-    prompt = prompts_gap.create_gap_analysis_prompt(report_text)
+    prompt = prompts_gap.create_gap_analysis_prompt(report_text, language)
     
     print(f"2. Invio della richiesta al modello '{GAP_ANALYZER_MODEL}' per l'analisi dei gap...")
     
     structured_response_str = get_structured_llm_response(
         prompt=prompt,
         model=GAP_ANALYZER_MODEL,
-        system_prompt=prompts_gap.SYSTEM_PROMPT,
+        system_prompt=prompts_gap.SYSTEM_PROMPT[language],
         tool_name="save_skill_gaps",
         tool_schema=GapAnalysisReport.model_json_schema()
     )
@@ -56,16 +63,16 @@ def identify_skill_gaps(report_text: str) -> GapAnalysisReport | None:
     
 from interviewer.llm_service import get_structured_llm_response_async
 
-async def identify_skill_gaps_async(report_text: str) -> GapAnalysisReport | None:
+async def identify_skill_gaps_async(report_text: str, language: str = "it") -> GapAnalysisReport | None:
     """Versione ASINCRONA: Estrae e raggruppa le carenze di skill."""
     print("1. [Gap Analysis] Creazione del prompt...")
-    prompt = prompts_gap.create_gap_analysis_prompt(report_text)
+    prompt = prompts_gap.create_gap_analysis_prompt(report_text, language)
     
     print(f"2. [Gap Analysis] Invio richiesta a '{GAP_ANALYZER_MODEL}'...")
     structured_response_str = await get_structured_llm_response_async( # <-- MODIFICA: usa await
         prompt=prompt,
         model=GAP_ANALYZER_MODEL,
-        system_prompt=prompts_gap.SYSTEM_PROMPT,
+        system_prompt=prompts_gap.SYSTEM_PROMPT[language],
         tool_name="save_skill_gaps",
         tool_schema=GapAnalysisReport.model_json_schema()
     )

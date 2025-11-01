@@ -37,13 +37,15 @@ def run_cv_analysis_pipeline_tenant(session_id: str, tenant_id: str) -> bool:
             
         jd_text = position_document["job_description"]
         hr_needs = position_document.get("hr_special_needs", "")
+        language = position_document.get("language", "it")  # Get language, default to Italian
 
     except Exception as e:
         print(f"  - ERRORE durante il recupero della Job Description: {e}")
         return False
 
-    # 3. Esegui l'analisi unificata
-    analysis_result = analyze_cv(cv_text=cv_text, job_description_text=jd_text, hr_special_needs=hr_needs)
+    # 3. Esegui l'analisi unificata con lingua
+    print(f"  - Esecuzione analisi CV in lingua: {language}")
+    analysis_result = analyze_cv(cv_text=cv_text, job_description_text=jd_text, hr_special_needs=hr_needs, language=language)
 
     # 4. Estrai i dati dal dizionario
     report_text = analysis_result.get("report_text")

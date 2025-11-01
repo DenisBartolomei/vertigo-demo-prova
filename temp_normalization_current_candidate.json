@@ -8,15 +8,15 @@
         "esco_matches": [
           {
             "esco_title": "responsabile della pianificazione strategica",
-            "similarity": "0.8200"
+            "similarity": "0.8126"
           },
           {
             "esco_title": "responsabile strategico/responsabile strategica",
-            "similarity": "0.7683"
+            "similarity": "0.7539"
           },
           {
             "esco_title": "consulente di gestione aziendale",
-            "similarity": "0.7217"
+            "similarity": "0.7346"
           }
         ]
       },
@@ -25,16 +25,16 @@
         "duration_months": 19,
         "esco_matches": [
           {
-            "esco_title": "analista di sistemi TIC",
-            "similarity": "0.8991"
+            "esco_title": "responsabile dell’organizzazione aziendale",
+            "similarity": "0.5957"
           },
           {
-            "esco_title": "responsabile dell’analisi commerciale TIC",
-            "similarity": "0.8857"
+            "esco_title": "knowledge manager TIC",
+            "similarity": "0.5947"
           },
           {
             "esco_title": "consulente informatico",
-            "similarity": "0.8848"
+            "similarity": "0.5885"
           }
         ]
       }

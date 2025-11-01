@@ -1,4 +1,7 @@
-SYSTEM_PROMPT = """Sei un Career Coach AI e un formatore esperto. Il tuo obiettivo è analizzare una grande quantità di dati su un candidato e produrre un report di feedback finale che sia costruttivo, empatico e orientato all'azione. Devi trasformare un'analisi tecnica in un consiglio di carriera personalizzato e di valore."""
+SYSTEM_PROMPT = {
+    "it": """Sei un Career Coach AI e un formatore esperto. Il tuo obiettivo è analizzare una grande quantità di dati su un candidato e produrre un report di feedback finale che sia costruttivo, empatico e orientato all'azione. Devi trasformare un'analisi tecnica in un consiglio di carriera personalizzato e di valore.""",
+    "en": """You are an AI Career Coach and expert trainer. Your goal is to analyze a large amount of data about a candidate and produce a final feedback report that is constructive, empathetic and action-oriented. You must transform a technical analysis into personalized and valuable career advice."""
+}
 
 # La funzione e il prompt sono stati riscritti per gestire i report separati e la nuova struttura di output.
 
@@ -7,12 +10,14 @@ def create_final_report_prompt(
     case_evaluation_report: str,
     enriched_gaps_json_str: str,
     candidate_name: str,
-    target_role: str
+    target_role: str,
+    language: str = "it"
 ) -> str:
     """
     Assembla il prompt per generare il contenuto del report finale in PDF con la nuova struttura.
     """
-    return f"""
+    prompts = {
+        "it": f"""
 **Obiettivo**
 Analizza i dati forniti per creare un report di feedback completo e personalizzato per un candidato. Il report deve essere strutturato in sezioni distinte come descritto di seguito. Trattandosi di un report che riceverà il candidato, usa un linguaggio professionale e utilizza la seconda persona singolare (tu).
 
@@ -63,4 +68,63 @@ Rispondi esclusivamente con un oggetto JSON che rispetti la struttura richiesta.
 
 [ANALISI DEI GAP E CORSI SUGGERITI (JSON)]
 {enriched_gaps_json_str}
+""",
+        "en": f"""
+**Objective**
+Analyze the provided data to create a complete and personalized feedback report for a candidate. The report must be structured in distinct sections as described below. Since this is a report that the candidate will receive, use professional language and use the second person singular (you).
+
+**Available Data:**
+1.  **CV Analysis Report:** An evaluation based exclusively on the experiences and skills declared in the candidate's resume.
+2.  **Interview Evaluation Report:** An evaluation of the candidate's practical performance during a simulated case study.
+3.  **Gap Analysis and Suggested Courses:** A JSON file that lists the overall gaps and a list of potentially useful courses.
+4.  **Candidate Data:** Name (`{candidate_name}`) and Target Role (`{target_role}`).
+
+**Output Structure (must be a JSON):**
+- `candidate_name`: "{candidate_name}"
+- `target_role`: "{target_role}"
+- `profile_summary`: Synthetic profile of 2-3 lines that merges impressions from CV and interview.
+- `cv_analysis_outcome`: Paragraph that summarizes the outcome of the CV analysis only - 2-3 lines.
+- `interview_outcome`: Paragraph that summarizes the outcome of the performance in the interview only, highlighting what was confirmed or refuted compared to the CV - 2-3 lines.
+- `suggested_pathway`: Ordered and logical list of selected courses. If no course is relevant, the list must be empty.
+
+**Generation Instructions:**
+
+1.  **For the "profile_summary" section:**
+    *   Create a general and balanced synthesis of the candidate, taking into account both sources (CV and interview).
+2.  **For the "cv_analysis_outcome" section:**
+    *   Read the "CV Analysis Report" and summarize its key points in a paragraph. Focus on what the CV communicates in terms of potential, experience and declared skills.
+3.  **For the "interview_outcome" section:**
+    *   Read the "Interview Evaluation Report". Describe how you performed in the practical test. Highlight the skills you demonstrated effectively and those where difficulties emerged. Make a constructive comparison with what emerged from the CV.
+4.  **For the "suggested_pathway" section:**
+    *   Analyze the list of "suggested courses" in the JSON for each skill family.
+    *   Select up to 2 courses per gap family present in the GAP ANALYSIS AND SUGGESTED COURSES JSON that create the most logical and efficient path.
+    *   Sort courses sequentially (e.g. Beginner before Advanced).
+    *   For each course, briefly justify why it was chosen and which gap it addresses.
+    *   Put AT LEAST 3 courses in the report
+
+**Output Format**
+Reply exclusively with a JSON object that respects the required structure.
+
+---
+**INPUTS**
+
+[REPORT 1: CV ANALYSIS]
+{cv_analysis_report}
+
+---
+
+[REPORT 2: INTERVIEW EVALUATION]
+{case_evaluation_report}
+
+---
+
+[GAP ANALYSIS AND SUGGESTED COURSES (JSON)]
+{enriched_gaps_json_str}
 """
+    }
+    
+    if language not in ["it", "en"]:
+        print(f"  - [Pathway Architect Prompts] Invalid language '{language}', defaulting to Italian")
+        language = "it"
+    
+    return prompts[language]

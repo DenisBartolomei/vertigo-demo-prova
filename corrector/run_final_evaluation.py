@@ -61,11 +61,13 @@ def execute_case_evaluation(session_id: str, tenant_id: str = None) -> bool:
         icp_text = position_data.get("icp")
         all_cases_data = position_data.get("all_cases")
         evaluation_criteria_data = position_data.get("evaluation_criteria")
+        language = position_data.get("language", "it")  # Get language, default to Italian
 
         if not all([icp_text, all_cases_data, evaluation_criteria_data]):
             print("  - ERRORE: Dati di contesto (ICP, casi, criteri) mancanti nel documento della posizione su MongoDB.")
             return False
             
+        print(f"  - Language: {language}")
         all_cases_text = json.dumps(all_cases_data)
         evaluation_criteria_text = json.dumps(evaluation_criteria_data)
             
@@ -86,7 +88,7 @@ def execute_case_evaluation(session_id: str, tenant_id: str = None) -> bool:
         map_lines.append(f"- Step {step.get('id', 'N/A')} ({step.get('title', 'N/A')}): Progettato per testare '{skills}'.")
     case_map_text = "\n".join(map_lines)
 
-    # 4. Esegui la valutazione (logica invariata)
+    # 4. Esegui la valutazione con lingua
     print("  - Avvio della valutazione con l'LLM...")
     final_report = evaluate_candidate_performance(
         icp_text=icp_text,
@@ -94,7 +96,8 @@ def execute_case_evaluation(session_id: str, tenant_id: str = None) -> bool:
         all_cases_text=all_cases_text,
         evaluation_criteria_text=evaluation_criteria_text,
         seniority_level=seniority_level,
-        case_map_text=case_map_text
+        case_map_text=case_map_text,
+        language=language
     )
     
     # 5. Salva l'output nel DB (logica invariata)

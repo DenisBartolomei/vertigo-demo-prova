@@ -44,21 +44,34 @@ def create_final_feedback_content(
     case_evaluation_report: str, 
     enriched_gaps_json_str: str, 
     candidate_name: str, 
-    target_role: str
+    target_role: str,
+    language: str = "it"
 ) -> FinalReportContent | None:
     """
     Genera il contenuto testuale e strutturato per il report finale in PDF.
     Utilizza i report separati per creare sezioni distinte nel feedback.
+    
+    Args:
+        cv_analysis_report: Report di analisi del CV
+        case_evaluation_report: Report di valutazione del case
+        enriched_gaps_json_str: JSON con gap e corsi suggeriti
+        candidate_name: Nome del candidato
+        target_role: Ruolo target
+        language: Lingua del prompt ("it" o "en")
+    
+    Returns:
+        FinalReportContent validato o None
     """
     print("1. Creazione del prompt per il report di feedback finale (versione aggiornata)...")
     
-    # La chiamata al prompt ora passa i due report separatamente.
+    # La chiamata al prompt ora passa i due report separatamente e la lingua.
     prompt = prompts_pathway.create_final_report_prompt(
         cv_analysis_report, 
         case_evaluation_report, 
         enriched_gaps_json_str, 
         candidate_name, 
-        target_role
+        target_role,
+        language
     )
     
     print(f"2. Invio della richiesta al modello '{ARCHITECT_MODEL}' per creare il percorso...")
@@ -66,7 +79,7 @@ def create_final_feedback_content(
     structured_response_str = get_structured_llm_response(
         prompt=prompt,
         model=ARCHITECT_MODEL,
-        system_prompt=prompts_pathway.SYSTEM_PROMPT,
+        system_prompt=prompts_pathway.SYSTEM_PROMPT[language],
         tool_name="save_final_feedback_report",
         tool_schema=FinalReportContent.model_json_schema()
     )
@@ -91,7 +104,8 @@ async def create_final_feedback_content_async(
     case_evaluation_report: str, 
     enriched_gaps_json_str: str, 
     candidate_name: str, 
-    target_role: str
+    target_role: str,
+    language: str = "it"
 ) -> FinalReportContent | None:
     """Versione ASINCRONA: Genera il contenuto testuale e strutturato per il report finale."""
     print("1. [Report Finale] Creazione del prompt...")
@@ -100,14 +114,15 @@ async def create_final_feedback_content_async(
         case_evaluation_report, 
         enriched_gaps_json_str, 
         candidate_name, 
-        target_role
+        target_role,
+        language
     )
     
     print(f"2. [Report Finale] Invio richiesta a '{ARCHITECT_MODEL}' per creare il percorso...")
     structured_response_str = await get_structured_llm_response_async( # <-- MODIFICA: usa await
         prompt=prompt,
         model=ARCHITECT_MODEL,
-        system_prompt=prompts_pathway.SYSTEM_PROMPT,
+        system_prompt=prompts_pathway.SYSTEM_PROMPT[language],
         tool_name="save_final_feedback_report",
         tool_schema=FinalReportContent.model_json_schema()
     )

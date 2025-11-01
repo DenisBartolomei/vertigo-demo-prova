@@ -5,19 +5,18 @@ from interviewer.llm_service import get_structured_llm_response, AZURE_DEPLOYMEN
 from . import prompts_eval_criteria
 
 class EvaluationCriterion(BaseModel):
-    evaluation_criteria_1: str = Field(description="Primo criterio di valutazione per il requisito.")
-    evaluation_criteria_2: str = Field(description="Secondo criterio di valutazione per il requisito.")
+    evaluation_criteria_1: str = Field(description="Criterio di valutazione per il requisito.")
 
 class RequirementEvaluation(BaseModel):
     requirement: str = Field(description="Il requisito specifico estratto dall'ICP (es. 'Problem Solving', 'Conoscenza di Salesforce').")
-    criteria: EvaluationCriterion = Field(description="I due criteri di valutazione associati a questo requisito.")
+    criteria: EvaluationCriterion = Field(description="Il criterio di valutazione associato a questo requisito.")
 
 class EvaluationCriteriaCollection(BaseModel):
     evaluation_schema: List[RequirementEvaluation] = Field(description="Una lista completa dei requisiti e dei loro criteri di valutazione.")
 
 GENERATION_MODEL = AZURE_DEPLOYMENT_NAME
 
-def generate_evaluation_criteria(icp_text: str, cases_json_str: str, seniority_level: str, hr_special_needs: str = "") -> EvaluationCriteriaCollection | None:
+def generate_evaluation_criteria(icp_text: str, cases_json_str: str, seniority_level: str, hr_special_needs: str = "", language: str = "it") -> EvaluationCriteriaCollection | None:
     """
     Genera i criteri di valutazione strutturati per i requisiti dell'ICP, integrando gli HR needs.
     """
@@ -25,7 +24,7 @@ def generate_evaluation_criteria(icp_text: str, cases_json_str: str, seniority_l
 
     print("1. Creazione del prompt per la generazione dei criteri di valutazione...")
     prompt = prompts_eval_criteria.create_evaluation_criteria_prompt(
-        icp_text, cases_json_str, seniority_level, json.dumps(output_schema_example, indent=2), hr_special_needs
+        icp_text, cases_json_str, seniority_level, json.dumps(output_schema_example, indent=2), hr_special_needs, language
     )
 
     print(f"2. Invio della richiesta al modello '{GENERATION_MODEL}'...")
@@ -33,7 +32,7 @@ def generate_evaluation_criteria(icp_text: str, cases_json_str: str, seniority_l
     structured_response_str = get_structured_llm_response(
         prompt=prompt,
         model=GENERATION_MODEL,
-        system_prompt=prompts_eval_criteria.SYSTEM_PROMPT,
+        system_prompt=prompts_eval_criteria.SYSTEM_PROMPT[language],
         tool_name="save_evaluation_criteria",
         tool_schema=output_schema_example
     )

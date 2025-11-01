@@ -46,7 +46,7 @@ def run_feedback_pipeline(session_id: str) -> str | None:
         if not original_cv_report or not case_eval_report:
             print("Errore: Report di analisi CV o valutazione del caso mancanti.")
             return None
-        consolidated_report = create_consolidated_report(original_cv_report, case_eval_report)
+        consolidated_report = create_consolidated_report(original_cv_report, case_eval_report, language)
         if not consolidated_report: return None
         save_stage_output(session_id, "consolidated_report", consolidated_report)
     else:
@@ -54,7 +54,7 @@ def run_feedback_pipeline(session_id: str) -> str | None:
 
     # STEP 2: Identificazione Gap. Usa il report consolidato.
     print("\n[STEP 2/5] Identificazione gap...")
-    gap_analysis = identify_skill_gaps(consolidated_report)
+    gap_analysis = identify_skill_gaps(consolidated_report, language)
     if not gap_analysis: return None
     save_stage_output(session_id, "gap_analysis", gap_analysis.model_dump())
 
@@ -66,7 +66,8 @@ def run_feedback_pipeline(session_id: str) -> str | None:
     enriched_skill_families = []
     for family in gap_analysis.skill_families:
         family_name, gap_names = family.skill_family_gap, [g.skill_gap for g in family.skill_gaps]
-        query = get_llm_response(create_query_refinement_prompt(family_name, gap_names), "gpt-4o-mini", "Sei un esperto di formazione.", temperature=0.1)
+        system_prompt = {"it": "Sei un esperto di formazione.", "en": "You are a training expert."}
+        query = get_llm_response(create_query_refinement_prompt(family_name, gap_names, language), "gpt-4o-mini", system_prompt.get(language, system_prompt["it"]), temperature=0.1)
         
         retrieved_courses = rag_service.search(query, k=8)
 
@@ -94,14 +95,17 @@ def run_feedback_pipeline(session_id: str) -> str | None:
     role_title = target_role
     cv_text_for_market = stages_data.get("uploaded_cv_text")
 
+    language = "it"  # Default language
     try:
         if db is None:
             raise ConnectionError("Connessione a MongoDB non disponibile.")
         positions_collection = db["positions_data"]
-        pos_doc = positions_collection.find_one({"_id": target_role}, {"job_description": 1, "position_name": 1})
+        pos_doc = positions_collection.find_one({"_id": target_role}, {"job_description": 1, "position_name": 1, "language": 1})
         if pos_doc:
             jd_text = pos_doc.get("job_description", "") or ""
             role_title = pos_doc.get("position_name", role_title) or role_title
+            language = pos_doc.get("language", "it")  # Get language from position
+            print(f"[FEEDBACK] Language: {language}")
     except Exception as e:
         print(f"Avviso: impossibile recuperare la JD o il titolo dal DB per il benchmark: {e}")
 
@@ -136,7 +140,8 @@ def run_feedback_pipeline(session_id: str) -> str | None:
         case_evaluation_report=case_eval_report,
         enriched_gaps_json_str=enriched_gaps_content_str,
         candidate_name=candidate_name,
-        target_role=target_role
+        target_role=target_role,
+        language=language
     )
     if not final_report_content: return None
 

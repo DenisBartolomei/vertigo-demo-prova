@@ -26,7 +26,7 @@ class CaseCollection(BaseModel):
 
 FINAL_MODEL = AZURE_DEPLOYMENT_NAME
 
-def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, reasoning_steps: int, hr_special_needs: str = "") -> CaseCollection | None:
+def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, reasoning_steps: int, hr_special_needs: str = "", language: str = "it") -> CaseCollection | None:
     """
     Genera una collezione di 5 casi di studio strutturati in formato JSON.
     Integra le Indicazioni HR nella generazione.
@@ -46,7 +46,7 @@ def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, senior
 
     print("1. Creazione del prompt finale con esempio JSON...")
     final_prompt = prompts_final.create_final_case_prompt(
-        icp_text, guide_text, kb_summary, seniority_level, json_example_str, hr_special_needs, reasoning_steps
+        icp_text, guide_text, kb_summary, seniority_level, json_example_str, hr_special_needs, reasoning_steps, language
     )
 
     print(f"2. Invio della richiesta al modello '{FINAL_MODEL}' per la generazione strutturata...")
@@ -54,7 +54,7 @@ def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, senior
     tool_call_args = get_structured_llm_response(
         prompt=final_prompt,
         model=FINAL_MODEL,
-        system_prompt=prompts_final.SYSTEM_PROMPT,
+        system_prompt=prompts_final.SYSTEM_PROMPT[language],
         tool_name="save_generated_cases",
         tool_schema=CaseCollection.model_json_schema()
     )

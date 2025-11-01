@@ -140,14 +140,31 @@ export function Positions() {
 
   function initializeEditedCriteria(positionId: string, criteria: any) {
     if (!editedCriteria[positionId] && criteria?.evaluation_schema) {
+      // Clone and migrate old format if needed
+      const clonedSchema = JSON.parse(JSON.stringify(criteria.evaluation_schema))
+      
+      // Migrate old format (evaluation_criteria) to new format (evaluation_criteria_1)
+      const migratedSchema = clonedSchema.map((req: any) => {
+        if (req.criteria && req.criteria.evaluation_criteria && !req.criteria.evaluation_criteria_1) {
+          // Old format detected - migrate to new format
+          return {
+            ...req,
+            criteria: {
+              evaluation_criteria_1: req.criteria.evaluation_criteria
+            }
+          }
+        }
+        return req
+      })
+      
       setEditedCriteria(prev => ({
         ...prev,
-        [positionId]: JSON.parse(JSON.stringify(criteria.evaluation_schema))
+        [positionId]: migratedSchema
       }))
     }
   }
 
-  function updateCriterion(positionId: string, reqIndex: number, field: 'evaluation_criteria_1' | 'evaluation_criteria_2', value: string) {
+  function updateCriterion(positionId: string, reqIndex: number, field: 'evaluation_criteria_1', value: string) {
     setEditedCriteria(prev => {
       const updated = { ...prev }
       if (!updated[positionId]) {
@@ -736,55 +753,29 @@ export function Positions() {
                                           }}>
                                             📌 {req.requirement}
                                           </div>
-                                          <div style={{ display: 'grid', gap: '12px' }}>
-                                            <div>
-                                              <label style={{ 
-                                                display: 'block', 
-                                                fontSize: '13px', 
-                                                fontWeight: '500', 
-                                                color: 'var(--text-secondary)',
-                                                marginBottom: '6px' 
-                                              }}>
-                                                Criterio di Valutazione 1
-                                              </label>
-                                              <textarea
-                                                value={editedCriteria[p._id]?.[idx]?.criteria?.evaluation_criteria_1 || req.criteria.evaluation_criteria_1}
-                                                onChange={(e) => updateCriterion(p._id, idx, 'evaluation_criteria_1', e.target.value)}
-                                                rows={3}
-                                                style={{ 
-                                                  width: '100%', 
-                                                  padding: '10px',
-                                                  fontSize: '14px',
-                                                  borderRadius: '6px',
-                                                  border: '1px solid rgba(139, 92, 246, 0.3)',
-                                                  background: 'white'
-                                                }}
-                                              />
-                                            </div>
-                                            <div>
-                                              <label style={{ 
-                                                display: 'block', 
-                                                fontSize: '13px', 
-                                                fontWeight: '500', 
-                                                color: 'var(--text-secondary)',
-                                                marginBottom: '6px' 
-                                              }}>
-                                                Criterio di Valutazione 2
-                                              </label>
-                                              <textarea
-                                                value={editedCriteria[p._id]?.[idx]?.criteria?.evaluation_criteria_2 || req.criteria.evaluation_criteria_2}
-                                                onChange={(e) => updateCriterion(p._id, idx, 'evaluation_criteria_2', e.target.value)}
-                                                rows={3}
-                                                style={{ 
-                                                  width: '100%', 
-                                                  padding: '10px',
-                                                  fontSize: '14px',
-                                                  borderRadius: '6px',
-                                                  border: '1px solid rgba(139, 92, 246, 0.3)',
-                                                  background: 'white'
-                                                }}
-                                              />
-                                            </div>
+                                          <div>
+                                            <label style={{ 
+                                              display: 'block', 
+                                              fontSize: '13px', 
+                                              fontWeight: '500', 
+                                              color: 'var(--text-secondary)',
+                                              marginBottom: '6px' 
+                                            }}>
+                                              Criterio di Valutazione
+                                            </label>
+                                            <textarea
+                                              value={editedCriteria[p._id]?.[idx]?.criteria?.evaluation_criteria_1 || req.criteria?.evaluation_criteria_1 || req.criteria?.evaluation_criteria || ''}
+                                              onChange={(e) => updateCriterion(p._id, idx, 'evaluation_criteria_1', e.target.value)}
+                                              rows={4}
+                                              style={{ 
+                                                width: '100%', 
+                                                padding: '10px',
+                                                fontSize: '14px',
+                                                borderRadius: '6px',
+                                                border: '1px solid rgba(139, 92, 246, 0.3)',
+                                                background: 'white'
+                                              }}
+                                            />
                                           </div>
                                         </div>
                                       ))}

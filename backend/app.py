@@ -124,7 +124,6 @@ class MessagePayload(BaseModel):
 
 class EvaluationCriterion(BaseModel):
     evaluation_criteria_1: str
-    evaluation_criteria_2: str
 
 
 class RequirementEvaluation(BaseModel):
@@ -460,10 +459,18 @@ def upsert_position(payload: PositionPayload, auth_data=Depends(hr_auth)):
         if not position_id:
             position_id = f"position-{uuid.uuid4().hex[:8]}"
     
-    ok = create_or_update_position_tenant(position_id, payload.model_dump(exclude={"position_id"}), collections["positions"])
+    # Detect language from job description
+    from services.language_detector import detect_language
+    detected_language = detect_language(payload.job_description)
+    
+    # Add language to payload
+    position_data = payload.model_dump(exclude={"position_id"})
+    position_data["language"] = detected_language
+    
+    ok = create_or_update_position_tenant(position_id, position_data, collections["positions"])
     if not ok:
         raise HTTPException(status_code=500, detail="Failed to upsert position")
-    return {"ok": True, "position_id": position_id}
+    return {"ok": True, "position_id": position_id, "language": detected_language}
 
 
 @app.get("/positions")
@@ -526,8 +533,7 @@ def update_evaluation_criteria(position_id: str, payload: EvaluationCriteriaUpda
                 {
                     "requirement": req.requirement,
                     "criteria": {
-                        "evaluation_criteria_1": req.criteria.evaluation_criteria_1,
-                        "evaluation_criteria_2": req.criteria.evaluation_criteria_2
+                        "evaluation_criteria_1": req.criteria.evaluation_criteria_1
                     }
                 }
                 for req in payload.evaluation_schema
@@ -2089,10 +2095,10 @@ async def list_batches(auth_data: dict = Depends(hr_auth)):
         print(f"❌ Traceback completo: {traceback.format_exc()}")
         return {"batches": [], "error": str(e)}
 
-# Startup events per scheduler e batch processor
+# Startup events per batch processor
 @app.on_event("startup")
 async def startup_event():
-    """Inizializzazione app con scheduler, batch processor e servizi pesanti"""
+    """Inizializzazione app con batch processor e servizi pesanti"""
     global rag_service_instance, recruitment_pipeline_instance, cv_normalizer_instance
     
     try:
@@ -2109,13 +2115,6 @@ async def startup_event():
         cv_normalizer_instance = CVNormalizer()
         print("✅ [STARTUP] CVNormalizer pronto.")
         
-        # Avvia scheduler per batch giornalieri
-        from services.scheduler_service import get_scheduler
-        scheduler = get_scheduler()
-        scheduler.schedule_daily_cv_batch(hour="19:00")
-        scheduler.start()
-        print("✅ Batch scheduler inizializzato (ore 19:00)")
-        
         # Avvia batch processor per monitoring automatico
         from services.batch_processor import get_processor
         processor = get_processor()
@@ -2131,16 +2130,12 @@ async def startup_event():
 async def shutdown_event():
     """Cleanup al shutdown"""
     try:
-        from services.scheduler_service import get_scheduler
         from services.batch_processor import get_processor
-        
-        scheduler = get_scheduler()
-        scheduler.stop()
         
         processor = get_processor()
         processor.stop_monitoring()
         
-        print("✅ Batch services fermati")
+        print("✅ Batch processor fermato")
     except Exception as e:
         print(f"⚠️ Errore durante shutdown: {e}")
 
