@@ -25,8 +25,8 @@ gcloud run deploy vertigo-ai-backend \
     --platform managed \
     --region ${REGION} \
     --allow-unauthenticated \
-    --memory 2Gi \
-    --cpu 1 \
+    --memory 4Gi \
+    --cpu 2 \
     --timeout 300 \
     --max-instances 10 \
     --min-instances 0 \
