@@ -11,19 +11,22 @@ import openai
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from dateutil.parser import parse as universal_date_parser
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import util
 from tqdm import tqdm
 from interviewer.llm_service import get_llm_response
 
 from recruitment_suite.config import settings
+from recruitment_suite.app.core.shared_embedding_model import get_shared_embedding_model
 
 class CVNormalizer:
     def __init__(self):
         print("Inizializzazione del Normalizzatore CV...")
         # Non si valida più la chiave localmente: viene gestita da llm_service
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL_NAME, device=self.device)
-        print(f"Normalizzazione CV: Modello '{settings.EMBEDDING_MODEL_NAME}' caricato su {self.device.upper()}.")
+        # Usa il modello condiviso invece di creare una nuova istanza
+        # Nota: Il primo chiamante determina il device del modello condiviso
+        self.embedding_model = get_shared_embedding_model(device=self.device)
+        print(f"Normalizzazione CV: Modello '{settings.EMBEDDING_MODEL_NAME}' disponibile (device richiesto: {self.device.upper()}).")
 
         self._prepare_esco_data()
 

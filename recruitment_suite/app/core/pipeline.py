@@ -6,11 +6,12 @@ import time
 import math
 import openai
 from pydantic import ValidationError
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import util
 from tqdm import tqdm
 from interviewer.llm_service import get_structured_llm_response
 from recruitment_suite.app.models.schemas import EvaluationResponse
 from recruitment_suite.config import settings
+from recruitment_suite.app.core.shared_embedding_model import get_shared_embedding_model
 import psutil  # <-- Aggiungi questo
 import os      # <-- Aggiungi questo
 
@@ -25,7 +26,8 @@ class RecruitmentPipeline:
     def __init__(self):
         print("Inizializzazione della Recruitment Pipeline...")
         self.offer_embedding = None
-        self.embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL_NAME)
+        # Usa il modello condiviso invece di creare una nuova istanza
+        self.embedding_model = get_shared_embedding_model(device="cpu")
         
     def _calculate_affinity_score(self, candidate_exp_text: str) -> float:
         if self.offer_embedding is None or not candidate_exp_text: return 0.0
