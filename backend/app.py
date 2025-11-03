@@ -12,6 +12,9 @@ import json
 import traceback
 from bson import ObjectId
 
+# SEMAFORO: Garantisce che solo 1 feedback venga generato alla volta (coda sequenziale)
+FEEDBACK_GENERATION_LOCK = asyncio.Semaphore(1)
+
 # Reuse existing services and pipelines
 from services.data_manager import (
     create_or_update_position,
@@ -918,19 +921,30 @@ async def run_and_update_feedback_status(session_id: str, collection_name: str):
     """
     Funzione wrapper per eseguire il pipeline in background e aggiornare lo stato 
     della sessione in modo sicuro (successo o fallimento).
+    
+    Utilizza un semaforo per garantire che solo un feedback venga generato alla volta,
+    creando una coda sequenziale automatica per tutte le richieste.
     """
-    try:
-        pdf_path = await run_feedback_pipeline_tenant_async(session_id, collection_name)
-            
-        if pdf_path:
-            save_stage_output_tenant(session_id, "feedback_pdf_path", pdf_path, collection_name)
-            save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_READY"], collection_name)
-            print(f"✅ Feedback PDF generato con successo per sessione {session_id}")
-        else:
-            raise ValueError("Il pipeline non ha prodotto un percorso PDF valido.")
-    except Exception as e:
-        print(f"❌ Errore nella generazione del feedback per sessione {session_id}: {e}")
-        save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_GENERATION_FAILED"], collection_name)
+    # Acquisisce il lock: se occupato, aspetta che il feedback precedente finisca
+    async with FEEDBACK_GENERATION_LOCK:
+        print(f"🔒 [LOCK ACQUIRED] Inizio generazione feedback per sessione {session_id}")
+        
+        try:
+            pdf_path = await run_feedback_pipeline_tenant_async(session_id, collection_name)
+                
+            if pdf_path:
+                save_stage_output_tenant(session_id, "feedback_pdf_path", pdf_path, collection_name)
+                save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_READY"], collection_name)
+                print(f"✅ Feedback PDF generato con successo per sessione {session_id}")
+            else:
+                raise ValueError("Il pipeline non ha prodotto un percorso PDF valido.")
+        except Exception as e:
+            print(f"❌ [ERRORE] Generazione feedback fallita per sessione {session_id}: {e}")
+            traceback.print_exc()
+            save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_GENERATION_FAILED"], collection_name)
+            save_stage_output_tenant(session_id, "feedback_error", str(e), collection_name)
+        finally:
+            print(f"🔓 [LOCK RELEASED] Fine generazione feedback per sessione {session_id}")
 
 # Sessions (HR)
 @app.post("/sessions")
@@ -1015,13 +1029,16 @@ async def generate_feedback(session_id: str, background_tasks: BackgroundTasks, 
         raise HTTPException(status_code=400, detail="Session not ready for feedback generation")
     
     # Check if feedback is already generated
-    #if stages.get("feedback_pdf_path"):
-    #    return {"ok": True, "message": "Feedback already generated", "pdf_path": stages.get("feedback_pdf_path")}
+    if stages.get("feedback_pdf_path"):
+        return {"ok": True, "message": "Feedback already generated", "pdf_path": stages.get("feedback_pdf_path")}
     
-    # Check if already in progress
-    #current_status = stages.get("status")
-    #if current_status == SESSION_STATUS["FEEDBACK_GENERATION_IN_PROGRESS"]:
-    #    raise HTTPException(status_code=409, detail="Feedback generation is already in progress for this session.")
+    # Check if already in progress (previene duplicati per la stessa sessione)
+    current_status = stages.get("status")
+    if current_status == SESSION_STATUS["FEEDBACK_GENERATION_IN_PROGRESS"]:
+        raise HTTPException(
+            status_code=409, 
+            detail="Feedback generation is already in progress for this session. Please wait for it to complete."
+        )
 
     # 2. Imposta lo stato su "in corso" per dare un feedback immediato all'UI
     save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_GENERATION_IN_PROGRESS"], collection_name)
@@ -1770,6 +1787,71 @@ def fix_cheating_scores_admin(auth_data=Depends(hr_auth)):
             return {"message": "Failed to normalize cheating scores", "status": "error"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fixing scores: {str(e)}")
+
+
+@app.post("/admin/recompute-course-embeddings", dependencies=[Depends(hr_auth)])
+def recompute_course_embeddings_admin(auth_data=Depends(hr_auth)):
+    """
+    Ricalcola gli embeddings per tutti i corsi e reinizializza il RAG Service.
+    Da utilizzare quando si aggiungono o modificano corsi.
+    (Admin only)
+    """
+    # Check if user is admin
+    if auth_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        # Import necessary modules
+        from sentence_transformers import SentenceTransformer
+        from services.data_manager import db
+        
+        EMBEDDING_MODEL_NAME = 'all-MiniLM-L6-v2'
+        COURSES_COLLECTION_NAME = "courses"
+        
+        if db is None:
+            raise HTTPException(status_code=500, detail="Database connection not available")
+        
+        collection = db[COURSES_COLLECTION_NAME]
+        courses = list(collection.find({}))
+        
+        if not courses:
+            raise HTTPException(status_code=404, detail="No courses found in database")
+        
+        # Load model and compute embeddings
+        model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+        
+        updated_count = 0
+        for course in courses:
+            course_id = course.get('_id')
+            description = f"{course.get('Course Name', '')}. {course.get('Description', '')}"
+            
+            # Calculate embedding
+            embedding = model.encode(description, convert_to_tensor=False)
+            
+            # Save to database
+            collection.update_one(
+                {"_id": course_id},
+                {"$set": {"embedding": embedding.tolist()}}
+            )
+            updated_count += 1
+        
+        # Reinitialize RAG service with new embeddings
+        global rag_service_instance
+        print("🔄 Reinizializzazione RAG Service con nuovi embeddings...")
+        rag_service_instance = RAGService()
+        print("✅ RAG Service reinizializzato con successo")
+        
+        return {
+            "message": f"Embeddings recomputed successfully for {updated_count} courses",
+            "status": "success",
+            "courses_updated": updated_count
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error recomputing embeddings: {str(e)}")
+
 
 # Evaluation and feedback (HR)
 @app.post("/sessions/{session_id}/evaluate")

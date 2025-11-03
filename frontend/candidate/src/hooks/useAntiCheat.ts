@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 
 interface CheatingEvent {
-  type: 'tab_switch' | 'copy_paste' | 'right_click' | 'devtools' | 'keyboard_shortcut' | 'focus_loss' | 'window_resize'
+  type: 'tab_switch' | 'copy_paste' | 'right_click' | 'devtools' | 'keyboard_shortcut' | 'focus_loss' | 'window_resize' | 'screenshot_attempt' | 'fullscreen_exit' | 'print_attempt'
   timestamp: string
   details?: string
   severity: 'low' | 'medium' | 'high'
@@ -14,7 +14,12 @@ interface AntiCheatConfig {
   maxWindowResizes: number
   warningThreshold: number
   sessionId: string
+  enforceFullscreen?: boolean
+  terminateOnFullscreenExit?: boolean
+  maxFullscreenExits?: number
   onCheatingDetected: (event: CheatingEvent) => void
+  onInterviewTerminated?: () => void
+  onFullscreenExit?: () => void
 }
 
 export function useAntiCheat(config: AntiCheatConfig) {
@@ -29,6 +34,9 @@ export function useAntiCheat(config: AntiCheatConfig) {
   const windowResizeCount = useRef(0)
   const lastFocusTime = useRef(Date.now())
   const isVisible = useRef(true)
+  const fullscreenExitCount = useRef(0)
+  const isFullscreen = useRef(false)
+  const screenshotAttemptCount = useRef(0)
 
   const addEvent = useCallback((event: CheatingEvent) => {
     setEvents(prev => [...prev, event])
@@ -168,6 +176,122 @@ export function useAntiCheat(config: AntiCheatConfig) {
     }
   }, [addEvent])
 
+  // NUOVO: Blocco screenshot
+  const handleScreenshotAttempt = useCallback((e: KeyboardEvent) => {
+    const isCtrlOrCmd = e.ctrlKey || e.metaKey
+    const isShift = e.shiftKey
+    
+    // Blocca tutte le scorciatoie screenshot comuni
+    const screenshotShortcuts = [
+      // Windows
+      { key: 'PrintScreen', name: 'PrtScn' },
+      { key: 'Print', name: 'Print' },
+      // Mac
+      { key: '3', shift: true, cmd: true, name: 'Cmd+Shift+3' },
+      { key: '4', shift: true, cmd: true, name: 'Cmd+Shift+4' },
+      { key: '5', shift: true, cmd: true, name: 'Cmd+Shift+5' },
+      // Print
+      { key: 'p', ctrl: true, name: 'Ctrl+P' }
+    ]
+
+    for (const shortcut of screenshotShortcuts) {
+      const keyMatch = e.key === shortcut.key
+      const shiftMatch = !shortcut.shift || isShift
+      const cmdMatch = !shortcut.cmd || isCtrlOrCmd
+      const ctrlMatch = !shortcut.ctrl || isCtrlOrCmd
+      
+      if (keyMatch && shiftMatch && cmdMatch && ctrlMatch) {
+        e.preventDefault()
+        e.stopPropagation()
+        screenshotAttemptCount.current++
+        
+        const event: CheatingEvent = {
+          type: 'screenshot_attempt',
+          timestamp: new Date().toISOString(),
+          details: `Screenshot attempt blocked: ${shortcut.name} (attempt #${screenshotAttemptCount.current})`,
+          severity: 'high'
+        }
+        addEvent(event)
+        
+        // Mostra alert visibile
+        alert('⚠️ ATTENZIONE: Il tentativo di screenshot è stato rilevato e registrato nel report di valutazione.')
+        return true
+      }
+    }
+    return false
+  }, [addEvent])
+
+  // NUOVO: Fullscreen enforcement
+  const requestFullscreen = useCallback(() => {
+    const elem = document.documentElement
+    if (elem.requestFullscreen) {
+      elem.requestFullscreen().catch(err => {
+        console.error('Fullscreen request failed:', err)
+      })
+    }
+  }, [])
+
+  const handleFullscreenChange = useCallback(() => {
+    const isNowFullscreen = !!document.fullscreenElement
+    
+    if (isFullscreen.current && !isNowFullscreen) {
+      // L'utente è uscito dal fullscreen
+      fullscreenExitCount.current++
+      
+      const event: CheatingEvent = {
+        type: 'fullscreen_exit',
+        timestamp: new Date().toISOString(),
+        details: `Fullscreen exit #${fullscreenExitCount.current}`,
+        severity: 'high'
+      }
+      addEvent(event)
+      
+      // Opzione 1: TERMINA IL COLLOQUIO
+      if (config.terminateOnFullscreenExit) {
+        if (config.onInterviewTerminated) {
+          config.onInterviewTerminated()
+        }
+        return
+      }
+      
+      // Opzione 2: Modalità moderata - mostra UI per rientrare
+      if (config.enforceFullscreen) {
+        const maxExits = config.maxFullscreenExits || 2
+        if (fullscreenExitCount.current > maxExits) {
+          if (config.onInterviewTerminated) {
+            config.onInterviewTerminated()
+          }
+          return
+        }
+        
+        // Notifica l'UI che l'utente è uscito dal fullscreen
+        if (config.onFullscreenExit) {
+          config.onFullscreenExit()
+        }
+      }
+    }
+    
+    isFullscreen.current = isNowFullscreen
+  }, [addEvent, config])
+
+  // NUOVO: Blocco tasto ESC in fullscreen
+  const handleEscapeKey = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape' && isFullscreen.current && config.enforceFullscreen) {
+      e.preventDefault()
+      e.stopPropagation()
+      
+      const event: CheatingEvent = {
+        type: 'keyboard_shortcut',
+        timestamp: new Date().toISOString(),
+        details: 'Blocked ESC key in fullscreen mode',
+        severity: 'medium'
+      }
+      addEvent(event)
+      
+      return false
+    }
+  }, [addEvent, config.enforceFullscreen])
+
   const startMonitoring = useCallback(() => {
     setIsMonitoring(true)
     
@@ -179,6 +303,11 @@ export function useAntiCheat(config: AntiCheatConfig) {
     document.addEventListener('cut', handleCopyPaste)
     document.addEventListener('keydown', handleKeyboardShortcuts)
     
+    // NUOVO: Screenshot e fullscreen protection
+    document.addEventListener('keydown', handleScreenshotAttempt, true) // capture phase
+    document.addEventListener('keydown', handleEscapeKey, true)
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    
     // Window events
     window.addEventListener('blur', handleWindowBlur)
     window.addEventListener('focus', handleWindowFocus)
@@ -187,6 +316,13 @@ export function useAntiCheat(config: AntiCheatConfig) {
     // Dev tools detection interval
     const devToolsInterval = setInterval(detectDevTools, 1000)
     
+    // NUOVO: Se enforceFullscreen è attivo, richiedi fullscreen all'inizio
+    if (config.enforceFullscreen) {
+      setTimeout(() => {
+        requestFullscreen()
+      }, 500)
+    }
+    
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       document.removeEventListener('contextmenu', handleContextMenu)
@@ -194,6 +330,11 @@ export function useAntiCheat(config: AntiCheatConfig) {
       document.removeEventListener('paste', handleCopyPaste)
       document.removeEventListener('cut', handleCopyPaste)
       document.removeEventListener('keydown', handleKeyboardShortcuts)
+      
+      // NUOVO: Cleanup screenshot e fullscreen
+      document.removeEventListener('keydown', handleScreenshotAttempt, true)
+      document.removeEventListener('keydown', handleEscapeKey, true)
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
       
       window.removeEventListener('blur', handleWindowBlur)
       window.removeEventListener('focus', handleWindowFocus)
@@ -209,7 +350,12 @@ export function useAntiCheat(config: AntiCheatConfig) {
     handleWindowBlur,
     handleWindowFocus,
     handleResize,
-    detectDevTools
+    detectDevTools,
+    handleScreenshotAttempt,
+    handleEscapeKey,
+    handleFullscreenChange,
+    requestFullscreen,
+    config.enforceFullscreen
   ])
 
   const stopMonitoring = useCallback(() => {
@@ -264,6 +410,7 @@ export function useAntiCheat(config: AntiCheatConfig) {
     stopMonitoring,
     resetCounters,
     getCheatingScore,
-    getCheatingSummary
+    getCheatingSummary,
+    reenterFullscreen: requestFullscreen
   }
 }

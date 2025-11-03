@@ -145,6 +145,8 @@ export function Interview() {
   const [isCompleted, setIsCompleted] = useState(false)
   const [showIntro, setShowIntro] = useState(true)
   const [termsAccepted, setTermsAccepted] = useState(false)
+  const [showFullscreenWarning, setShowFullscreenWarning] = useState(false)
+  const [showFullscreenReturnPrompt, setShowFullscreenReturnPrompt] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Speech recognition hook
@@ -158,7 +160,7 @@ export function Interview() {
     resetTranscript
   } = useSpeechRecognition('it-IT')
 
-  // Anti-cheat system
+  // Anti-cheat system con protezione fullscreen e screenshot (MODALITÀ MODERATA)
   const antiCheat = useAntiCheat({
     maxTabSwitches: 3,
     maxCopyPasteAttempts: 2,
@@ -166,6 +168,9 @@ export function Interview() {
     maxWindowResizes: 10,
     warningThreshold: 3,
     sessionId: token || '',
+    enforceFullscreen: true,              // ✅ Fullscreen obbligatorio
+    terminateOnFullscreenExit: false,     // ✅ Modalità moderata: warning invece di terminare
+    maxFullscreenExits: 2,                // ✅ Massimo 2 uscite prima di terminare
     onCheatingDetected: async (event) => {
       // Send cheating event to backend
       try {
@@ -177,6 +182,22 @@ export function Interview() {
       } catch (err) {
         console.error('Failed to report security event:', err)
       }
+    },
+    onInterviewTerminated: () => {
+      // Chiamato quando il colloquio viene terminato per violazioni di sicurezza
+      setError('⛔ COLLOQUIO TERMINATO: Hai superato il numero massimo di violazioni delle regole di sicurezza.')
+      setIsCompleted(true)
+      setIsStarted(false)
+      // Notifica il backend della terminazione
+      fetch(`${API_BASE}/interviews/${token}/terminated`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'security_violations' })
+      }).catch(err => console.error('Failed to report termination:', err))
+    },
+    onFullscreenExit: () => {
+      // Mostra il prompt per rientrare in fullscreen
+      setShowFullscreenReturnPrompt(true)
     }
   })
 
@@ -305,9 +326,17 @@ export function Interview() {
 
   async function startInterview() {
     if (!token || loading) return // Prevent multiple starts
+    
+    // Mostra prima il popup di avviso fullscreen
+    setShowFullscreenWarning(true)
+  }
+
+  async function handleFullscreenWarningAccept() {
+    setShowFullscreenWarning(false)
     setLoading(true)
+    
     try {
-      // Start anti-cheat monitoring
+      // Start anti-cheat monitoring (questo richiederà automaticamente il fullscreen)
       antiCheat.startMonitoring()
       
       const resp = await fetch(`${API_BASE}/interviews/${token}/start`, { method: 'POST' })
@@ -346,6 +375,11 @@ export function Interview() {
     } finally {
       setLoading(false)
     }
+  }
+
+  function handleReenterFullscreen() {
+    setShowFullscreenReturnPrompt(false)
+    antiCheat.reenterFullscreen()
   }
 
   const handleAcceptTerms = () => {
@@ -401,6 +435,142 @@ export function Interview() {
 
   return (
     <div className="chat-container">
+      {/* Popup di avviso fullscreen prima dell'inizio */}
+      {showFullscreenWarning && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.85)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '600px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div style={{ fontSize: '64px', marginBottom: '16px' }}>🔒</div>
+              <h2 style={{ fontSize: '24px', fontWeight: '600', color: '#1a1a1a', marginBottom: '12px' }}>
+                Modalità Schermo Intero Obbligatoria
+              </h2>
+            </div>
+            <div style={{ fontSize: '16px', lineHeight: '1.6', color: '#4a4a4a', marginBottom: '24px' }}>
+              <p style={{ marginBottom: '16px' }}>
+                <strong>⚠️ IMPORTANTE:</strong> Quando cliccherai "Ho capito", il colloquio inizierà in modalità schermo intero.
+              </p>
+              <div style={{ backgroundColor: '#fff3cd', border: '1px solid #ffc107', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+                <p style={{ margin: 0, color: '#856404' }}>
+                  <strong>🚨 Regole di sicurezza:</strong>
+                </p>
+                <ul style={{ marginTop: '12px', paddingLeft: '20px', color: '#856404' }}>
+                  <li>Devi rimanere in modalità schermo intero per tutta la durata del colloquio</li>
+                  <li>Uscire dallo schermo intero verrà registrato come tentativo di violazione</li>
+                  <li>Sono consentite <strong>massimo 2 uscite</strong> accidentali</li>
+                  <li>Oltre il limite, il colloquio verrà <strong>automaticamente terminato</strong></li>
+                </ul>
+              </div>
+              <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>
+                📌 Per uscire dallo schermo intero temporaneamente, ti verrà mostrato un pulsante per rientrare.
+              </p>
+            </div>
+            <button
+              onClick={handleFullscreenWarningAccept}
+              style={{
+                width: '100%',
+                padding: '16px',
+                fontSize: '18px',
+                fontWeight: '600',
+                color: 'white',
+                backgroundColor: '#7c3aed',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#6d28d9'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#7c3aed'}
+            >
+              ✅ Ho capito, avvia il colloquio
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Prompt per rientrare in fullscreen */}
+      {showFullscreenReturnPrompt && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(220, 38, 38, 0.95)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '500px',
+            textAlign: 'center',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+          }}>
+            <div style={{ fontSize: '64px', marginBottom: '16px' }}>⚠️</div>
+            <h2 style={{ fontSize: '28px', fontWeight: '700', color: '#dc2626', marginBottom: '16px' }}>
+              ATTENZIONE!
+            </h2>
+            <p style={{ fontSize: '18px', lineHeight: '1.6', color: '#4a4a4a', marginBottom: '24px' }}>
+              Sei uscito dalla modalità schermo intero. Questa azione è stata <strong>registrata</strong> nel tuo report di valutazione.
+            </p>
+            <p style={{ fontSize: '16px', color: '#666', marginBottom: '8px' }}>
+              Uscite rimanenti: <strong style={{ color: '#dc2626', fontSize: '20px' }}>
+                {2 - (antiCheat.getCheatingSummary().highSeverityEvents || 0)}
+              </strong>
+            </p>
+            <p style={{ fontSize: '14px', color: '#666', marginBottom: '32px' }}>
+              Clicca il pulsante per tornare alla sessione
+            </p>
+            <button
+              onClick={handleReenterFullscreen}
+              style={{
+                width: '100%',
+                padding: '20px',
+                fontSize: '20px',
+                fontWeight: '700',
+                color: 'white',
+                backgroundColor: '#16a34a',
+                border: 'none',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                boxShadow: '0 4px 16px rgba(22, 163, 74, 0.4)',
+                transition: 'all 0.2s'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = '#15803d'
+                e.currentTarget.style.transform = 'scale(1.02)'
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = '#16a34a'
+                e.currentTarget.style.transform = 'scale(1)'
+              }}
+            >
+              🔒 Ritorna alla Sessione a Tutto Schermo
+            </button>
+          </div>
+        </div>
+      )}
+      
       <AntiCheatWarning 
         warningCount={antiCheat.warnings}
         isBlocked={antiCheat.isBlocked}

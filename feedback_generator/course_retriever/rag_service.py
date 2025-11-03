@@ -53,16 +53,39 @@ class RAGService:
             return []
 
     def _build_index(self):
-        """Costruisce l'indice FAISS in memoria. Questa funzione non cambia."""
+        """Costruisce l'indice FAISS caricando embeddings pre-calcolati da MongoDB."""
         if not self.courses_data:
             return None, None
-        descriptions = [f"{course.get('Course Name', '')}. {course.get('Description', '')}" for course in self.courses_data]
-        print(f"  - Creazione embeddings per {len(descriptions)} corsi...")
-        embeddings = self.model.encode(descriptions, convert_to_tensor=False)
+        
+        # Verifica se gli embeddings sono già stati pre-calcolati
+        embeddings_list = []
+        courses_with_embeddings = []
+        
+        for course in self.courses_data:
+            if 'embedding' in course and course['embedding']:
+                embeddings_list.append(course['embedding'])
+                courses_with_embeddings.append(course)
+        
+        if embeddings_list:
+            # ✅ CASO OTTIMIZZATO: Carica embeddings pre-calcolati
+            print(f"  ✅ Caricamento {len(embeddings_list)} embeddings pre-calcolati da MongoDB...")
+            embeddings = np.array(embeddings_list, dtype=np.float32)
+        else:
+            # ⚠️ FALLBACK: Calcola embeddings al volo (primo avvio)
+            print(f"  ⚠️  Embeddings non trovati. Calcolo al volo...")
+            print(f"  💡 TIP: Esegui 'python scripts/precompute_course_embeddings.py' per ottimizzare!")
+            descriptions = [f"{course.get('Course Name', '')}. {course.get('Description', '')}" 
+                           for course in self.courses_data]
+            print(f"  - Creazione embeddings per {len(descriptions)} corsi...")
+            embeddings = self.model.encode(descriptions, convert_to_tensor=False)
+            courses_with_embeddings = self.courses_data
+        
+        # Costruisci indice FAISS
         d = embeddings.shape[1]
         index = faiss.IndexFlatL2(d)
-        index.add(np.array(embeddings, dtype=np.float32))
-        course_map = {i: course for i, course in enumerate(self.courses_data)}
+        index.add(embeddings)
+        course_map = {i: course for i, course in enumerate(courses_with_embeddings)}
+        
         print("  - Indice FAISS costruito in memoria.")
         return index, course_map
 
@@ -98,3 +121,23 @@ class RAGService:
             except Exception as e:
                 print(f"Errore in RAG search_async: {e}")
                 return []
+
+
+# --- Singleton Pattern ---
+# Mantiene una singola istanza di RAGService per tutta l'applicazione
+# per evitare di ricaricare i dati e ricostruire l'indice FAISS più volte
+
+_rag_service_instance: RAGService | None = None
+
+def get_rag_service() -> RAGService:
+    """
+    Restituisce l'istanza singleton di RAGService.
+    Se non esiste ancora, la crea. Altrimenti restituisce quella esistente.
+    
+    Returns:
+        RAGService: L'istanza singleton del servizio RAG
+    """
+    global _rag_service_instance
+    if _rag_service_instance is None:
+        _rag_service_instance = RAGService()
+    return _rag_service_instance

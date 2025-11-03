@@ -14,6 +14,7 @@ export function Positions() {
   const [savingCriteria, setSavingCriteria] = useState(false)
   const [isPreparing, setIsPreparing] = useState(false)
   const [isCreateFormExpanded, setIsCreateFormExpanded] = useState(true)
+  const [expandedCriteria, setExpandedCriteria] = useState<Record<string, Set<number>>>({})
   const token = localStorage.getItem('hr_jwt')
 
   async function load() {
@@ -180,6 +181,30 @@ export function Positions() {
       }
       return updated
     })
+  }
+
+  // Toggle criterion expansion
+  function toggleCriterionExpansion(positionId: string, criterionIndex: number) {
+    setExpandedCriteria(prev => {
+      const positionCriteria = prev[positionId] || new Set<number>()
+      const newSet = new Set(positionCriteria)
+      
+      if (newSet.has(criterionIndex)) {
+        newSet.delete(criterionIndex)
+      } else {
+        newSet.add(criterionIndex)
+      }
+      
+      return {
+        ...prev,
+        [positionId]: newSet
+      }
+    })
+  }
+
+  // Check if criterion is expanded
+  function isCriterionExpanded(positionId: string, criterionIndex: number): boolean {
+    return expandedCriteria[positionId]?.has(criterionIndex) || false
   }
 
   async function saveCriteria(positionId: string) {
@@ -735,50 +760,98 @@ export function Positions() {
                                 {info.evaluation_criteria?.evaluation_schema ? (
                                   <div>
                                     <div style={{ display: 'grid', gap: '16px', marginBottom: '20px' }}>
-                                      {(editedCriteria[p._id] || info.evaluation_criteria.evaluation_schema).map((req: any, idx: number) => (
-                                        <div key={idx} style={{ 
-                                          padding: '16px', 
-                                          background: 'rgba(255, 255, 255, 0.7)', 
-                                          borderRadius: 'var(--radius-md)',
-                                          border: '1px solid rgba(139, 92, 246, 0.1)'
-                                        }}>
-                                          <div style={{ 
-                                            fontWeight: '600', 
-                                            marginBottom: '12px', 
-                                            color: 'var(--text-primary)',
-                                            fontSize: '15px',
-                                            padding: '8px',
-                                            background: 'rgba(139, 92, 246, 0.1)',
-                                            borderRadius: '6px'
+                                      {(editedCriteria[p._id] || info.evaluation_criteria.evaluation_schema).map((req: any, idx: number) => {
+                                        const isExpanded = isCriterionExpanded(p._id, idx)
+                                        
+                                        return (
+                                          <div key={idx} style={{ 
+                                            padding: '16px', 
+                                            background: 'rgba(255, 255, 255, 0.7)', 
+                                            borderRadius: 'var(--radius-md)',
+                                            border: '1px solid rgba(139, 92, 246, 0.1)',
+                                            transition: 'all 0.2s ease'
                                           }}>
-                                            📌 {req.requirement}
-                                          </div>
-                                          <div>
-                                            <label style={{ 
-                                              display: 'block', 
-                                              fontSize: '13px', 
-                                              fontWeight: '500', 
-                                              color: 'var(--text-secondary)',
-                                              marginBottom: '6px' 
+                                            <div style={{ 
+                                              display: 'flex',
+                                              justifyContent: 'space-between',
+                                              alignItems: 'center',
+                                              marginBottom: isExpanded ? '12px' : '0'
                                             }}>
-                                              Criterio di Valutazione
-                                            </label>
-                                            <textarea
-                                              value={editedCriteria[p._id]?.[idx]?.criteria?.evaluation_criteria_1 || req.criteria?.evaluation_criteria_1 || req.criteria?.evaluation_criteria || ''}
-                                              onChange={(e) => updateCriterion(p._id, idx, 'evaluation_criteria_1', e.target.value)}
-                                              rows={4}
-                                              style={{ 
-                                                width: '100%', 
-                                                padding: '10px',
-                                                fontSize: '14px',
+                                              <div style={{ 
+                                                fontWeight: '600', 
+                                                color: 'var(--text-primary)',
+                                                fontSize: '15px',
+                                                padding: '8px',
+                                                background: 'rgba(139, 92, 246, 0.1)',
                                                 borderRadius: '6px',
-                                                border: '1px solid rgba(139, 92, 246, 0.3)',
-                                                background: 'white'
-                                              }}
-                                            />
+                                                flex: 1
+                                              }}>
+                                                📌 {req.requirement}
+                                              </div>
+                                              <button
+                                                onClick={() => toggleCriterionExpansion(p._id, idx)}
+                                                style={{
+                                                  marginLeft: '12px',
+                                                  padding: '8px 16px',
+                                                  background: isExpanded ? 'rgba(139, 92, 246, 0.15)' : 'rgba(139, 92, 246, 0.08)',
+                                                  border: '1px solid rgba(139, 92, 246, 0.3)',
+                                                  borderRadius: '6px',
+                                                  color: 'var(--primary-purple)',
+                                                  fontSize: '13px',
+                                                  fontWeight: '600',
+                                                  cursor: 'pointer',
+                                                  transition: 'all 0.2s ease',
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  gap: '6px',
+                                                  whiteSpace: 'nowrap'
+                                                }}
+                                                onMouseOver={(e) => {
+                                                  e.currentTarget.style.background = 'rgba(139, 92, 246, 0.2)'
+                                                  e.currentTarget.style.transform = 'scale(1.02)'
+                                                }}
+                                                onMouseOut={(e) => {
+                                                  e.currentTarget.style.background = isExpanded ? 'rgba(139, 92, 246, 0.15)' : 'rgba(139, 92, 246, 0.08)'
+                                                  e.currentTarget.style.transform = 'scale(1)'
+                                                }}
+                                              >
+                                                <span>{isExpanded ? '▼' : '▶'}</span>
+                                                <span>{isExpanded ? 'Nascondi' : 'Visualizza e modifica'}</span>
+                                              </button>
+                                            </div>
+                                            
+                                            {isExpanded && (
+                                              <div style={{
+                                                marginTop: '12px',
+                                                animation: 'fadeIn 0.2s ease-in'
+                                              }}>
+                                                <label style={{ 
+                                                  display: 'block', 
+                                                  fontSize: '13px', 
+                                                  fontWeight: '500', 
+                                                  color: 'var(--text-secondary)',
+                                                  marginBottom: '6px' 
+                                                }}>
+                                                  Criterio di Valutazione
+                                                </label>
+                                                <textarea
+                                                  value={editedCriteria[p._id]?.[idx]?.criteria?.evaluation_criteria_1 || req.criteria?.evaluation_criteria_1 || req.criteria?.evaluation_criteria || ''}
+                                                  onChange={(e) => updateCriterion(p._id, idx, 'evaluation_criteria_1', e.target.value)}
+                                                  rows={4}
+                                                  style={{ 
+                                                    width: '100%', 
+                                                    padding: '10px',
+                                                    fontSize: '14px',
+                                                    borderRadius: '6px',
+                                                    border: '1px solid rgba(139, 92, 246, 0.3)',
+                                                    background: 'white'
+                                                  }}
+                                                />
+                                              </div>
+                                            )}
                                           </div>
-                                        </div>
-                                      ))}
+                                        )
+                                      })}
                                     </div>
                                     {editedCriteria[p._id] && (
                                       <button
