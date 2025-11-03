@@ -388,6 +388,29 @@ export function TokenLanding() {
             </form>
           </div>
         )}
+
+        {/* Powered by Vertigo AI */}
+        <div style={{
+          marginTop: '32px',
+          paddingTop: '24px',
+          borderTop: '1px solid #e1e5e9',
+          textAlign: 'center'
+        }}>
+          <p style={{
+            fontSize: '12px',
+            color: '#9ca3af',
+            margin: 0,
+            fontWeight: '500'
+          }}>
+            Powered by <span style={{ 
+              background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              fontWeight: '600'
+            }}>Vertigo AI</span>
+          </p>
+        </div>
       </div>
     </div>
   )

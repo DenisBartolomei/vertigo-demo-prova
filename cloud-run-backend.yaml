@@ -15,7 +15,7 @@ spec:
         run.googleapis.com/execution-environment: gen2
     spec:
       containerConcurrency: 100
-      timeoutSeconds: 300
+      timeoutSeconds: 900
       containers:
       - image: gcr.io/poetic-orb-474016-q7/vertigo-ai-backend:latest
         ports:
@@ -46,7 +46,7 @@ spec:
         resources:
           limits:
             cpu: "2"
-            memory: "4Gi"
+            memory: "6Gi"
           requests:
             cpu: "1"
             memory: "2Gi"

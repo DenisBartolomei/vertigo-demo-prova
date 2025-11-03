@@ -9,12 +9,50 @@ export function App() {
   
   if (isLoading) {
     return (
-      <div className="layout">
-        <div className="content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
-            <div>Validating session...</div>
+      <div className="layout" style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #F3F0FF 0%, #FDF2F8 100%)'
+      }}>
+        <div style={{ 
+          textAlign: 'center',
+          background: 'white',
+          padding: '40px',
+          borderRadius: '16px',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+          maxWidth: '400px'
+        }}>
+          <div style={{
+            display: 'inline-block',
+            width: '48px',
+            height: '48px',
+            border: '4px solid rgba(139, 92, 246, 0.2)',
+            borderTopColor: '#8B5CF6',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+            marginBottom: '16px'
+          }} />
+          <div style={{ 
+            fontSize: '18px', 
+            color: '#6B7280',
+            fontWeight: '500',
+            marginBottom: '8px'
+          }}>
+            Validazione sessione in corso...
           </div>
+          <div style={{ 
+            fontSize: '14px', 
+            color: '#9CA3AF'
+          }}>
+            Attendere prego
+          </div>
+          <style>{`
+            @keyframes spin {
+              to { transform: rotate(360deg); }
+            }
+          `}</style>
         </div>
       </div>
     )
@@ -64,6 +102,10 @@ export function App() {
             />
           </h3>
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <Link to="/app/dashboard">
+              <span style={{ fontSize: '18px' }}>📊</span>
+              Dashboard
+            </Link>
             <Link to="/app/positions">
               <span style={{ fontSize: '18px' }}>📋</span>
               Annunci

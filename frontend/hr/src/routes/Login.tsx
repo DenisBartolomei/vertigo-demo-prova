@@ -7,24 +7,36 @@ export function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    const resp = await fetch(`${API_BASE}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    })
-    if (!resp.ok) {
-      setError('Credenziali non valide')
-      return
+    setIsLoading(true)
+    
+    try {
+      const resp = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      })
+      
+      if (!resp.ok) {
+        setError('Credenziali non valide')
+        setIsLoading(false)
+        return
+      }
+      
+      const data = await resp.json()
+      localStorage.setItem('hr_jwt', data.token)
+      
+      // Reindirizza alla dashboard (la route esiste ora)
+      window.location.href = '/app/dashboard'
+    } catch (err) {
+      setError('Errore durante l\'accesso. Riprova.')
+      setIsLoading(false)
     }
-    const data = await resp.json()
-    localStorage.setItem('hr_jwt', data.token)
-    // Reload the page to initialize the new auth system
-    window.location.href = '/app/dashboard'
   }
 
   return (
@@ -92,9 +104,43 @@ export function Login() {
               {error}
             </div>
           )}
-          <button type="submit" style={{ width: '100%', justifyContent: 'center' }}>
-            Accedi
+          <button 
+            type="submit" 
+            disabled={isLoading}
+            style={{ 
+              width: '100%', 
+              justifyContent: 'center',
+              opacity: isLoading ? 0.6 : 1,
+              cursor: isLoading ? 'wait' : 'pointer',
+              position: 'relative'
+            }}
+          >
+            {isLoading ? (
+              <>
+                <span style={{ 
+                  display: 'inline-block',
+                  width: '16px',
+                  height: '16px',
+                  border: '2px solid rgba(255,255,255,0.3)',
+                  borderTopColor: 'white',
+                  borderRadius: '50%',
+                  animation: 'spin 0.8s linear infinite',
+                  marginRight: '8px'
+                }} />
+                Accesso in corso...
+              </>
+            ) : (
+              'Accedi'
+            )}
           </button>
+          
+          {isLoading && (
+            <style>{`
+              @keyframes spin {
+                to { transform: rotate(360deg); }
+              }
+            `}</style>
+          )}
         </form>
       </div>
     </div>

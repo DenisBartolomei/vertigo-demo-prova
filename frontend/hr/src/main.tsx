@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { App } from './routes/App'
 import { Positions } from './routes/Positions'
+import { Dashboard } from './routes/Dashboard'
 import { InterviewSetup } from './routes/InterviewSetup'
 import { Candidati } from './routes/Candidati'
 import { NuovaSessione } from './routes/NuovaSessione'
@@ -17,6 +18,7 @@ const router = createBrowserRouter([
     element: <App />,
     children: [
       { index: true, element: <Positions /> }, // Default route for /app
+      { path: 'dashboard', element: <Dashboard /> },
       { path: 'positions', element: <Positions /> },
       { path: 'setup-colloqui', element: <InterviewSetup /> },
       { path: 'candidati', element: <Candidati /> },
