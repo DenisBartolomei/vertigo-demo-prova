@@ -56,10 +56,27 @@ def generate_qualitative_llm_report(candidate_json: dict, market_json: dict, job
     Mantieni un tono professionale, oggettivo e costruttivo. NON ripetere i dati grezzi dei JSON.
     """
     
+    # Verifica che market_json e candidate_json siano dizionari validi
+    if not isinstance(market_json, dict):
+        print(f"⚠ ERRORE: market_json non è un dizionario, è {type(market_json)}")
+        market_json = {}
+    if not isinstance(candidate_json, dict):
+        print(f"⚠ ERRORE: candidate_json non è un dizionario, è {type(candidate_json)}")
+        candidate_json = {}
+    
+    # Serializza in JSON per il prompt
+    try:
+        market_data_str = json.dumps(market_json, indent=2, ensure_ascii=False) if market_json else "{}"
+        candidate_data_str = json.dumps(candidate_json, indent=2, ensure_ascii=False) if candidate_json else "{}"
+    except Exception as e:
+        print(f"✗ ERRORE durante serializzazione JSON: {e}")
+        market_data_str = "{}"
+        candidate_data_str = "{}"
+    
     user_prompt = user_prompt_template.format(
         job_offer=job_offer_text,
-        market_data=json.dumps(market_json, indent=2, ensure_ascii=False),
-        candidate_data=json.dumps(candidate_json, indent=2, ensure_ascii=False)
+        market_data=market_data_str,
+        candidate_data=candidate_data_str
     )
 
     return get_llm_response(
@@ -122,11 +139,28 @@ async def generate_qualitative_llm_report_async(candidate_json: dict, market_jso
     Mantieni un tono professionale, oggettivo e costruttivo. NON ripetere i dati grezzi dei JSON.
     """
     
+    # Verifica che market_json e candidate_json siano dizionari validi
+    if not isinstance(market_json, dict):
+        print(f"⚠ ERRORE (async): market_json non è un dizionario, è {type(market_json)}")
+        market_json = {}
+    if not isinstance(candidate_json, dict):
+        print(f"⚠ ERRORE (async): candidate_json non è un dizionario, è {type(candidate_json)}")
+        candidate_json = {}
+    
+    # Serializza in JSON per il prompt
+    try:
+        market_data_str = json.dumps(market_json, indent=2, ensure_ascii=False) if market_json else "{}"
+        candidate_data_str = json.dumps(candidate_json, indent=2, ensure_ascii=False) if candidate_json else "{}"
+    except Exception as e:
+        print(f"✗ ERRORE durante serializzazione JSON (async): {e}")
+        market_data_str = "{}"
+        candidate_data_str = "{}"
+    
     # La preparazione del prompt rimane identica, è un'operazione sincrona e veloce
     user_prompt = user_prompt_template.format(
         job_offer=job_offer_text,
-        market_data=json.dumps(market_json, indent=2, ensure_ascii=False),
-        candidate_data=json.dumps(candidate_json, indent=2, ensure_ascii=False)
+        market_data=market_data_str,
+        candidate_data=candidate_data_str
     )
 
     # <-- MODIFICA CHIAVE: Chiama la versione async con 'await' -->

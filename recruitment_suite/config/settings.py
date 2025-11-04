@@ -29,6 +29,14 @@ MONGO_COLLECTION_OCCUPATIONS_RAW = "suite_occupations_unfiltered"
 MONGO_COLLECTION_OCCUPATIONS_FILTERED = "suite_occupations_filtered"
 MONGO_COLLECTION_ESCO_HIERARCHY = "suite_esco_hierarchy"
 MONGO_COLLECTION_EMBEDDINGS = "suite_embeddings"
+MONGO_COLLECTION_OFFER_VECTORS = "suite_offer_vectors"
+MONGO_COLLECTION_CANDIDATE_VECTORS = "suite_candidate_vectors"
+# ==============================================================================
+
+# --- CONFIGURAZIONE CLOUD ---
+CLOUD_CHUNK_SIZE = 8  # Chunk size ridotto per cloud (da 32)
+CLOUD_BATCH_SIZE = 50  # Batch size per MongoDB bulk operations
+CLOUD_MEMORY_THRESHOLD = 80.0  # Soglia percentuale memoria (non superare)
 # ==============================================================================
 
 # --- FILE DI INPUT DINAMICI (Questi rimangono percorsi locali) ---

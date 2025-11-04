@@ -4,19 +4,19 @@
     "normalized_experiences": [
       {
         "original_title": "Senior Strategy Consultant",
-        "duration_months": 18,
+        "duration_months": 19,
         "esco_matches": [
           {
             "esco_title": "responsabile della pianificazione strategica",
-            "similarity": "0.8126"
+            "similarity": "0.7920"
           },
           {
             "esco_title": "responsabile strategico/responsabile strategica",
-            "similarity": "0.7539"
+            "similarity": "0.7564"
           },
           {
-            "esco_title": "consulente di gestione aziendale",
-            "similarity": "0.7346"
+            "esco_title": "consulente finanziario corporate",
+            "similarity": "0.7484"
           }
         ]
       },
@@ -25,16 +25,16 @@
         "duration_months": 19,
         "esco_matches": [
           {
-            "esco_title": "responsabile dell’organizzazione aziendale",
-            "similarity": "0.5957"
-          },
-          {
-            "esco_title": "knowledge manager TIC",
-            "similarity": "0.5947"
-          },
-          {
             "esco_title": "consulente informatico",
-            "similarity": "0.5885"
+            "similarity": "0.8017"
+          },
+          {
+            "esco_title": "analista business dei sistemi TIC",
+            "similarity": "0.7873"
+          },
+          {
+            "esco_title": "responsabile dell’analisi commerciale TIC",
+            "similarity": "0.7536"
           }
         ]
       }

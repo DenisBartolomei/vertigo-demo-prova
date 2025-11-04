@@ -112,10 +112,14 @@ def run_feedback_pipeline(session_id: str) -> str | None:
     # Esegui il benchmark solo se hai i dati necessari
     if jd_text and cv_text_for_market:
         # Cattura i 3 valori restituiti dalla funzione
+        # Nota: cv_text_for_market è il testo del CV, non parsed_experiences
+        # La funzione run_market_benchmark_from_text ora accetta parsed_experiences
+        # Per ora passiamo cv_text_for_market come parsed_experiences (potrebbe richiedere parsing)
         qualitative_text, chart_cat_b64, market_skills_list = run_market_benchmark_from_text(
             job_description_text=jd_text,
-            cv_text=cv_text_for_market,
-            offer_title=role_title
+            parsed_experiences=cv_text_for_market,  # Passa il testo del CV come parsed_experiences
+            offer_title=role_title,
+            position_id=target_role  # Passa position_id per usare cache pre-calcolata
         )
         # Salva i risultati nella sessione per persistenza e debug
         if qualitative_text:

@@ -30,7 +30,6 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null)
   const [selectedTimeRange, setSelectedTimeRange] = useState<'7d' | '30d' | '90d' | '1y'>('30d')
   const [selectedPosition, setSelectedPosition] = useState<string>("all")
-  const [isDownloading, setIsDownloading] = useState(false) // NUOVO STATO
 
   useEffect(() => {
     loadDashboardData()
@@ -70,47 +69,6 @@ export function Dashboard() {
     }
   }
 
-  // --- NUOVA FUNZIONE PER SCARICARE IL REPORT ---
-  async function downloadDashboardReport() {
-    setIsDownloading(true);
-    const token = localStorage.getItem('hr_jwt');
-    if (!token) {
-      alert('Errore: Token di autenticazione non trovato.');
-      setIsDownloading(false);
-      return;
-    }
-
-    try {
-      // Costruisce l'URL con i filtri correnti. L'endpoint /dashboard/report/pdf è ipotetico
-      // e dovrà essere implementato nel backend.
-      const reportUrl = `${API_BASE}/dashboard/report/pdf?timeRange=${selectedTimeRange}&positionFilter=${selectedPosition}`;
-      
-      const response = await fetch(reportUrl, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Errore dal server (${response.status}): ${errorText || 'Impossibile generare il report.'}`);
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Report_Dashboard_${selectedPosition}_${new Date().toLocaleDateString('it-IT')}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-    } catch (error) {
-      console.error('Errore nel download del report:', error);
-      alert(error instanceof Error ? error.message : 'Si è verificato un errore imprevisto durante il download.');
-    } finally {
-      setIsDownloading(false);
-    }
-  }
 
 
   if (loading) {
@@ -169,33 +127,17 @@ export function Dashboard() {
     <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
       
       {/* Header */}
+      <div style={{ marginBottom: '24px' }}>
+        <h2>Dashboard HR</h2>
+      </div>
+      
       <div style={{ 
         display: 'flex', 
-        justifyContent: 'space-between', 
+        justifyContent: 'flex-end', 
         alignItems: 'center',
-        marginBottom: '32px'
+        marginBottom: '32px',
+        gap: '16px'
       }}>
-        <div>
-          <h1 style={{ 
-            fontSize: '32px', 
-            fontWeight: '700', 
-            margin: '0 0 8px 0',
-            background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text'
-          }}>
-            📊 Dashboard HR
-          </h1>
-          <p style={{ 
-            fontSize: '16px', 
-            color: 'var(--text-secondary)', 
-            margin: '0' 
-          }}>
-            Indicatori di performance per il processo di recruitment
-          </p>
-        </div>
-        
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <label style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500' }}>
@@ -243,35 +185,13 @@ export function Dashboard() {
             </select>
           </div>
 
-          {/* --- NUOVO PULSANTE DI DOWNLOAD --- */}
-          <button
-            onClick={downloadDashboardReport}
-            disabled={isDownloading}
-            style={{
-              padding: '8px 16px',
-              background: 'var(--primary-purple)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: isDownloading ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              opacity: isDownloading ? 0.7 : 1,
-              fontSize: '14px',
-              fontWeight: '500',
-              marginLeft: '8px'
-            }}
-          >
-            {isDownloading ? '📥 In download...' : '📥 Scarica Report'}
-          </button>
         </div>
       </div>
 
       {/* Indicatori Principali */}
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
+        gridTemplateColumns: 'repeat(3, 1fr)', 
         gap: '24px',
         marginBottom: '32px'
       }}>
@@ -295,20 +215,6 @@ export function Dashboard() {
           icon="🔄"
           color="#3b82f6"
           tooltip="Candidati che hanno ricevuto il token ma non hanno ancora completato l'intervista"
-        />
-        <MetricCard
-          title="Durata Media Colloquio"
-          value={`${data.metrics.avg_interview_duration.toFixed(1)}m`}
-          icon="⏱️"
-          color="#06b6d4"
-          tooltip="Tempo medio impiegato dai candidati per completare l'intervista, dall'inizio alla fine"
-        />
-        <MetricCard
-          title="Tempo di Presa in Carico"
-          value={`${data.metrics.avg_takeover_time.toFixed(1)}h`}
-          icon="📋"
-          color="#8b5cf6"
-          tooltip="Tempo medio che intercorre tra il completamento dell'intervista e l'invio del link al candidato"
         />
         <MetricCard
           title="Scoring Medio Colloqui"
@@ -465,9 +371,9 @@ function PerformancePieChart({
   const neutralCount = totalEvaluated - recoveryCount - underperformingCount
   const total = totalEvaluated || 1 // Evita divisione per zero
 
-  const recoveryPercent = (recoveryCount / total) * 100
-  const underperformingPercent = (underperformingCount / total) * 100
-  const neutralPercent = (neutralCount / total) * 100
+  const recoveryPercent = total > 0 ? (recoveryCount / total) * 100 : 0
+  const underperformingPercent = total > 0 ? (underperformingCount / total) * 100 : 0
+  const neutralPercent = total > 0 ? (neutralCount / total) * 100 : 0
 
   // Calcola gli angoli per il grafico a torta
   const recoveryAngle = (recoveryPercent / 100) * 360
@@ -499,33 +405,61 @@ function PerformancePieChart({
   const slices = []
   let currentAngle = 0
 
-  if (recoveryPercent > 0) {
+  // Se una categoria ha il 100%, mostra solo quella
+  if (recoveryPercent === 100) {
     slices.push({
-      ...createSlice(currentAngle, currentAngle + recoveryAngle, '#10b981'),
+      path: 'M 100 20 A 80 80 0 1 1 100 20 Z', // Cerchio completo
+      color: '#10b981',
       label: 'Recupero',
       count: recoveryCount,
       percent: recoveryPercent
     })
-    currentAngle += recoveryAngle
-  }
-
-  if (neutralPercent > 0) {
+  } else if (underperformingPercent === 100) {
     slices.push({
-      ...createSlice(currentAngle, currentAngle + neutralAngle, '#94a3b8'),
-      label: 'Neutri',
-      count: neutralCount,
-      percent: neutralPercent
-    })
-    currentAngle += neutralAngle
-  }
-
-  if (underperformingPercent > 0) {
-    slices.push({
-      ...createSlice(currentAngle, currentAngle + underperformingAngle, '#ef4444'),
+      path: 'M 100 20 A 80 80 0 1 1 100 20 Z', // Cerchio completo
+      color: '#ef4444',
       label: 'Underperforming',
       count: underperformingCount,
       percent: underperformingPercent
     })
+  } else if (neutralPercent === 100) {
+    slices.push({
+      path: 'M 100 20 A 80 80 0 1 1 100 20 Z', // Cerchio completo
+      color: '#94a3b8',
+      label: 'Neutri',
+      count: neutralCount,
+      percent: neutralPercent
+    })
+  } else {
+    // Caso normale: più categorie
+    if (recoveryPercent > 0) {
+      slices.push({
+        ...createSlice(currentAngle, currentAngle + recoveryAngle, '#10b981'),
+        label: 'Recupero',
+        count: recoveryCount,
+        percent: recoveryPercent
+      })
+      currentAngle += recoveryAngle
+    }
+
+    if (neutralPercent > 0) {
+      slices.push({
+        ...createSlice(currentAngle, currentAngle + neutralAngle, '#94a3b8'),
+        label: 'Neutri',
+        count: neutralCount,
+        percent: neutralPercent
+      })
+      currentAngle += neutralAngle
+    }
+
+    if (underperformingPercent > 0) {
+      slices.push({
+        ...createSlice(currentAngle, currentAngle + underperformingAngle, '#ef4444'),
+        label: 'Underperforming',
+        count: underperformingCount,
+        percent: underperformingPercent
+      })
+    }
   }
 
   return (
@@ -548,25 +482,42 @@ function PerformancePieChart({
         📊 Distribuzione Performance Candidati
       </h3>
 
-      <div style={{ 
-        display: 'flex', 
-        gap: '32px', 
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexWrap: 'wrap'
-      }}>
-        {/* Grafico a torta SVG */}
-        <svg width="200" height="200" viewBox="0 0 200 200">
-          {slices.map((slice, index) => (
-            <path
-              key={index}
-              d={slice.path}
-              fill={slice.color}
-              stroke="white"
-              strokeWidth="2"
-            />
-          ))}
-        </svg>
+      {totalEvaluated === 0 ? (
+        <div style={{
+          textAlign: 'center',
+          padding: '40px',
+          color: 'var(--text-secondary)',
+          fontSize: '14px'
+        }}>
+          Nessun dato disponibile per visualizzare il grafico
+        </div>
+      ) : (
+        <div style={{ 
+          display: 'flex', 
+          gap: '32px', 
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexWrap: 'wrap'
+        }}>
+          {/* Grafico a torta SVG */}
+          <svg width="200" height="200" viewBox="0 0 200 200" style={{ display: 'block' }}>
+            {slices.length === 0 ? (
+              <circle cx="100" cy="100" r="80" fill="#e5e7eb" />
+            ) : slices.length === 1 && (slices[0].percent === 100) ? (
+              // Cerchio completo per una categoria al 100%
+              <circle cx="100" cy="100" r="80" fill={slices[0].color} />
+            ) : (
+              slices.map((slice, index) => (
+                <path
+                  key={index}
+                  d={slice.path}
+                  fill={slice.color}
+                  stroke="white"
+                  strokeWidth="2"
+                />
+              ))
+            )}
+          </svg>
 
         {/* Leggenda */}
         <div style={{ 
@@ -601,7 +552,8 @@ function PerformancePieChart({
             </div>
           ))}
         </div>
-      </div>
+        </div>
+      )}
 
       <div style={{ 
         marginTop: '16px', 

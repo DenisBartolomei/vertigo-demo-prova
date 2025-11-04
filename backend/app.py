@@ -496,10 +496,14 @@ def run_data_prep(position_id: str, auth_data=Depends(hr_auth)):
     collections = get_tenant_collections_from_auth(auth_data)
     
     # Recupera configurazione intervista per il tenant
-    tenant_id = auth_data["tenant_id"]
+    tenant_id = auth_data.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=401, detail="No tenant ID in token")
+    
     config = get_interview_config_or_default(tenant_id)
     
-    ok = run_full_generation_pipeline(position_id, config.reasoning_steps, collections["positions"])
+    # Passa esplicitamente tenant_id invece di estrarre dalla collection
+    ok = run_full_generation_pipeline(position_id, config.reasoning_steps, collections["positions"], tenant_id=tenant_id)
     if not ok:
         raise HTTPException(status_code=500, detail="Data preparation failed")
     return {"ok": True}
@@ -678,10 +682,17 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
         role_title = position_data.get("position_name", target_role) if position_data else target_role
         
         if jd_text and cv_text_for_market:
+            # Estrai tenant_id dal nome della collection (formato: {tenant_id}_sessions)
+            tenant_id = None
+            if collection_name.endswith("_sessions"):
+                tenant_id = collection_name.replace("_sessions", "")
+            
             qualitative_text, chart_cat_b64, market_skills_list = run_market_benchmark_from_text(
                 job_description_text=jd_text,
-                cv_text=cv_text_for_market,
-                offer_title=role_title
+                parsed_experiences=cv_text_for_market,  # Passa come parsed_experiences
+                offer_title=role_title,
+                position_id=target_role,  # Passa position_id per usare cache pre-calcolata
+                tenant_id=tenant_id  # Passa tenant_id per multi-tenant
             )
             if qualitative_text:
                 save_stage_output_tenant(session_id, "market_benchmark_text", qualitative_text, collection_name)
@@ -821,12 +832,19 @@ async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: s
             print("ATTENZIONE: Esperienze parsate non trovate. Il benchmark di mercato potrebbe essere incompleto.")
             # Continuiamo comunque, ma il report qualitativo non avrà i dati del candidato
         
+        # Estrai tenant_id dal nome della collection (formato: {tenant_id}_sessions)
+        tenant_id = None
+        if collection_name.endswith("_sessions"):
+            tenant_id = collection_name.replace("_sessions", "")
+        
         market_task = asyncio.create_task(
             run_market_benchmark_from_text_async(
                 job_description_text=jd_text,
-                parsed_experiences=parsed_experiences,  # <-- MODIFICA QUI
+                parsed_experiences=parsed_experiences,
                 offer_title=role_title,
-                db=db
+                db=db,
+                position_id=target_role_id,  # Passa position_id per usare cache pre-calcolata
+                tenant_id=tenant_id  # Passa tenant_id per multi-tenant
             )
         )
 

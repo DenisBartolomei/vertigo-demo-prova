@@ -13,7 +13,7 @@ export function Positions() {
   const [editedCriteria, setEditedCriteria] = useState<Record<string, any>>({})
   const [savingCriteria, setSavingCriteria] = useState(false)
   const [isPreparing, setIsPreparing] = useState(false)
-  const [isCreateFormExpanded, setIsCreateFormExpanded] = useState(true)
+  const [isCreateFormExpanded, setIsCreateFormExpanded] = useState(false)
   const [expandedCriteria, setExpandedCriteria] = useState<Record<string, Set<number>>>({})
   const token = localStorage.getItem('hr_jwt')
 
@@ -254,65 +254,85 @@ export function Positions() {
 
   return (
     <div className="container" style={{ display: 'grid', gap: '32px', position: 'relative' }}>
-      {/* Loading Overlay */}
+      {/* Loading Notification - Non bloccante */}
       {isPreparing && (
         <div style={{
           position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.7)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          top: '20px',
+          right: '20px',
+          background: 'white',
+          padding: '24px',
+          borderRadius: 'var(--radius-xl)',
+          boxShadow: 'var(--shadow-lg)',
+          maxWidth: '400px',
           zIndex: 9999,
-          backdropFilter: 'blur(4px)'
+          border: '2px solid var(--primary-purple)'
         }}>
-          <div style={{
-            background: 'white',
-            padding: '40px',
-            borderRadius: 'var(--radius-xl)',
-            textAlign: 'center',
-            boxShadow: 'var(--shadow-lg)',
-            maxWidth: '400px',
-            margin: '20px'
+          <div style={{ 
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            marginBottom: '16px'
           }}>
             <div style={{ 
-              fontSize: '48px', 
-              marginBottom: '20px',
-              background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text'
+              fontSize: '32px', 
+              marginRight: '12px'
             }}>
               ⚙️
             </div>
-            <h3 style={{ 
-              fontSize: '24px', 
-              fontWeight: '600', 
-              marginBottom: '12px',
-              color: 'var(--text-primary)'
-            }}>
-              Preparazione in corso...
-            </h3>
-            <p style={{ 
-              fontSize: '16px', 
-              color: 'var(--text-secondary)',
-              lineHeight: '1.5',
-              marginBottom: '20px'
-            }}>
-              Stiamo generando i casi di studio e i criteri di valutazione per questa posizione. Questo processo può richiedere alcuni minuti.
-            </p>
-            <div style={{
-              background: 'var(--light-purple)',
-              padding: '12px',
-              borderRadius: 'var(--radius-md)',
-              fontSize: '14px',
-              color: 'var(--text-secondary)'
-            }}>
-              ⏳ Non chiudere questa pagina durante la preparazione
-            </div>
+            <button
+              onClick={() => setIsPreparing(false)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                fontSize: '20px',
+                cursor: 'pointer',
+                color: 'var(--text-secondary)',
+                padding: '0',
+                width: '24px',
+                height: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '50%',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--bg-secondary)'
+                e.currentTarget.style.color = 'var(--text-primary)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent'
+                e.currentTarget.style.color = 'var(--text-secondary)'
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          <h3 style={{ 
+            fontSize: '18px', 
+            fontWeight: '600', 
+            marginBottom: '8px',
+            color: 'var(--text-primary)'
+          }}>
+            Preparazione in corso...
+          </h3>
+          <p style={{ 
+            fontSize: '14px', 
+            color: 'var(--text-secondary)',
+            lineHeight: '1.5',
+            marginBottom: '12px'
+          }}>
+            Stiamo generando i casi di studio e i criteri di valutazione per questa posizione. Questo processo può richiedere alcuni minuti.
+          </p>
+          <div style={{
+            background: 'var(--light-purple)',
+            padding: '8px 12px',
+            borderRadius: 'var(--radius-md)',
+            fontSize: '12px',
+            color: 'var(--text-secondary)'
+          }}>
+            ⏳ Il processo continua in background
           </div>
         </div>
       )}

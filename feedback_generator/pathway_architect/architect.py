@@ -29,7 +29,7 @@ class FinalReportContent(BaseModel):
     interview_outcome: str = Field(description="Paragrafo che riassume gli esiti (punti di forza e carenze) emersi dalla performance del candidato durante il colloquio/caso di studio.")
     
     # Placeholder per la futura analisi di mercato.
-    market_benchmark: str = Field(description="Paragrafo placeholder per il benchmark di mercato. Deve contenere un testo provvisorio.")
+    market_benchmark: str = Field(description="Paragrafo per il benchmark di mercato.")
     
     # Il percorso formativo rimane una parte cruciale.
     suggested_pathway: List[SuggestedCourse] = Field(description="Lista ordinata di corsi che costituiscono il percorso formativo suggerito.")

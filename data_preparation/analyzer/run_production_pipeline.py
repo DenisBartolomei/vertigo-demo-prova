@@ -14,8 +14,28 @@ from .final_generator.criteria_creator import generate_final_criteria
 from ..corrector.evaluation_criteria_generator.criteria_generator import generate_evaluation_criteria
 
 from services.data_manager import db
+from recruitment_suite.app.core.pipeline import RecruitmentPipeline
+from recruitment_suite.app.reporting.analysis import visualize_results, create_dossiers_for_promoted
+from recruitment_suite.app.utils.esco_fetcher import EscoSkillFetcher
+from recruitment_suite.app.core.benchmark_cache import save_offer_benchmark_to_cache
+from recruitment_suite.config import settings
+import numpy as np
+import re
 
-def run_full_generation_pipeline(position_id: str, reasoning_steps: int, collection_name: str = "positions_data") -> bool:
+def extract_tenant_id_from_collection(collection_name: str) -> str | None:
+    """
+    Estrae tenant_id dal nome della collection.
+    Formato: {tenant_id}_positions_data oppure semplicemente positions_data (senza tenant)
+    """
+    if collection_name == "positions_data":
+        return None
+    # Pattern: {tenant_id}_positions_data
+    match = re.match(r'^(.+?)_positions_data$', collection_name)
+    if match:
+        return match.group(1)
+    return None
+
+def run_full_generation_pipeline(position_id: str, reasoning_steps: int, collection_name: str = "positions_data", tenant_id: str | None = None) -> bool:
     """
     Orchestra l'intera pipeline di generazione dei dati per una nuova posizione.
     """
@@ -93,13 +113,111 @@ def run_full_generation_pipeline(position_id: str, reasoning_steps: int, collect
     print(f"  - Criteri per il chatbot salvati con successo per '{position_id}'.")
 
     # --- STEP 6: GENERAZIONE DEI CRITERI DI VALUTAZIONE FINALE ---
-    print(f"\n[STEP 6/6] Generazione dei Criteri di ValUTazione Finale...")
+    print(f"\n[STEP 6/7] Generazione dei Criteri di Valutazione Finale...")
     eval_criteria_collection = generate_evaluation_criteria(icp_text, cases_json_str, seniority_level, hr_special_needs, language)
     if not eval_criteria_collection:
         print("  - Fallimento nella generazione dei Criteri di Valutazione. Pipeline interrotta.")
         return False
     positions_collection.update_one({"_id": position_id}, {"$set": {"evaluation_criteria": eval_criteria_collection.model_dump()}})
     print(f"  - Criteri di valutazione finale salvati con successo per '{position_id}'.")
+
+    # --- STEP 7: PRE-CALCOLO BENCHMARK DI MERCATO (Cloud Optimized) ---
+    print(f"\n[STEP 7/7] Pre-calcolo Benchmark di Mercato (Cloud Optimized)...")
+    try:
+        # Carica candidati benchmark da MongoDB (streaming/projection per efficienza)
+        collection_name = settings.MONGO_COLLECTION_BENCHMARK_CANDIDATES
+        projection = {"profile_id": 1, "ID": 1, "normalized_experiences": 1, "_id": 0}
+        candidates_data_full = list(db[collection_name].find({}, projection))
+        
+        if not candidates_data_full:
+            print("  - ATTENZIONE: Nessun candidato benchmark trovato. Salto pre-calcolo benchmark.")
+        else:
+            print(f"  - Caricati {len(candidates_data_full)} candidati benchmark.")
+            candidates_data_filtered = [p for p in candidates_data_full if p.get('normalized_experiences')]
+            
+            if not candidates_data_filtered:
+                print("  - ATTENZIONE: Nessun candidato con esperienze normalizzate. Salto pre-calcolo benchmark.")
+            else:
+                print(f"  - {len(candidates_data_filtered)} candidati validi per il benchmark.")
+                
+                # Usa il titolo della posizione o fallback al position_id
+                position_name = position_document.get("position_name", position_id)
+                
+                # Crea pipeline e calcola benchmark
+                pipeline = RecruitmentPipeline()
+                llm_analysis, _ = pipeline.run_full_pipeline(
+                    position_name,
+                    jd_text,
+                    candidates_data_filtered
+                )
+                
+                # Genera risultati di mercato
+                market_df = None
+                chart_cat_base64 = None
+                market_skills_list = None
+                
+                if llm_analysis:
+                    promossi_llm = [p for p in llm_analysis if not p.get('scartato')]
+                    if promossi_llm:
+                        # Fix: usare 'ID' (maiuscolo) come restituito dall'LLM, non settings.ID_COLUMN
+                        promoted_ids = {p.get('ID') for p in promossi_llm if p.get('ID')}
+                        print(f"  - {len(promoted_ids)} candidati promossi dall'LLM per il benchmark.")
+                        skill_fetcher = EscoSkillFetcher()
+                        final_dossiers = create_dossiers_for_promoted(promoted_ids, candidates_data_full, skill_fetcher)
+                        print(f"  - {len(final_dossiers)} dossier creati per la generazione del market_json.")
+                        if final_dossiers:
+                            market_df, chart_cat_base64, market_skills_list = visualize_results(final_dossiers)
+                            
+                            # Genera market_json da market_df per uso diretto nel report qualitativo
+                            # Converti i valori numpy a tipi Python nativi per serializzazione MongoDB
+                            if market_df is not None and not market_df.empty:
+                                market_json_raw = market_df.head(10).round(0).astype(int).to_dict()
+                                # Converti valori numpy a int Python nativi
+                                market_json = {str(k): int(v) for k, v in market_json_raw.items()}
+                            else:
+                                market_json = None
+                
+                # Salva in cache per uso futuro
+                if market_df is not None and pipeline.offer_embedding is not None:
+                    offer_embedding = pipeline.offer_embedding
+                    # Converti tensore a numpy array se necessario e normalizza a float32
+                    if hasattr(offer_embedding, 'cpu'):
+                        offer_embedding = offer_embedding.cpu().numpy().astype(np.float32)
+                    elif hasattr(offer_embedding, 'numpy'):
+                        offer_embedding = offer_embedding.numpy().astype(np.float32)
+                    else:
+                        offer_embedding = np.array(offer_embedding, dtype=np.float32)
+                    
+                    # Usa tenant_id passato esplicitamente, altrimenti prova a estrarlo dalla collection
+                    if tenant_id is None:
+                        tenant_id = extract_tenant_id_from_collection(collection_name)
+                    
+                    # Verifica che tenant_id non sia una stringa "NULL" o "None"
+                    if tenant_id and isinstance(tenant_id, str) and tenant_id.upper() in ("NULL", "NONE", ""):
+                        tenant_id = None
+                    
+                    if tenant_id:
+                        print(f"  - tenant_id utilizzato per il benchmark: {tenant_id}")
+                    else:
+                        print(f"  - ATTENZIONE: tenant_id non disponibile, benchmark salvato senza tenant_id")
+                    
+                    save_offer_benchmark_to_cache(
+                        position_id,
+                        offer_embedding,  # Già float32
+                        market_df,
+                        chart_cat_base64,
+                        market_skills_list,
+                        tenant_id=tenant_id,
+                        market_json=market_json  # Passa market_json per evitare ricalcolo
+                    )
+                    cache_key = f"{tenant_id}_{position_id}" if tenant_id else position_id
+                    print(f"  - Benchmark di mercato pre-calcolato e salvato in cache per '{cache_key}'.")
+                else:
+                    print("  - ATTENZIONE: Benchmark non generato correttamente. Non salvato in cache.")
+    
+    except Exception as e:
+        print(f"  - ERRORE durante il pre-calcolo del benchmark: {e}")
+        print("  - Continuo comunque la pipeline (benchmark opzionale).")
 
     print("\n--- [PIPELINE 'PRODUCTION'] Tutti i dati per la posizione sono stati generati e salvati su MongoDB. ---")
     return True
