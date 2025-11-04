@@ -131,9 +131,29 @@ async def create_final_feedback_content_async(
         return None
 
     try:
-        validated_data = FinalReportContent.model_validate_json(structured_response_str)
+        print("3. [Report Finale] Output strutturato ricevuto, validazione in corso...")
+        parsed_json = json.loads(structured_response_str)
+        
+        # FALLBACK: Assicura che candidate_name e target_role siano sempre presenti
+        # (anche se l'LLM non li include nel JSON)
+        if "candidate_name" not in parsed_json or not parsed_json.get("candidate_name"):
+            print(f"⚠ ATTENZIONE: candidate_name mancante nel JSON LLM, uso valore fornito: {candidate_name}")
+            parsed_json["candidate_name"] = candidate_name
+        
+        if "target_role" not in parsed_json or not parsed_json.get("target_role"):
+            print(f"⚠ ATTENZIONE: target_role mancante nel JSON LLM, uso valore fornito: {target_role}")
+            parsed_json["target_role"] = target_role
+        
+        validated_data = FinalReportContent.model_validate(parsed_json)
         print("4. [Report Finale] Contenuto generato e validato.")
         return validated_data
+    except json.JSONDecodeError as e:
+        print(f"✗ ERRORE: JSON non valido ricevuto dall'LLM: {e}")
+        print(f"   Risposta ricevuta (primi 500 caratteri): {structured_response_str[:500]}")
+        return None
     except Exception as e:
-        print(f"Errore critico durante la validazione del report finale: {e}")
+        print(f"✗ ERRORE critico durante la validazione del report finale: {e}")
+        print(f"   JSON ricevuto (primi 500 caratteri): {structured_response_str[:500] if structured_response_str else 'Nessuna risposta'}")
+        import traceback
+        print(f"   Traceback: {traceback.format_exc()}")
         return None

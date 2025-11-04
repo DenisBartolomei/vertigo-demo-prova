@@ -14,7 +14,7 @@ from interviewer.llm_service import get_structured_llm_response
 from recruitment_suite.app.models.schemas import EvaluationResponse
 from recruitment_suite.config import settings
 from recruitment_suite.app.core.shared_embedding_model import get_shared_embedding_model
-from recruitment_suite.app.core.cloud_optimizer import log_memory_usage, cleanup_tensors, monitor_memory_usage, get_dynamic_chunk_size
+from recruitment_suite.app.core.cloud_optimizer import log_memory_usage, cleanup_tensors, monitor_memory_usage, get_dynamic_chunk_size, get_memory_usage_percent
 from recruitment_suite.app.core.benchmark_cache import (
     get_candidate_embedding_from_cache,
     save_candidate_embedding_to_cache,
@@ -93,9 +93,9 @@ class RecruitmentPipeline:
         # --- FASE 1 OTTIMIZZATA: Calcolo affinità in CHUNK (Cloud Optimized) ---
         print("\n--- FASE 1: Calcolo affinità (in chunk efficienti in RAM) ---")
 
-        # Usa chunk size dinamico basato su memoria disponibile
-        CHUNK_SIZE = get_dynamic_chunk_size(base_chunk_size=settings.CLOUD_CHUNK_SIZE, max_chunk_size=16)
-        print(f"Chunk size dinamico: {CHUNK_SIZE}")
+        # Usa chunk size dinamico basato su memoria disponibile (ottimizzato per cloud)
+        CHUNK_SIZE = get_dynamic_chunk_size(base_chunk_size=settings.CLOUD_CHUNK_SIZE, max_chunk_size=32)
+        print(f"Chunk size dinamico: {CHUNK_SIZE} (memoria: {get_memory_usage_percent():.1f}%)")
 
         all_scores = []
         num_chunks = math.ceil(len(candidates_data) / CHUNK_SIZE)

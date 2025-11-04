@@ -49,28 +49,32 @@ def cleanup_and_log(stage: str = ""):
     cleanup_tensors()
     log_memory_usage(stage)
 
-def get_dynamic_chunk_size(base_chunk_size: int = 8, max_chunk_size: int = 16) -> int:
+def get_dynamic_chunk_size(base_chunk_size: int = 16, max_chunk_size: int = 32) -> int:
     """
     Calcola un chunk size dinamico basato sulla memoria disponibile.
+    Ottimizzato per cloud con 6GB RAM: chunk più grandi per migliorare throughput.
     
     Args:
-        base_chunk_size: Chunk size minimo (default 8)
-        max_chunk_size: Chunk size massimo (default 16)
+        base_chunk_size: Chunk size minimo (default 16, aumentato per cloud)
+        max_chunk_size: Chunk size massimo (default 32, aumentato per cloud)
     
     Returns:
         Chunk size ottimale basato sulla memoria disponibile
     """
     usage_percent = get_memory_usage_percent()
     
-    if usage_percent < 50:
-        # Memoria abbondante, possiamo usare chunk più grandi
+    if usage_percent < 40:
+        # Memoria abbondante (< 40%), possiamo usare chunk più grandi
         return max_chunk_size
-    elif usage_percent < 70:
-        # Memoria media, chunk medio
+    elif usage_percent < 65:
+        # Memoria media (40-65%), chunk medio
         return (base_chunk_size + max_chunk_size) // 2
-    else:
-        # Memoria limitata, chunk piccolo
+    elif usage_percent < 85:
+        # Memoria in uso (65-85%), chunk base
         return base_chunk_size
+    else:
+        # Memoria critica (> 85%), chunk ridotto
+        return max(8, base_chunk_size // 2)
 
 def safe_operation(operation, max_retries: int = 3, retry_delay: float = 1.0):
     """

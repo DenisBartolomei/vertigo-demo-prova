@@ -34,9 +34,9 @@ MONGO_COLLECTION_CANDIDATE_VECTORS = "suite_candidate_vectors"
 # ==============================================================================
 
 # --- CONFIGURAZIONE CLOUD ---
-CLOUD_CHUNK_SIZE = 8  # Chunk size ridotto per cloud (da 32)
+CLOUD_CHUNK_SIZE = 16  # Chunk size ottimizzato per cloud (aumentato per migliorare prestazioni)
 CLOUD_BATCH_SIZE = 50  # Batch size per MongoDB bulk operations
-CLOUD_MEMORY_THRESHOLD = 80.0  # Soglia percentuale memoria (non superare)
+CLOUD_MEMORY_THRESHOLD = 85.0  # Soglia percentuale memoria (aumentata per permettere più memoria)
 # ==============================================================================
 
 # --- FILE DI INPUT DINAMICI (Questi rimangono percorsi locali) ---
