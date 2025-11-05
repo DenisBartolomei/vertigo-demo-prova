@@ -118,11 +118,17 @@ def get_structured_llm_response(
         return None
     
 from openai import AsyncAzureOpenAI
-client_async = AsyncAzureOpenAI(
+
+# Inizializza il client async solo se tutte le variabili sono state trovate
+client_async = None
+if all([AZURE_ENDPOINT, AZURE_API_KEY, AZURE_DEPLOYMENT_NAME]):
+    client_async = AsyncAzureOpenAI(
         api_key=AZURE_API_KEY,
         api_version=AZURE_API_VERSION,
         azure_endpoint=AZURE_ENDPOINT
     )
+else:
+    print("⚠ ATTENZIONE: Client AsyncAzureOpenAI non inizializzato (variabili mancanti)")
 
 # <-- MODIFICA: Tutta la funzione è ora 'async def' e usa 'await' -->
 async def get_llm_response_async(prompt: str, model: str, system_prompt: str, **kwargs) -> str:
@@ -138,7 +144,7 @@ async def get_llm_response_async(prompt: str, model: str, system_prompt: str, **
     ]
     try:
         # La chiamata al client ora è asincrona
-        response = client.chat.completions.create(
+        response = await client_async.chat.completions.create(
             model=AZURE_DEPLOYMENT_NAME,  # Usa il deployment name per Azure
             messages=messages,
             **kwargs 

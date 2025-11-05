@@ -67,15 +67,38 @@ async def identify_skill_gaps_async(report_text: str, language: str = "it") -> G
     """Versione ASINCRONA: Estrae e raggruppa le carenze di skill."""
     print("1. [Gap Analysis] Creazione del prompt...")
     prompt = prompts_gap.create_gap_analysis_prompt(report_text, language)
+    system_prompt = prompts_gap.SYSTEM_PROMPT[language]
     
-    print(f"2. [Gap Analysis] Invio richiesta a '{GAP_ANALYZER_MODEL}'...")
-    structured_response_str = await get_structured_llm_response_async( # <-- MODIFICA: usa await
-        prompt=prompt,
-        model=GAP_ANALYZER_MODEL,
-        system_prompt=prompts_gap.SYSTEM_PROMPT[language],
-        tool_name="save_skill_gaps",
-        tool_schema=GapAnalysisReport.model_json_schema()
-    )
+    # TASK 5: Caching LLM responses per Gap Analysis
+    try:
+        from recruitment_suite.app.core.llm_cache import get_prompt_hash, get_cached_llm_response, save_cached_llm_response
+        prompt_hash = get_prompt_hash(prompt, system_prompt, temperature=None, max_tokens=None)
+        cached_response = get_cached_llm_response(prompt_hash)
+        
+        if cached_response:
+            print(f"✓ [Gap Analysis] Cache HIT - riuso risposta cached")
+            structured_response_str = cached_response
+        else:
+            print(f"2. [Gap Analysis] Invio richiesta a '{GAP_ANALYZER_MODEL}'...")
+            structured_response_str = await get_structured_llm_response_async(
+                prompt=prompt,
+                model=GAP_ANALYZER_MODEL,
+                system_prompt=system_prompt,
+                tool_name="save_skill_gaps",
+                tool_schema=GapAnalysisReport.model_json_schema()
+            )
+            # Salva in cache
+            if structured_response_str:
+                save_cached_llm_response(prompt_hash, structured_response_str)
+    except Exception as e:
+        print(f"⚠ Errore caching Gap Analysis: {e}, continuo senza cache")
+        structured_response_str = await get_structured_llm_response_async(
+            prompt=prompt,
+            model=GAP_ANALYZER_MODEL,
+            system_prompt=system_prompt,
+            tool_name="save_skill_gaps",
+            tool_schema=GapAnalysisReport.model_json_schema()
+        )
 
     if not structured_response_str:
         print("Errore critico: la chiamata LLM per l'analisi dei gap non ha restituito dati.")

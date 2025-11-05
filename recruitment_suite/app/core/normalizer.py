@@ -8,15 +8,19 @@ import numpy as np
 import pandas as pd
 import torch
 import openai
+import asyncio
+import hashlib
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from dateutil.parser import parse as universal_date_parser
 from sentence_transformers import util
 from tqdm import tqdm
-from interviewer.llm_service import get_llm_response
+from interviewer.llm_service import get_llm_response, get_llm_response_async
 
 from recruitment_suite.config import settings
 from recruitment_suite.app.core.shared_embedding_model import get_shared_embedding_model
+from recruitment_suite.app.core.llm_cache import get_prompt_hash, get_cached_llm_response, save_cached_llm_response
+from recruitment_suite.app.core.benchmark_cache import get_candidate_embedding_from_cache, save_candidate_embedding_to_cache
 
 class CVNormalizer:
     def __init__(self):
@@ -64,6 +68,14 @@ class CVNormalizer:
             # Assegna l'array all'attributo corretto!
             self.esco_embeddings_matrix = np.array(full_list)
             print(f"Embeddings riassemblati. Shape finale: {self.esco_embeddings_matrix.shape}")
+            
+            # TASK 2: Pre-conversione matrice ESCO in tensor (una volta sola)
+            self.esco_embeddings_tensor = torch.tensor(
+                self.esco_embeddings_matrix, 
+                device=self.device, 
+                dtype=torch.float32
+            )
+            print(f"✓ Matrice ESCO pre-convertita in tensor su {self.device.upper()}")
     
         except Exception as e:
             raise RuntimeError(f"ERRORE CRITICO nel caricamento dei dati da MongoDB per CVNormalizer: {e}")
@@ -133,41 +145,193 @@ class CVNormalizer:
         return valid_experiences    
 
     def _normalize_experiences(self, valid_experiences: list) -> list:
-        print("3. Normalizzazione di ogni esperienza valida...")
-        normalized_list = []
-        for exp in valid_experiences:
+        """
+        Versione sincrona mantenuta per backward compatibility.
+        Usa la versione async internamente.
+        """
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        return loop.run_until_complete(self._normalize_experiences_async(valid_experiences))
+    
+    async def _normalize_experiences_async(self, valid_experiences: list) -> list:
+        """
+        TASK 1: Versione ASINCRONA e PARALLELA della normalizzazione.
+        Parallelizza le chiamate LLM per processare più esperienze contemporaneamente.
+        """
+        print("3. Normalizzazione di ogni esperienza valida (PARALLELA)...")
+        print(f"   Processando {len(valid_experiences)} esperienze in parallelo...")
+        
+        async def normalize_single_experience(exp: dict) -> dict | None:
+            """Normalizza una singola esperienza (async)"""
             print(f"  > Normalizzando '{exp['title']}'...")
             prompt = settings.LLM_PROMPT_ENRICHMENT_IT_NORM.format(
                 title=exp['title'], description=exp['description']
             )
+            system_prompt = "Sei un esperto di semantica HR."
+            
             try:
-                raw = get_llm_response(
-                    prompt=prompt,
-                    model=settings.LLM_MODEL,
-                    system_prompt="Sei un esperto di semantica HR.",
-                    temperature=0.15,
-                    max_tokens=800
-                )
+                # TASK 3: Caching LLM responses
+                prompt_hash = get_prompt_hash(prompt, system_prompt, temperature=0.15, max_tokens=800)
+                raw = get_cached_llm_response(prompt_hash)
+                
+                if not raw:
+                    # TASK 1: Chiamata LLM async (parallelizzata) - solo se non in cache
+                    raw = await get_llm_response_async(
+                        prompt=prompt,
+                        model=settings.LLM_MODEL,
+                        system_prompt=system_prompt,
+                        temperature=0.15,
+                        max_tokens=800
+                    )
+                    # Salva in cache
+                    if raw and not raw.startswith("Errore"):
+                        save_cached_llm_response(prompt_hash, raw)
                 enriched_text = json.loads(raw).get("enriched_text")
                 if enriched_text:
-                    query_embedding = self.embedding_model.encode(enriched_text, convert_to_tensor=True, device=self.device)
-                    embeddings_tensor = torch.tensor(self.esco_embeddings_matrix, device=self.device)
-                    cos_scores = util.cos_sim(query_embedding.to(dtype=torch.float32), embeddings_tensor.to(dtype=torch.float32))[0]
-                    top_results = torch.topk(cos_scores, k=settings.TOP_N_MATCHES_NORM)
-                    matches = [
-                        {'esco_title': self.occupations_df.iloc[idx.item()]['Title'], 'similarity': f"{score.item():.4f}"}
-                        for score, idx in zip(top_results.values, top_results.indices)
-                    ]
-                    normalized_list.append({
+                    # TASK 4: Caching Embedding Esperienze
+                    # Crea hash del testo arricchito per cache embedding
+                    text_hash = hashlib.sha256(enriched_text.encode('utf-8')).hexdigest()
+                    candidate_data_for_cache = {"normalized_experiences": [{"llm_enriched_text": enriched_text}]}
+                    cached_embedding = get_candidate_embedding_from_cache(text_hash, candidate_data_for_cache)
+                    
+                    embedding_from_cache = False
+                    if cached_embedding is not None:
+                        # Usa embedding dalla cache
+                        query_embedding = torch.tensor(
+                            cached_embedding, 
+                            device=self.device, 
+                            dtype=torch.float32
+                        )
+                        print(f"    -> Embedding da cache")
+                        embedding_from_cache = True
+                    else:
+                        # TASK 6: Non fare encoding qui, sarà fatto in batch dopo
+                        # Segna che questo testo deve essere processato in batch
+                        pass
+                    
+                    # TASK 2: Usa matrice ESCO pre-convertita (non convertirla ogni volta!)
+                    # Nota: Se embedding_from_cache, calcola subito. Altrimenti sarà fatto in batch.
+                    if embedding_from_cache:
+                        cos_scores = util.cos_sim(
+                            query_embedding.to(dtype=torch.float32), 
+                            self.esco_embeddings_tensor
+                        )[0]
+                        top_results = torch.topk(cos_scores, k=settings.TOP_N_MATCHES_NORM)
+                        matches = [
+                            {'esco_title': self.occupations_df.iloc[idx.item()]['Title'], 'similarity': f"{score.item():.4f}"}
+                            for score, idx in zip(top_results.values, top_results.indices)
+                        ]
+                    else:
+                        # Matches verranno calcolati dopo batch encoding
+                        matches = []
+                    
+                    result = {
                         "original_title": exp['title'],
                         "duration_months": exp['duration_months'],
-                        "esco_matches": matches
-                    })
-                    print(f"    -> Match trovato.")
+                        "esco_matches": matches,
+                        "enriched_text": enriched_text,  # Salva per batch encoding
+                        "embedding_from_cache": embedding_from_cache  # Flag per batch processing
+                    }
+                    if embedding_from_cache:
+                        print(f"    -> Match trovato (da cache).")
+                    else:
+                        print(f"    -> Arricchito, in attesa batch encoding...")
+                    return result
                 else:
                     print(f"    -> Arricchimento saltato (testo nullo dall'LLM).")
+                    return None
             except Exception as e:
                 print(f"  - ERRORE durante l'arricchimento/matching per '{exp['title']}': {e}")
+                return None
+        
+        # TASK 1: Parallelizza tutte le chiamate LLM
+        tasks = [normalize_single_experience(exp) for exp in valid_experiences]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Filtra risultati validi (rimuovi None ed eccezioni)
+        normalized_list = []
+        enriched_texts_for_batch = []  # Per TASK 6: Batch encoding
+        result_indices = []  # Per mappare embeddings batch ai risultati
+        
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                print(f"  - ERRORE durante normalizzazione esperienza {i+1}: {result}")
+            elif result is not None:
+                # TASK 6: Raccogli testi arricchiti per batch encoding (se non già in cache)
+                if result.get("enriched_text") and not result.get("embedding_from_cache"):
+                    enriched_texts_for_batch.append(result["enriched_text"])
+                    result_indices.append(len(normalized_list))
+                
+                normalized_list.append(result)
+        
+        # TASK 6: Batch encoding transformer (se ci sono testi da processare)
+        if enriched_texts_for_batch:
+            print(f"  → Encoding batch transformer per {len(enriched_texts_for_batch)} esperienze...")
+            try:
+                # Encoding batch (più efficiente)
+                batch_embeddings = self.embedding_model.encode(
+                    enriched_texts_for_batch,
+                    batch_size=4,  # Batch size piccolo per limiti RAM
+                    convert_to_tensor=True,
+                    device=self.device,
+                    show_progress_bar=False
+                )
+                
+                # Mappa embeddings batch ai risultati
+                for batch_idx, result_idx in enumerate(result_indices):
+                    if result_idx < len(normalized_list):
+                        result = normalized_list[result_idx]
+                        enriched_text = result["enriched_text"]
+                        
+                        # Ottieni embedding dal batch (gestisci dimensioni correttamente)
+                        if batch_embeddings.dim() == 2:
+                            # Batch di embeddings: shape [batch_size, embedding_dim]
+                            query_embedding = batch_embeddings[batch_idx:batch_idx+1]  # [1, embedding_dim]
+                        else:
+                            # Singolo embedding: shape [embedding_dim]
+                            query_embedding = batch_embeddings[batch_idx].unsqueeze(0)  # [1, embedding_dim]
+                        
+                        # Assicura float32
+                        query_embedding = query_embedding.to(dtype=torch.float32)
+                        
+                        # Calcola cosine similarity con ESCO
+                        cos_scores = util.cos_sim(
+                            query_embedding, 
+                            self.esco_embeddings_tensor
+                        )[0]
+                        top_results = torch.topk(cos_scores, k=settings.TOP_N_MATCHES_NORM)
+                        matches = [
+                            {'esco_title': self.occupations_df.iloc[idx.item()]['Title'], 'similarity': f"{score.item():.4f}"}
+                            for score, idx in zip(top_results.values, top_results.indices)
+                        ]
+                        
+                        # Aggiorna risultato con matches
+                        normalized_list[result_idx]["esco_matches"] = matches
+                        
+                        # Salva embedding in cache per riutilizzo futuro
+                        text_hash = hashlib.sha256(enriched_text.encode('utf-8')).hexdigest()
+                        # Estrai embedding come numpy array (rimuovi dimensione batch)
+                        if query_embedding.dim() > 1:
+                            embedding_array = query_embedding.squeeze(0).cpu().numpy().astype(np.float32)
+                        else:
+                            embedding_array = query_embedding.cpu().numpy().astype(np.float32)
+                        candidate_data_for_cache = {"normalized_experiences": [{"llm_enriched_text": enriched_text}]}
+                        save_candidate_embedding_to_cache(
+                            profile_id=text_hash,
+                            embedding=embedding_array,
+                            candidate_data=candidate_data_for_cache
+                        )
+                
+                print(f"    ✓ Batch encoding completato per {len(enriched_texts_for_batch)} esperienze")
+            except Exception as e:
+                print(f"    ⚠ Errore batch encoding: {e}, continuo con encoding sequenziale")
+                # Fallback: encoding sequenziale già fatto in normalize_single_experience
+        
+        print(f"✓ Normalizzazione completata: {len(normalized_list)}/{len(valid_experiences)} esperienze processate con successo")
         return normalized_list
 
     def run_normalization(self, parsed_experiences: list, profile_id: str = "cv_profile") -> list | None:
@@ -197,7 +361,7 @@ class CVNormalizer:
             return None
         print(f"Trovate {len(valid_experiences)} esperienze valide da normalizzare.")
 
-        # 4. La normalizzazione vera e propria rimane la stessa
+        # 4. La normalizzazione (ora async/parallela)
         normalized_experiences_list = self._normalize_experiences(valid_experiences)
 
         # 5. Costruisce il risultato finale

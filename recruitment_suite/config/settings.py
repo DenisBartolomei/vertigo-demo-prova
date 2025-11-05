@@ -34,9 +34,14 @@ MONGO_COLLECTION_CANDIDATE_VECTORS = "suite_candidate_vectors"
 # ==============================================================================
 
 # --- CONFIGURAZIONE CLOUD ---
-CLOUD_CHUNK_SIZE = 16  # Chunk size ottimizzato per cloud (aumentato per migliorare prestazioni)
+CLOUD_CHUNK_SIZE = 32  # Chunk size ottimizzato per cloud (aumentato per migliorare prestazioni)
 CLOUD_BATCH_SIZE = 50  # Batch size per MongoDB bulk operations
-CLOUD_MEMORY_THRESHOLD = 85.0  # Soglia percentuale memoria (aumentata per permettere più memoria)
+CLOUD_MEMORY_THRESHOLD = 90.0  # Soglia percentuale memoria (aumentata per permettere più memoria)
+# ==============================================================================
+
+# --- CONFIGURAZIONE CACHING LLM ---
+LLM_CACHE_ENABLED = True  # Abilita caching risposte LLM
+LLM_CACHE_TTL_DAYS = 7  # TTL cache in giorni (esperienze simili)
 # ==============================================================================
 
 # --- FILE DI INPUT DINAMICI (Questi rimangono percorsi locali) ---

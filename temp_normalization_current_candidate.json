@@ -7,36 +7,40 @@
         "duration_months": 19,
         "esco_matches": [
           {
-            "esco_title": "responsabile della pianificazione strategica",
-            "similarity": "0.7920"
+            "esco_title": "responsabile della distribuzione di legno e materiali edili",
+            "similarity": "0.7839"
           },
           {
-            "esco_title": "responsabile strategico/responsabile strategica",
-            "similarity": "0.7564"
+            "esco_title": "sarto da uomo/sarta da uomo",
+            "similarity": "0.7522"
           },
           {
-            "esco_title": "consulente finanziario corporate",
-            "similarity": "0.7484"
+            "esco_title": "addetto all’ispezione dei sigari/addetta all’ispezione dei sigari",
+            "similarity": "0.7471"
           }
-        ]
+        ],
+        "enriched_text": "Il Senior Strategy Consultant coordina team multidisciplinari e gestisce direttamente la relazione con clienti nel settore dei servizi finanziari, occupandosi di pianificazione strategica, modellizzazione dei costi, analisi di business case, due diligence tecnologica (Tech CDD) in operazioni di M&A e Project Management Office IT. Svolge analisi di mercato e normative, benchmarking competitivo, supporta la definizione di linee guida strategiche e presenta deliverable a stakeholder senior, fornendo consulenza e supporto decisionale al top management per l’ottimizzazione dei processi aziendali e l’implementazione di strategie innovative.",
+        "embedding_from_cache": false
       },
       {
         "original_title": "IT Strategy Consultant",
         "duration_months": 19,
         "esco_matches": [
           {
-            "esco_title": "consulente informatico",
-            "similarity": "0.8017"
+            "esco_title": "conducente di macchina battipalo",
+            "similarity": "0.8300"
           },
           {
-            "esco_title": "analista business dei sistemi TIC",
-            "similarity": "0.7873"
+            "esco_title": "console",
+            "similarity": "0.8136"
           },
           {
-            "esco_title": "responsabile dell’analisi commerciale TIC",
-            "similarity": "0.7536"
+            "esco_title": "responsabile della sicurezza",
+            "similarity": "0.7937"
           }
-        ]
+        ],
+        "enriched_text": "Il ruolo di IT Strategy Consultant prevede l’analisi e la definizione di strategie IT innovative, con particolare attenzione all’intelligenza artificiale generativa e ai trend tecnologici emergenti. La posizione include la collaborazione con stakeholder di alto livello per la trasformazione digitale, la ristrutturazione dei modelli operativi IT, la creazione di centri di eccellenza, la partecipazione a progetti di fusione e acquisizione tecnologica (Tech M&A), la revisione di IT Target Operating Model e la gestione di progetti complessi per clienti enterprise.",
+        "embedding_from_cache": false
       }
     ]
   }

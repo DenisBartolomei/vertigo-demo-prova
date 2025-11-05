@@ -79,13 +79,33 @@ def generate_qualitative_llm_report(candidate_json: dict, market_json: dict, job
         candidate_data=candidate_data_str
     )
 
-    return get_llm_response(
+    # TASK 5: Caching LLM responses per Market Benchmark qualitativo
+    try:
+        prompt_hash = get_prompt_hash(user_prompt, system_prompt, temperature=0.4, max_tokens=1000)
+        cached_response = get_cached_llm_response(prompt_hash)
+        
+        if cached_response:
+            print(f"✓ [Market Benchmark Qualitativo] Cache HIT - riuso risposta cached")
+            return cached_response
+    except Exception as e:
+        print(f"⚠ Errore caching Market Benchmark: {e}, continuo senza cache")
+    
+    response = get_llm_response(
         prompt=user_prompt,
         model=settings.LLM_MODEL,
         system_prompt=system_prompt,
         temperature=0.4,
         max_tokens=1000
     )
+    
+    # Salva in cache
+    try:
+        if response and not response.startswith("Errore"):
+            save_cached_llm_response(prompt_hash, response)
+    except Exception as e:
+        print(f"⚠ Errore salvataggio cache Market Benchmark: {e}")
+    
+    return response
 
 from interviewer.llm_service import get_llm_response_async
 
@@ -163,11 +183,31 @@ async def generate_qualitative_llm_report_async(candidate_json: dict, market_jso
         candidate_data=candidate_data_str
     )
 
+    # TASK 5: Caching LLM responses per Market Benchmark qualitativo (async)
+    try:
+        prompt_hash = get_prompt_hash(user_prompt, system_prompt, temperature=0.4, max_tokens=1000)
+        cached_response = get_cached_llm_response(prompt_hash)
+        
+        if cached_response:
+            print(f"✓ [Market Benchmark Qualitativo (async)] Cache HIT - riuso risposta cached")
+            return cached_response
+    except Exception as e:
+        print(f"⚠ Errore caching Market Benchmark (async): {e}, continuo senza cache")
+    
     # <-- MODIFICA CHIAVE: Chiama la versione async con 'await' -->
-    return await get_llm_response_async(
+    response = await get_llm_response_async(
         prompt=user_prompt,
         model=settings.LLM_MODEL,
         system_prompt=system_prompt,
         temperature=0.4,
         max_tokens=1000
     )
+    
+    # Salva in cache
+    try:
+        if response and not response.startswith("Errore"):
+            save_cached_llm_response(prompt_hash, response)
+    except Exception as e:
+        print(f"⚠ Errore salvataggio cache Market Benchmark (async): {e}")
+    
+    return response
