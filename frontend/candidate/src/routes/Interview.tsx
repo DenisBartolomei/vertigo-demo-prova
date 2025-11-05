@@ -147,6 +147,7 @@ export function Interview() {
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [showFullscreenWarning, setShowFullscreenWarning] = useState(false)
   const [showFullscreenReturnPrompt, setShowFullscreenReturnPrompt] = useState(false)
+  const [showMultipleDisplayBlock, setShowMultipleDisplayBlock] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Speech recognition hook
@@ -327,8 +328,24 @@ export function Interview() {
   async function startInterview() {
     if (!token || loading) return // Prevent multiple starts
     
+    // Controlla prima se c'è un doppio schermo attivo
+    if (antiCheat.checkMultipleDisplays()) {
+      setShowMultipleDisplayBlock(true)
+      return
+    }
+    
     // Mostra prima il popup di avviso fullscreen
     setShowFullscreenWarning(true)
+  }
+
+  function handleCheckMultipleDisplaysAgain() {
+    // Controlla di nuovo se il doppio schermo è ancora presente
+    if (!antiCheat.checkMultipleDisplays()) {
+      // Se non è più presente, chiudi il popup e procedi
+      setShowMultipleDisplayBlock(false)
+      setShowFullscreenWarning(true)
+    }
+    // Se è ancora presente, il popup rimane aperto
   }
 
   async function handleFullscreenWarningAccept() {
@@ -435,6 +452,75 @@ export function Interview() {
 
   return (
     <div className="chat-container">
+      {/* Popup di blocco doppio schermo */}
+      {showMultipleDisplayBlock && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(220, 38, 38, 0.95)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10001
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '600px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div style={{ fontSize: '64px', marginBottom: '16px' }}>🖥️</div>
+              <h2 style={{ fontSize: '24px', fontWeight: '600', color: '#dc2626', marginBottom: '12px' }}>
+                Doppio Schermo Rilevato
+              </h2>
+            </div>
+            <div style={{ fontSize: '16px', lineHeight: '1.6', color: '#4a4a4a', marginBottom: '24px' }}>
+              <p style={{ marginBottom: '16px' }}>
+                <strong>⚠️ ATTENZIONE:</strong> Il sistema ha rilevato la presenza di più schermi collegati al tuo computer.
+              </p>
+              <div style={{ backgroundColor: '#fee2e2', border: '1px solid #dc2626', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+                <p style={{ margin: 0, color: '#991b1b' }}>
+                  <strong>🚨 Regola di sicurezza:</strong>
+                </p>
+                <ul style={{ marginTop: '12px', paddingLeft: '20px', color: '#991b1b' }}>
+                  <li>Per garantire l'integrità del colloquio, è necessario utilizzare <strong>un solo schermo</strong></li>
+                  <li>Disconnetti tutti i monitor aggiuntivi prima di procedere</li>
+                  <li>Una volta disconnesso lo schermo aggiuntivo, clicca su "Verifica di nuovo"</li>
+                </ul>
+              </div>
+              <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>
+                📌 Questo controllo viene eseguito anche durante il colloquio per garantire la sicurezza del processo.
+              </p>
+            </div>
+            <button
+              onClick={handleCheckMultipleDisplaysAgain}
+              style={{
+                width: '100%',
+                padding: '16px',
+                fontSize: '18px',
+                fontWeight: '600',
+                color: 'white',
+                backgroundColor: '#16a34a',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                marginBottom: '12px'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#15803d'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#16a34a'}
+            >
+              ✅ Verifica di nuovo
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Popup di avviso fullscreen prima dell'inizio */}
       {showFullscreenWarning && (
         <div style={{

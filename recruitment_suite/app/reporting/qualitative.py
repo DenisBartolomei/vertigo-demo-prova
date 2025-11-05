@@ -4,6 +4,7 @@
 import json
 from recruitment_suite.config import settings
 from interviewer.llm_service import get_llm_response
+from recruitment_suite.app.core.llm_cache import get_prompt_hash, get_cached_llm_response, save_cached_llm_response
 
 
 def generate_qualitative_llm_report(candidate_json: dict, market_json: dict, job_offer_text: str) -> str:
@@ -80,6 +81,7 @@ def generate_qualitative_llm_report(candidate_json: dict, market_json: dict, job
     )
 
     # TASK 5: Caching LLM responses per Market Benchmark qualitativo
+    prompt_hash = None
     try:
         prompt_hash = get_prompt_hash(user_prompt, system_prompt, temperature=0.4, max_tokens=1000)
         cached_response = get_cached_llm_response(prompt_hash)
@@ -100,7 +102,7 @@ def generate_qualitative_llm_report(candidate_json: dict, market_json: dict, job
     
     # Salva in cache
     try:
-        if response and not response.startswith("Errore"):
+        if response and not response.startswith("Errore") and prompt_hash:
             save_cached_llm_response(prompt_hash, response)
     except Exception as e:
         print(f"⚠ Errore salvataggio cache Market Benchmark: {e}")
@@ -184,6 +186,7 @@ async def generate_qualitative_llm_report_async(candidate_json: dict, market_jso
     )
 
     # TASK 5: Caching LLM responses per Market Benchmark qualitativo (async)
+    prompt_hash = None
     try:
         prompt_hash = get_prompt_hash(user_prompt, system_prompt, temperature=0.4, max_tokens=1000)
         cached_response = get_cached_llm_response(prompt_hash)
@@ -205,7 +208,7 @@ async def generate_qualitative_llm_report_async(candidate_json: dict, market_jso
     
     # Salva in cache
     try:
-        if response and not response.startswith("Errore"):
+        if response and not response.startswith("Errore") and prompt_hash:
             save_cached_llm_response(prompt_hash, response)
     except Exception as e:
         print(f"⚠ Errore salvataggio cache Market Benchmark (async): {e}")

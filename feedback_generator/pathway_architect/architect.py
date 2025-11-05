@@ -130,6 +130,7 @@ async def create_final_feedback_content_async(
     if not structured_response_str:
         return None
 
+    parsed_json = None
     try:
         print("3. [Report Finale] Output strutturato ricevuto, validazione in corso...")
         parsed_json = json.loads(structured_response_str)
@@ -144,6 +145,12 @@ async def create_final_feedback_content_async(
             print(f"⚠ ATTENZIONE: target_role mancante nel JSON LLM, uso valore fornito: {target_role}")
             parsed_json["target_role"] = target_role
         
+        # Gestione alias: Pydantic può restituire errori se il JSON usa alias invece dei nomi dei campi
+        # Convertiamo manualmente gli alias ai nomi dei campi prima della validazione
+        if "Profilo sintetico" in parsed_json and "profile_summary" not in parsed_json:
+            parsed_json["profile_summary"] = parsed_json.pop("Profilo sintetico")
+            print("⚠ ATTENZIONE: Convertito alias 'Profilo sintetico' in 'profile_summary'")
+        
         validated_data = FinalReportContent.model_validate(parsed_json)
         print("4. [Report Finale] Contenuto generato e validato.")
         return validated_data
@@ -151,9 +158,33 @@ async def create_final_feedback_content_async(
         print(f"✗ ERRORE: JSON non valido ricevuto dall'LLM: {e}")
         print(f"   Risposta ricevuta (primi 500 caratteri): {structured_response_str[:500]}")
         return None
-    except Exception as e:
-        print(f"✗ ERRORE critico durante la validazione del report finale: {e}")
+    except Exception as validation_error:
+        # Gestione specifica per errori di validazione Pydantic
+        print(f"✗ ERRORE critico durante la validazione del report finale: {validation_error}")
         print(f"   JSON ricevuto (primi 500 caratteri): {structured_response_str[:500] if structured_response_str else 'Nessuna risposta'}")
-        import traceback
-        print(f"   Traceback: {traceback.format_exc()}")
-        return None
+        
+        # Prova a fare un fallback più robusto: ricarica il JSON e gestisci gli errori campo per campo
+        try:
+            # Riprova a parsare il JSON se non era già stato parsato
+            if parsed_json is None:
+                parsed_json = json.loads(structured_response_str)
+            
+            # Se la validazione fallisce, prova a costruire manualmente i campi mancanti
+            if "candidate_name" not in parsed_json or not parsed_json.get("candidate_name"):
+                parsed_json["candidate_name"] = candidate_name
+            if "target_role" not in parsed_json or not parsed_json.get("target_role"):
+                parsed_json["target_role"] = target_role
+            
+            # Gestione alias anche nel fallback
+            if "Profilo sintetico" in parsed_json and "profile_summary" not in parsed_json:
+                parsed_json["profile_summary"] = parsed_json.pop("Profilo sintetico")
+            
+            # Riprova la validazione dopo il fallback
+            validated_data = FinalReportContent.model_validate(parsed_json, strict=False)
+            print("⚠ [FALLBACK] Validazione riuscita dopo correzione dei campi mancanti")
+            return validated_data
+        except Exception as fallback_error:
+            print(f"✗ ERRORE anche nel fallback: {fallback_error}")
+            import traceback
+            print(f"   Traceback: {traceback.format_exc()}")
+            return None
