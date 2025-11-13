@@ -57,7 +57,7 @@ gcloud compute instances create ${VM_NAME} \
     --metadata=install-nvidia-driver=True \
     --scopes=https://www.googleapis.com/auth/cloud-platform \
     --tags=gpu-service,http-server \
-    --create-disk=auto-delete=yes,boot=yes,device-name=${VM_NAME},image=projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts,mode=rw,size=${BOOT_DISK_SIZE},type=projects/${PROJECT_ID}/zones/${ZONE}/diskTypes/pd-standard
+    --project=${PROJECT_ID}
 
 echo "✅ VM creata con successo"
 
