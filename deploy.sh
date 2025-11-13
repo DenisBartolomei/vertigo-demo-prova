@@ -5,7 +5,7 @@ set -e
 # Configuration
 PROJECT_ID="poetic-orb-474016-q7"
 REGION="europe-west8"  # Milan, Italy (per Cloud Run)
-GPU_ZONE="europe-west1-b"  # Zone per GPU VM (Belgium - supporta N1+T4)
+GPU_ZONE="${GPU_ZONE:-europe-west4-a}"  # Zone per GPU VM (Netherlands - principale zona EU con GPU)
 SERVICE_ACCOUNT="vertigo-ai-deploy@${PROJECT_ID}.iam.gserviceaccount.com"
 GPU_VM_NAME="vertigo-gpu-service"
 

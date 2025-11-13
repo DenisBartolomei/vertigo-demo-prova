@@ -8,7 +8,7 @@ set -e
 # Configuration
 PROJECT_ID="${GCP_PROJECT_ID:-poetic-orb-474016-q7}"
 REGION="${GCP_REGION:-europe-west8}"
-ZONE="${GCP_ZONE:-europe-west1-b}"  # Belgium - supporta N1+T4
+ZONE="${GCP_ZONE:-europe-west4-a}"  # Netherlands - principale zona EU con GPU T4
 VM_NAME="${GPU_VM_NAME:-vertigo-gpu-service}"
 MACHINE_TYPE="${GPU_MACHINE_TYPE:-n1-standard-2}"
 GPU_TYPE="${GPU_TYPE:-nvidia-tesla-t4}"

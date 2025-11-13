@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", os.getenv("PROJECT_ID", "poetic-orb-474016-q7"))
-ZONE = os.getenv("GCP_ZONE", os.getenv("ZONE", "europe-west8-a"))
+ZONE = os.getenv("GCP_ZONE", os.getenv("ZONE", "europe-west4-a"))  # Netherlands - principale zona EU
 VM_NAME = os.getenv("GPU_VM_NAME", "vertigo-gpu-service")
 
 
