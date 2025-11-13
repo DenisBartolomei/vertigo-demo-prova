@@ -152,47 +152,80 @@ def _extract_skills_from_case(caso_svolto_data: dict, position_data: dict) -> Li
     unmatched_skills = []
     
     for skill_name in tested_skills:
+        # Valida e normalizza il formato della skill
+        normalized_skill_name, is_valid = _validate_skill_format(skill_name)
+        
+        if not is_valid:
+            print(f"    ⚠ Skill non valida, saltata: '{skill_name}'")
+            unmatched_skills.append(skill_name)
+            continue
+        
+        # Usa il nome normalizzato per il matching
+        skill_to_match = normalized_skill_name
+        
         # Prima prova matching esatto
         exact_match = None
         for item in schema:
             req = item.get("requirement", "").strip()
-            if req == skill_name:
+            # Normalizza anche il requirement per il matching
+            normalized_req, _ = _validate_skill_format(req)
+            if normalized_req == skill_to_match:
                 exact_match = item
                 break
         
         if exact_match:
             # Match esatto trovato
             crit = exact_match.get("criteria", {})
-            c1 = crit.get("evaluation_criteria") or ""
+            # Supporta sia evaluation_criteria_1 che evaluation_criteria per retrocompatibilità
+            c1 = crit.get("evaluation_criteria_1") or crit.get("evaluation_criteria") or ""
+            skill_id = _slugify(skill_to_match)
+            if not skill_id:
+                print(f"    ⚠ Skill ID vuoto dopo slugify: '{skill_to_match}'")
+                unmatched_skills.append(skill_name)
+                continue
+            
             canonical.append({
-                "skill_id": _slugify(skill_name),
-                "skill_name": skill_name,
-                "criteria_texts": [c1]
+                "skill_id": skill_id,
+                "skill_name": skill_to_match,
+                "criteria_texts": [c1] if c1 else [""]
             })
             matched_skills.add(skill_name)
             print(f"    ✓ Match esatto: '{skill_name}' -> '{exact_match.get('requirement')}'")
         else:
             # Prova matching fuzzy
-            best_match_req = _find_best_skill_match(skill_name, available_requirements, threshold=0.9)
+            best_match_req = _find_best_skill_match(skill_to_match, available_requirements, threshold=0.9)
             if best_match_req:
                 # Trova l'item corrispondente
                 for item in schema:
-                    if item.get("requirement", "").strip() == best_match_req:
+                    req_normalized, _ = _validate_skill_format(item.get("requirement", "").strip())
+                    if req_normalized == best_match_req:
                         crit = item.get("criteria", {})
-                        c1 = crit.get("evaluation_criteria") or ""
+                        c1 = crit.get("evaluation_criteria_1") or crit.get("evaluation_criteria") or ""
+                        skill_id = _slugify(skill_to_match)
+                        if not skill_id:
+                            print(f"    ⚠ Skill ID vuoto dopo slugify: '{skill_to_match}'")
+                            unmatched_skills.append(skill_name)
+                            break
+                        
                         canonical.append({
-                            "skill_id": _slugify(skill_name),
-                            "skill_name": skill_name,
-                            "criteria_texts": [c1]
+                            "skill_id": skill_id,
+                            "skill_name": skill_to_match,
+                            "criteria_texts": [c1] if c1 else [""]
                         })
                         matched_skills.add(skill_name)
                         print(f"    ✓ Match fuzzy: '{skill_name}' -> '{best_match_req}'")
                         break
             else:
-                # Nessun match trovato - includi comunque con criteri vuoti
+                # Nessun match trovato - includi comunque con criteri vuoti (ma valida il formato)
+                skill_id = _slugify(skill_to_match)
+                if not skill_id:
+                    print(f"    ⚠ Skill ID vuoto dopo slugify: '{skill_to_match}'")
+                    unmatched_skills.append(skill_name)
+                    continue
+                
                 canonical.append({
-                    "skill_id": _slugify(skill_name),
-                    "skill_name": skill_name,
+                    "skill_id": skill_id,
+                    "skill_name": skill_to_match,
                     "criteria_texts": [""]
                 })
                 unmatched_skills.append(skill_name)
@@ -204,33 +237,95 @@ def _extract_skills_from_case(caso_svolto_data: dict, position_data: dict) -> Li
     
     return canonical
 
+def _validate_skill_format(skill_name: str) -> tuple:
+    """
+    Valida e normalizza il formato di una skill.
+    
+    Returns:
+        Tuple (skill_name_normalized, is_valid)
+    """
+    if not skill_name:
+        return "", False
+    
+    # Rimuovi spazi extra e normalizza
+    normalized = skill_name.strip()
+    
+    # Normalizza spazi multipli
+    normalized = re.sub(r'\s+', ' ', normalized)
+    
+    # Controlla che non sia vuoto dopo la normalizzazione
+    if not normalized:
+        return "", False
+    
+    # Controlla che non sia troppo lungo (probabilmente un errore)
+    if len(normalized) > 200:
+        print(f"    ⚠ Skill name troppo lunga ({len(normalized)} caratteri): '{normalized[:50]}...'")
+        return normalized[:200], True  # Tronca ma considera valida
+    
+    return normalized, True
+
 def _extract_canonical_skills(position_data: dict) -> List[dict]:
     """
     Estrae la lista canonica delle skill dai criteri di valutazione finali (evaluation_criteria.evaluation_schema).
     Ogni item contiene: skill_id, skill_name, criteria_texts (lista con 1 stringa).
+    
+    Valida e normalizza il formato delle skill estratte.
     
     DEPRECATED: Usa _extract_skills_from_case per estrarre solo le skill testate nel caso.
     """
     eval_criteria = position_data.get("evaluation_criteria", {})
     schema = eval_criteria.get("evaluation_schema", [])
     canonical = []
+    invalid_skills = []
+    
+    print(f"  - [SKILL EXTRACTOR] Estrazione skill da {len(schema)} items nell'evaluation_schema...")
+    
     for item in schema:
         req = item.get("requirement") or ""
         crit = item.get("criteria", {})
-        c1 = crit.get("evaluation_criteria") or ""
+        # Supporta sia evaluation_criteria_1 che evaluation_criteria per retrocompatibilità
+        c1 = crit.get("evaluation_criteria_1") or crit.get("evaluation_criteria") or ""
+        
         if not req:
+            print(f"    ⚠ Item senza requirement, saltato")
             continue
+        
+        # Valida e normalizza il formato della skill
+        normalized_name, is_valid = _validate_skill_format(req)
+        
+        if not is_valid:
+            invalid_skills.append(req)
+            print(f"    ⚠ Skill non valida (vuota dopo normalizzazione): '{req}'")
+            continue
+        
+        # Se il nome è cambiato dopo la normalizzazione, loggalo
+        if normalized_name != req:
+            print(f"    ℹ Skill normalizzata: '{req}' → '{normalized_name}'")
+        
+        skill_id = _slugify(normalized_name)
+        
+        # Verifica che skill_id non sia vuoto
+        if not skill_id:
+            invalid_skills.append(req)
+            print(f"    ⚠ Skill ID vuoto dopo slugify: '{normalized_name}'")
+            continue
+        
         canonical.append({
-            "skill_id": _slugify(req),
-            "skill_name": req,
-            "criteria_texts": [c1]
+            "skill_id": skill_id,
+            "skill_name": normalized_name,
+            "criteria_texts": [c1] if c1 else [""]
         })
+    
+    print(f"  - [SKILL EXTRACTOR] Estrazione completata: {len(canonical)} skill valide")
+    if invalid_skills:
+        print(f"    ⚠ {len(invalid_skills)} skill non valide scartate: {invalid_skills}")
+    
     return canonical
 
 def _canonical_skilllist_as_json(canonical_skills: List[dict]) -> str:
     """
     Prepara un JSON compatto con campi necessari al prompt:
-    - skill_id, skill_name, criteria_texts[1]
+    - skill_id, skill_name, criteria_texts[2]
     """
     payload = {"skills": canonical_skills}
     return json.dumps(payload, ensure_ascii=False, indent=2)
@@ -247,14 +342,12 @@ def _score_cv_relevance(cv_text: str, canonical_skills: List[dict], seniority_le
         "it": (
             "Sei un valutatore HR rigoroso. Applica sempre la stessa rubrica e restituisci un output JSON per TUTTE le skill, "
             "senza ometterne nessuna e mantenendo l'ordine. Vietato inventare evidenze. "
-            "Usa il 'criterio di valutazione' (derivato dalla rubrica ufficiale) come standard oggettivo e imparziale per guidare la tua valutazione. "
-            "Confronta le evidenze trovate con il criterio fornito."
+            "Usa i 'criteria_texts' come estratti dalla rubrica 'evaluation_criteria'; se mancanti per una skill, valuta comunque."
         ),
         "en": (
             "You are a rigorous HR evaluator. Always apply the same rubric and return a JSON output for ALL skills, "
             "without omitting any and maintaining the order. Inventing evidence is forbidden. "
-            "Use the 'evaluation criterion' (derived from the official rubric) as an objective and impartial standard to guide your evaluation. "
-            "Compare the evidence found with the provided criterion."
+            "Use 'criteria_texts' as extracted from the 'evaluation_criteria' rubric; if missing for a skill, evaluate anyway."
         )
     }
     
@@ -292,14 +385,12 @@ def _score_interview_relevance(conversation_json: List[dict], canonical_skills: 
         "it": (
             "Sei un valutatore HR rigoroso. Applica sempre la stessa rubrica e restituisci un output JSON per TUTTE le skill, "
             "senza ometterne nessuna e mantenendo l'ordine. Pesa gli step che testano esplicitamente la skill. Vietato inventare evidenze. "
-            "Usa il 'criterio di valutazione' (derivato dalla rubrica ufficiale) come standard oggettivo e imparziale per guidare la tua valutazione. "
-            "Confronta le evidenze trovate con il criterio fornito."
+            "Usa i 'criteria_texts' come estratti dalla rubrica 'evaluation_criteria'; se mancanti per una skill, valuta comunque."
         ),
         "en": (
             "You are a rigorous HR evaluator. Always apply the same rubric and return a JSON output for ALL skills, "
             "without omitting any and maintaining the order. Weight the steps that explicitly test the skill. Inventing evidence is forbidden. "
-            "Use the 'evaluation criterion' (derived from the official rubric) as an objective and impartial standard to guide your evaluation. "
-            "Compare the evidence found with the provided criterion."
+            "Use 'criteria_texts' as extracted from the 'evaluation_criteria' rubric; if missing for a skill, evaluate anyway."
         )
     }
     
@@ -414,6 +505,30 @@ def compute_and_save_skill_relevance(session_id: str, tenant_id: str = None) -> 
     if not canonical_skills:
         print("  - ERRORE: 'evaluation_criteria.evaluation_schema' non trovato o vuoto. Impossibile stabilire le skill canoniche.")
         return False
+    
+    # Validazione postumo: verifica coerenza con canonical_skills dalla position_data (se disponibile)
+    position_canonical_skills = position_data.get("canonical_skills")
+    if position_canonical_skills:
+        print("  - [SKILL SCORER] Validazione coerenza con canonical_skills dalla position_data...")
+        position_skill_names = {skill['skill_name'].strip().lower() for skill in position_canonical_skills}
+        extracted_skill_names = {skill['skill_name'].strip().lower() for skill in canonical_skills}
+        
+        # Verifica che tutte le skill estratte siano nella lista canonica
+        missing_in_canonical = extracted_skill_names - position_skill_names
+        if missing_in_canonical:
+            print(f"    ⚠ ATTENZIONE: {len(missing_in_canonical)} skill estratte non sono nella lista canonica:")
+            for skill_name in missing_in_canonical:
+                print(f"      - '{skill_name}'")
+            print(f"    Questo potrebbe indicare un'inconsistenza nel processo.")
+        else:
+            print(f"    ✓ Tutte le {len(extracted_skill_names)} skill estratte corrispondono alla lista canonica.")
+        
+        # Verifica se ci sono skill canoniche non valutate (accettabile, ogni reasoning step testa solo alcune skills)
+        not_evaluated = position_skill_names - extracted_skill_names
+        if not_evaluated:
+            print(f"    ℹ {len(not_evaluated)} skill canoniche non sono state valutate (normale: ogni reasoning step testa solo alcune skills).")
+    else:
+        print("  - [SKILL SCORER] canonical_skills non disponibile nella position_data (validazione saltata).")
 
     # Estrai il seniority level dalla posizione
     seniority_level = position_data.get("seniority_level", "Mid-Level")

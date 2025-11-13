@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react'
+import { Clock, BarChart3, Search, Settings, Save } from 'lucide-react'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://vertigo-ai-backend-tbia7kjh7a-oc.a.run.app'
 
@@ -94,8 +97,8 @@ export function InterviewSetup() {
     return (
       <div className="container" style={{ display: 'grid', gap: '32px' }}>
         <div className="card fade-in" style={{ textAlign: 'center', padding: '40px' }}>
-          <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
-          Caricamento configurazione...
+          <Clock size={24} color="#9CA3AF" style={{ marginBottom: '8px' }} />
+          <div style={{ marginTop: '8px' }}>Caricamento configurazione...</div>
         </div>
       </div>
     )
@@ -211,7 +214,7 @@ export function InterviewSetup() {
             background: 'var(--bg-secondary)'
           }}>
             <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>
-              📊 Stime Calcolate
+              <BarChart3 size={18} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Stime Calcolate
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
@@ -262,7 +265,7 @@ export function InterviewSetup() {
           marginBottom: '24px'
         }}>
           <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: 'white' }}>
-            🔍 Pre-screening Candidati
+            <Search size={20} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Pre-screening Candidati
           </h2>
           <p style={{ margin: '8px 0 0 0', opacity: 0.8, fontSize: '14px' }}>
             Configurazione test preliminari per filtrare i candidati

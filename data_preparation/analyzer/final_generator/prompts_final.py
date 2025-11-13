@@ -7,7 +7,7 @@ Dati gli input, restituisci un oggetto JSON con i campi predefiniti nella strutt
 Given the inputs, return a JSON object with the predefined fields in the expected structure. Accurately format the output data. If a data is missing or cannot be determined, return a default value (e.g., null, 0, or 'N/A')."""
 }
 
-def create_final_case_prompt(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, json_example_str: str, hr_special_needs: str, reasoning_steps: int, language: str = "it") -> str:
+def create_final_case_prompt(icp_text: str, guide_text: str, kb_summary: str, seniority_level: str, json_example_str: str, hr_special_needs: str, reasoning_steps: int, language: str = "it", canonical_skills: list = None) -> str:
     """
     Assembla il prompt finale per la generazione dei case strutturati, integrando le Indicazioni HR.
     
@@ -20,12 +20,39 @@ def create_final_case_prompt(icp_text: str, guide_text: str, kb_summary: str, se
         hr_special_needs: Indicazioni speciali da parte dell'HR
         reasoning_steps: Numero di reasoning steps richiesti dall'HR (il sistema aggiungerà automaticamente lo step 0)
         language: Lingua del prompt ("it" o "en")
+        canonical_skills: Lista canonica delle skills (UNICA fonte di verità)
     
     Returns:
         Il prompt formattato nella lingua specificata
     """
     # Calcola il numero effettivo di steps da generare (reasoning_steps + 1 per lo step 0)
     total_steps = reasoning_steps + 1
+    
+    # Prepara il blocco canonical_skills PRIMA di definire i prompts (per usarlo nelle f-string)
+    canonical_skills_block = ""
+    if canonical_skills:
+        skills_list = [f"- {skill['skill_name']} ({skill['skill_type']})" for skill in canonical_skills]
+        skills_text = "\n".join(skills_list)
+        if language == "it":
+            canonical_skills_block = f"""
+[LISTA CANONICA DELLE SKILL (UNICA FONTE DI VERITÀ)]
+Questa è la lista COMPLETA e DEFINITIVA di tutte le skill che devono essere testate nei case.
+DEVI usare SOLO queste skill, con i nomi ESATTI come indicati di seguito. NON inventare, NON variare, NON dedurre skill aggiuntive.
+
+{skills_text}
+
+**REGOLA CRITICA**: Per il campo `skills_to_test` in ogni reasoning step, puoi usare SOLO le skill elencate sopra, con i nomi ESATTI. Se una skill non è in questa lista, NON puoi usarla.
+"""
+        else:
+            canonical_skills_block = f"""
+[CANONICAL SKILLS LIST (SINGLE SOURCE OF TRUTH)]
+This is the COMPLETE and DEFINITIVE list of all skills that must be tested in the cases.
+You MUST use ONLY these skills, with the EXACT names as indicated below. DO NOT invent, DO NOT vary, DO NOT deduce additional skills.
+
+{skills_text}
+
+**CRITICAL RULE**: For the `skills_to_test` field in each reasoning step, you can use ONLY the skills listed above, with the EXACT names. If a skill is not in this list, you CANNOT use it.
+"""
     
     prompts = {
         "it": f"""
@@ -35,9 +62,9 @@ Integra le INDICAZIONI SPECIALI HR come vincoli o preferenze operative nella cos
 Indicazioni Speciali HR: usa questo interpretando le richieste in chiave di quanto richiesto nella ICP e guida alla generazione. Dagli buona importanza dal momento che sono le richieste particolari.
 {{hr_block}}
 
-Poiché per ciascun case dovranno essere verificate tutte le skill richieste dovrai, per ciascun reasoning step, indicare 3 skill da poter testare (estratte in modo accurato dalla ICP e basandoti sulle indicazioni della Guida alla generazione) all'interno del reasoning step stesso, esplictando brevemente in che modo (per questo lavoro aiutati con l'input GUIDA ALLA GENERAZIONE, che contiene tutti i requisiti da testare, e le modalità con cui è possibile farlo).
+Poiché per ciascun case dovranno essere verificate tutte le skill richieste dovrai, per ciascun reasoning step, indicare da 2 a 5 skill da poter testare (estratte in modo accurato dalla ICP e basandoti sulle indicazioni della Guida alla generazione) all'interno del reasoning step stesso, esplicitando brevemente in che modo (per questo lavoro aiutati con l'input GUIDA ALLA GENERAZIONE, che contiene tutti i requisiti da testare, e le modalità con cui è possibile farlo).
 Perché i Case, e relativi reasoning steps siano perfetti:
-o	Ciascun case dovrà essere in grado di verificare TUTTE LE skill riportate nei paragrafi della ICP intitolati: "Competenze tecniche richieste esplicitamente dall'annuncio", "Competenze trasversali richieste esplicitamente dall'annuncio (escluse le lingue)". Per fare ciò, dovrai quindi attribuire a ciascun reasoning step almeno 3 skill che secondo te sono ideali da verificare in quel contesto (secondo lo schema imposto).
+o	Ciascun case dovrà essere in grado di verificare TUTTE LE skill riportate nei paragrafi della ICP intitolati: "Competenze tecniche richieste esplicitamente dall'annuncio", "Competenze trasversali richieste esplicitamente dall'annuncio (escluse le lingue)". Per fare ciò, dovrai quindi attribuire a ciascun reasoning step da 1 a 5 skill che secondo te sono ideali da verificare in quel contesto (secondo lo schema imposto).
 o	Dovranno adattare la complessità e la profondità al livello di seniority richiesto (Evita domande da super-esperto se il ruolo è junior, e viceversa evita domande semplici per profili lead).
 o	Dovranno prendere spunto dalla Knowledge Base (kb_insights) riportata di seguito (es. 'Descrivi come guideresti l'implementazione di [Tecnologia X] in un contesto simile a [Insight da Progetto Y da KB]'; Oppure ' Come utilizzeresti [Tecnologia / Metodologia X] in un contesto simile a [Insight da Progetto Z da KB]').
 o	Dovrà esserci un reasoning step ulteriore, rispetto ai {reasoning_steps} creati per decomporre la soluzione. Il reasoning step in questione, chiamato sempre reasoning step 0, servirà a mettere in luce il ragionamento necessario per la risoluzione dei Case, lo costruirai dunque prendendo spunto dai {total_steps} reasoning step creati per decomporre la soluzione. Questo reasoning step servirà a un agente specializzato per capire come testare le capacità di impostare il ragionamento dei candidati.
@@ -52,7 +79,7 @@ o	Dai a ciascun case un taglio narrativo, ad esempio: "Sei il responsabile del m
 o	Evita ambiguità ed eccessiva generalità.
 o	Usa l'input "GUIDA ALLA GENERAZIONE" per comprendere come poter testare in modo efficace ciascuna requisito richiesto dall'annuncio, ricorda che ciascun case dovrà poter testare tutte le skill contenute nell'annuncio.
 o	Non usare ulteriore testo oltre alla produzione di quanto richiesto sopra.
-o   **IMPORTANTE**: Per il campo `skills_to_test`, assicurati di generare una lista di oggetti, dove ogni oggetto ha due chiavi: `skill_name` e `testing_method`. Non generare una semplice lista di stringhe. Le skills_to_test devono essere al 100% attinenti a quanto richiesto dalla ICP e dalle INDICAZIONI SPECIALI HR, inteso che devono essere scritte nello stesso identico modo, senza variazioni; non inventare o dedurre nulla di nuovo.
+o   **IMPORTANTE**: Per il campo `skills_to_test`, assicurati di generare una lista di oggetti, dove ogni oggetto ha due chiavi: `skill_name` e `testing_method`. Non generare una semplice lista di stringhe. Le skills_to_test devono essere ESCLUSIVAMENTE dalla LISTA CANONICA DELLE SKILL fornita sopra, usando i nomi ESATTI senza variazioni, abbreviazioni o sinonimi. NON inventare, NON dedurre, NON variare i nomi delle skill.
 o   **FORMATO JSON OBBLIGATORIO**: Il tuo output finale DEVE essere un oggetto JSON che rispetta esattamente la struttura, i nomi delle chiavi e i tipi di dati mostrati nell'esempio di seguito.
 
 ESEMPIO DELLA STRUTTURA JSON ATTESA:
@@ -60,6 +87,8 @@ ESEMPIO DELLA STRUTTURA JSON ATTESA:
 {{json_example_str}}
 ---
 INPUTS
+
+{canonical_skills_block}
 
 [PROFILO CANDIDATO IDEALE (ICP)]
 {{icp_text}}
@@ -80,9 +109,9 @@ Integrate the HR SPECIAL INSTRUCTIONS as operational constraints or preferences 
 HR Special Instructions: use this by interpreting the requests in terms of what is required in the ICP and generation guide. Give it good importance since these are particular requests.
 {{hr_block}}
 
-Since ALL THE HARD AND SOFT SKILLS from ICP must be verified for each case, you will need to indicate 3 or 4 skills to test for each reasoning step (accurately extracted from the ICP and based on the Generation Guide indications) within the reasoning step itself, briefly explaining how (for this work, help yourself with the GENERATION GUIDE input, which contains all the requirements to test, and the ways in which it is possible to do so).
+Since ALL THE HARD AND SOFT SKILLS from ICP must be verified for each case, you will need to indicate 2 to 5 skills to test for each reasoning step (accurately extracted from the ICP and based on the Generation Guide indications) within the reasoning step itself, briefly explaining how (for this work, help yourself with the GENERATION GUIDE input, which contains all the requirements to test, and the ways in which it is possible to do so).
 For the Cases and related reasoning steps to be perfect:
-o	Each case must be able to verify ALL the skills reported in the ICP paragraphs entitled: "Technical skills explicitly required by the posting", "Soft skills explicitly required by the posting (excluding languages)". To do this, you will therefore have to assign to each reasoning step at least 3 skills that you think are ideal to verify in that context (according to the imposed scheme).
+o	Each case must be able to verify ALL the skills reported in the ICP paragraphs entitled: "Technical skills explicitly required by the posting", "Soft skills explicitly required by the posting (excluding languages)". To do this, you will therefore have to assign to each reasoning step 1 to 5 skills that you think are ideal to verify in that context (according to the imposed scheme).
 o	They must adapt the complexity and depth to the required seniority level (Avoid super-expert questions if the role is junior, and vice versa avoid simple questions for lead profiles).
 o	They must draw inspiration from the Knowledge Base (kb_insights) reported below (e.g. 'Describe how you would guide the implementation of [Technology X] in a context similar to [Insight from Project Y from KB]'; Or 'How would you use [Technology / Methodology X] in a context similar to [Insight from Project Z from KB]').
 o	There must be an additional reasoning step, compared to the {reasoning_steps} created to break down the solution. The reasoning step in question, always called reasoning step 0, will serve to highlight the reasoning necessary for the resolution of the Cases, you will therefore build it by taking inspiration from the {total_steps} reasoning steps created to break down the solution. This reasoning step will serve a specialized agent to understand how to test the candidates' ability to set up reasoning.
@@ -97,7 +126,7 @@ o	Give each case a narrative approach, for example: "You are the digital marketi
 o	Avoid ambiguity and excessive generality.
 o	Use the "GENERATION GUIDE" input to understand how to effectively test each requirement required by the posting, remember that each case must be able to test all the skills contained in the posting.
 o	Do not use additional text beyond the production of what is required above.
-o   **IMPORTANT**: For the `skills_to_test` field, make sure to generate a list of objects, where each object has two keys: `skill_name` and `testing_method`. Do not generate a simple list of strings. The skills_to_test must be 100% relevant to what is required by the ICP and the HR SPECIAL INSTRUCTIONS, meaning they must be written in the exact same way, without variations; do not invent or deduce anything new.
+o   **IMPORTANT**: For the `skills_to_test` field, make sure to generate a list of objects, where each object has two keys: `skill_name` and `testing_method`. Do not generate a simple list of strings. The skills_to_test must be EXCLUSIVELY from the CANONICAL SKILLS LIST provided above, using the EXACT names without variations, abbreviations or synonyms. DO NOT invent, DO NOT deduce, DO NOT vary the skill names.
 o   **MANDATORY JSON FORMAT**: Your final output MUST be a JSON object that exactly respects the structure, key names and data types shown in the example below.
 
 EXPECTED JSON STRUCTURE EXAMPLE:
@@ -105,6 +134,8 @@ EXPECTED JSON STRUCTURE EXAMPLE:
 {{json_example_str}}
 ---
 INPUTS
+
+{canonical_skills_block}
 
 [IDEAL CANDIDATE PROFILE (ICP)]
 {{icp_text}}
@@ -131,6 +162,7 @@ INPUTS
     )
     
     return prompts[language].format(
+        canonical_skills_block=canonical_skills_block,
         hr_block=hr_block,
         json_example_str=json_example_str,
         icp_text=icp_text,

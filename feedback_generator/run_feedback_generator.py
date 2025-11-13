@@ -119,7 +119,8 @@ def run_feedback_pipeline(session_id: str) -> str | None:
             job_description_text=jd_text,
             parsed_experiences=cv_text_for_market,  # Passa il testo del CV come parsed_experiences
             offer_title=role_title,
-            position_id=target_role  # Passa position_id per usare cache pre-calcolata
+            position_id=target_role,  # Passa position_id per usare cache pre-calcolata
+            job_language=language
         )
         # Salva i risultati nella sessione per persistenza e debug
         if qualitative_text:
@@ -164,6 +165,7 @@ def run_feedback_pipeline(session_id: str) -> str | None:
     create_feedback_pdf(
         report_content=final_report_content,
         output_path=temp_pdf_path,
+        language=language,
         # Passiamo i dati che la funzione si aspetta ora:
         market_benchmark_text=qualitative_text,
         market_chart_categories_base64=chart_cat_b64,

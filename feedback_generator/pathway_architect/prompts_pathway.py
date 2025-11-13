@@ -27,15 +27,18 @@ Analizza i dati forniti per creare un report di feedback completo e personalizza
 3.  **Analisi dei Gap e Corsi Suggeriti:** Un file JSON che elenca le carenze complessive e una lista di corsi potenzialmente utili.
 4.  **Dati Candidato:** Nome (`{candidate_name}`) e Ruolo Target (`{target_role}`).
 
-**Struttura dell'output (deve essere un JSON):**
+**Struttura dell'output (deve essere un JSON con chiavi esattamente come elencate):**
 - `candidate_name`: "{candidate_name}"
 - `target_role`: "{target_role}"
 - `profile_summary`: Profilo sintetico di 2-3 righe che fonde le impressioni da CV e colloquio.
 - `cv_analysis_outcome`: Paragrafo che sintetizza l'esito dell'analisi del solo CV - 2-3 righe.
 - `interview_outcome`: Paragrafo che sintetizza l'esito della performance nel solo colloquio, evidenziando cosa è stato confermato o smentito rispetto al CV - 2-3 righe.
+- `market_benchmark`: Paragrafo che confronta il profilo del candidato con le tendenze di mercato disponibili. Se non hai dati, spiega l'assenza usando la lingua richiesta.
 - `suggested_pathway`: Lista ordinata e logica di corsi selezionati. Se nessun corso risulta pertinente, la lista deve essere vuota.
 
 **Istruzioni per la Generazione:**
+
+0.  Usa sempre e solo le chiavi JSON indicate nella sezione "Struttura dell'output". Non tradurre o rinominare le chiavi.
 
 1.  **Per la sezione "profile_summary":**
     *   Crea una sintesi generale ed equilibrata del candidato, tenendo conto di entrambe le fonti (CV e colloquio).
@@ -79,15 +82,18 @@ Analyze the provided data to create a complete and personalized feedback report 
 3.  **Gap Analysis and Suggested Courses:** A JSON file that lists the overall gaps and a list of potentially useful courses.
 4.  **Candidate Data:** Name (`{candidate_name}`) and Target Role (`{target_role}`).
 
-**Output Structure (must be a JSON):**
+**Output Structure (must be a JSON with keys exactly as listed):**
 - `candidate_name`: "{candidate_name}"
 - `target_role`: "{target_role}"
 - `profile_summary`: Synthetic profile of 2-3 lines that merges impressions from CV and interview.
 - `cv_analysis_outcome`: Paragraph that summarizes the outcome of the CV analysis only - 2-3 lines.
 - `interview_outcome`: Paragraph that summarizes the outcome of the performance in the interview only, highlighting what was confirmed or refuted compared to the CV - 2-3 lines.
+- `market_benchmark`: Paragraph that compares the candidate profile with the available market trends. If you lack data, explain the absence using the requested language.
 - `suggested_pathway`: Ordered and logical list of selected courses. If no course is relevant, the list must be empty.
 
 **Generation Instructions:**
+
+0.  Always and only use the JSON keys indicated in the "Output Structure" section. Do not translate or rename the keys.
 
 1.  **For the "profile_summary" section:**
     *   Create a general and balanced synthesis of the candidate, taking into account both sources (CV and interview).

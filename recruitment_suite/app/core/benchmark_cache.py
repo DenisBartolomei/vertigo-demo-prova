@@ -141,7 +141,10 @@ def save_offer_benchmark_to_cache(
     chart_cat_base64: Optional[str],
     market_skills_list: Optional[List[str]],
     tenant_id: Optional[str] = None,
-    market_json: Optional[dict] = None
+    market_json: Optional[dict] = None,
+    job_language: Optional[str] = None,
+    translated_for_benchmark: bool = False,
+    job_description_hash: Optional[str] = None,
 ) -> bool:
     """
     Salva i risultati del benchmark di mercato per una posizione nella cache.
@@ -154,6 +157,9 @@ def save_offer_benchmark_to_cache(
         market_skills_list: Lista skill di mercato (opzionale)
         tenant_id: ID del tenant (opzionale, per multi-tenant)
         market_json: Dizionario market_json già formato (opzionale, per evitare ricalcolo)
+        job_language: Lingua originale dell'annuncio
+        translated_for_benchmark: True se l'annuncio è stato tradotto prima del benchmark
+        job_description_hash: Hash SHA256 del testo usato per il benchmark
     
     Returns:
         True se salvato con successo, False altrimenti
@@ -206,7 +212,10 @@ def save_offer_benchmark_to_cache(
             "chart_cat_base64": chart_cat_base64,
             "market_skills_list": market_skills_list,
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "updated_at": datetime.utcnow(),
+            "job_language": job_language,
+            "translated_for_benchmark": bool(translated_for_benchmark),
+            "benchmark_job_description_hash": job_description_hash,
         }
         
         # Rimuovi eventuali campi None per evitare problemi con indici MongoDB
@@ -218,11 +227,61 @@ def save_offer_benchmark_to_cache(
             del doc["tenant_id"]
             print(f"⚠ ATTENZIONE: tenant_id era una stringa invalida, rimosso dal documento.")
         
-        collection.replace_one({"_id": cache_key}, doc, upsert=True)
-        print(f"Benchmark di mercato salvato in cache per posizione: {cache_key}")
-        return True
+        # Rimuovi eventuali indici problematici prima di salvare (es. job_title_1 che causa duplicate key error)
+        try:
+            existing_indexes = list(collection.list_indexes())
+            for idx in existing_indexes:
+                idx_name = idx.get('name', '')
+                idx_key = idx.get('key', {})
+                # Cerca indici unici su job_title
+                if 'job_title' in idx_key and idx.get('unique', False):
+                    print(f"⚠ Rimozione indice problematico '{idx_name}' su job_title (causa duplicate key error con null)")
+                    try:
+                        collection.drop_index(idx_name)
+                        print(f"  ✓ Indice '{idx_name}' rimosso con successo")
+                    except Exception as drop_err:
+                        print(f"  ⚠ Errore durante rimozione indice '{idx_name}': {drop_err}")
+        except Exception as idx_err:
+            print(f"⚠ Errore durante verifica indici (non bloccante): {idx_err}")
+        
+        # Prova a salvare il documento
+        try:
+            collection.replace_one({"_id": cache_key}, doc, upsert=True)
+            print(f"✓ Benchmark di mercato salvato in cache per posizione: {cache_key}")
+            return True
+        except Exception as save_err:
+            # Se l'errore è ancora un duplicate key su job_title, prova a rimuovere l'indice e riprovare
+            error_str = str(save_err)
+            if "E11000" in error_str and "job_title" in error_str:
+                print(f"⚠ Errore duplicate key su job_title rilevato. Tentativo rimozione indice e retry...")
+                try:
+                    # Prova a rimuovere tutti gli indici che contengono job_title
+                    indexes_to_drop = []
+                    for idx in collection.list_indexes():
+                        idx_name = idx.get('name', '')
+                        idx_key = idx.get('key', {})
+                        if 'job_title' in idx_key:
+                            indexes_to_drop.append(idx_name)
+                    
+                    for idx_name in indexes_to_drop:
+                        try:
+                            collection.drop_index(idx_name)
+                            print(f"  ✓ Indice '{idx_name}' rimosso")
+                        except Exception as e:
+                            print(f"  ⚠ Impossibile rimuovere indice '{idx_name}': {e}")
+                    
+                    # Riprova il salvataggio dopo la rimozione degli indici
+                    collection.replace_one({"_id": cache_key}, doc, upsert=True)
+                    print(f"✓ Benchmark di mercato salvato in cache per posizione: {cache_key} (dopo rimozione indice)")
+                    return True
+                except Exception as retry_err:
+                    print(f"✗ Errore persistente dopo rimozione indice: {retry_err}")
+                    return False
+            else:
+                # Se è un altro tipo di errore, rilanciarlo
+                raise save_err
     except Exception as e:
-        print(f"Errore salvataggio benchmark in cache: {e}")
+        print(f"✗ Errore salvataggio benchmark in cache: {e}")
         return False
 
 def load_offer_benchmark_from_cache(position_id: str, tenant_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -324,7 +383,10 @@ def load_offer_benchmark_from_cache(position_id: str, tenant_id: Optional[str] =
                 "chart_cat_base64": cached_doc.get("chart_cat_base64"),
                 "market_skills_list": cached_doc.get("market_skills_list"),
                 "created_at": cached_doc.get("created_at"),
-                "updated_at": cached_doc.get("updated_at")
+                "updated_at": cached_doc.get("updated_at"),
+                "job_language": cached_doc.get("job_language"),
+                "translated_for_benchmark": cached_doc.get("translated_for_benchmark", False),
+                "benchmark_job_description_hash": cached_doc.get("benchmark_job_description_hash"),
             }
         
         return None

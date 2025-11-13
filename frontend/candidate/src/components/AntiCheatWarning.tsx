@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { AlertTriangle } from 'lucide-react'
 
 interface AntiCheatWarningProps {
   warningCount: number
@@ -66,7 +67,7 @@ export function AntiCheatWarning({ warningCount, isBlocked, onAccept, onContinue
         maxWidth: '500px',
         border: '2px solid #ffa500'
       }}>
-        <div style={{ fontSize: '48px', marginBottom: '20px' }}>⚠️</div>
+        <AlertTriangle size={48} color="#ffa500" style={{ marginBottom: '20px' }} />
         <h2 style={{ color: '#ffa500', marginBottom: '16px' }}>
           Security Warning
         </h2>
@@ -148,7 +149,7 @@ export function AntiCheatWarning({ warningCount, isBlocked, onAccept, onContinue
       boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-        <span style={{ fontSize: '20px' }}>⚠️</span>
+        <AlertTriangle size={20} color="#856404" />
         <strong style={{ color: '#856404' }}>Security Warning</strong>
       </div>
       <p style={{ margin: '0 0 12px 0', color: '#856404', fontSize: '14px', lineHeight: '1.4' }}>

@@ -1,4 +1,5 @@
 import React from 'react'
+import { PartyPopper, Hand, AlertCircle, Mic, Square, Clock, Send } from 'lucide-react'
 
 interface SandboxAreaProps {
   input: string
@@ -51,10 +52,17 @@ export function SandboxArea({
               textAlign: 'center',
               padding: '40px 20px'
             }}>
-              {isCompleted 
-                ? '🎉 Interview completed successfully!'
-                : '👋 Start the interview to use this area'
-              }
+              {isCompleted ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                  <PartyPopper size={32} color="#10B981" />
+                  <span>Interview completed successfully!</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                  <Hand size={32} color="#9CA3AF" />
+                  <span>Start the interview to use this area</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -79,7 +87,7 @@ export function SandboxArea({
             fontSize: '14px',
             color: '#721c24'
           }}>
-            ⚠️ {speechError}
+            <AlertCircle size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> {speechError}
           </div>
         )}
         
@@ -91,7 +99,7 @@ export function SandboxArea({
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Write or speak your answer here... (Press Enter to send, Shift+Enter for new line, or use 🎤 for voice input)"
+            placeholder="Write or speak your answer here... (Press Enter to send, Shift+Enter for new line, or use the microphone icon for voice input)"
             disabled={loading}
           />
           
@@ -125,7 +133,7 @@ export function SandboxArea({
                 }}
                 title={isListening ? 'Stop voice input' : 'Start voice input'}
               >
-                {isListening ? '⏹️' : '🎤'}
+                {isListening ? <Square size={16} fill="white" /> : <Mic size={16} />}
               </button>
             )}
             
@@ -134,7 +142,15 @@ export function SandboxArea({
               onClick={onSend} 
               disabled={loading || !input.trim()}
             >
-              {loading ? '⏳ Sending...' : '➤ Send Answer'}
+              {loading ? (
+                <>
+                  <Clock size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Sending...
+                </>
+              ) : (
+                <>
+                  <Send size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Send Answer
+                </>
+              )}
             </button>
           </div>
           
@@ -151,7 +167,7 @@ export function SandboxArea({
               border: '1px solid rgba(139, 69, 255, 0.2)',
               marginTop: '12px'
             }}>
-              🎤 Listening... Speak now
+              <Mic size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Listening... Speak now
             </div>
           )}
         </div>

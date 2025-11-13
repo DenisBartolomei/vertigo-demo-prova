@@ -1,6 +1,7 @@
 # File: feedback_generator/market_integration.py
 import os
 import sys
+import hashlib
 
 # Aggiunge la root del progetto al PYTHONPATH (cartella padre di 'feedback_generator')
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -19,6 +20,11 @@ from recruitment_suite.app.core.benchmark_cache import (
     save_offer_benchmark_to_cache
 )
 from services.data_manager import db
+from services.language_detector import detect_language, validate_language
+from services.text_translation import (
+    translate_to_italian,
+    translate_to_italian_async,
+)
 import asyncio
 import numpy as np
 
@@ -29,13 +35,43 @@ def run_market_benchmark_from_text(
     parsed_experiences: str,
     offer_title: str,
     position_id: str = None,
-    tenant_id: str = None
+    tenant_id: str = None,
+    job_language: str | None = None
 ) -> tuple[str | None, str | None, list[str] | None]:
     """
     Esegue la recruitment suite usando JD e testo del CV.
     Usa benchmark pre-calcolato se disponibile, altrimenti calcola.
     Ritorna: (testo_qualitativo, grafico_categorie_base64, lista_delle_skill_piu_comuni)
     """
+    original_job_description_text = job_description_text or ""
+    normalized_language = (
+        validate_language(job_language)
+        if job_language
+        else detect_language(original_job_description_text)
+    )
+    benchmark_job_description = original_job_description_text
+    translated_for_benchmark = False
+
+    if normalized_language == "en":
+        translated_text = translate_to_italian(
+            original_job_description_text,
+            source_language="en",
+        )
+        if translated_text and translated_text.strip():
+            if translated_text.strip() != original_job_description_text.strip():
+                benchmark_job_description = translated_text
+                translated_for_benchmark = True
+                print("🌐 [Benchmark] Traduzione EN→IT applicata per la job description (sync).")
+            else:
+                print("ℹ️ [Benchmark] Traduzione EN→IT identica all'originale, uso testo originale (sync).")
+        else:
+            print("⚠ [Benchmark] Traduzione EN→IT fallita, uso job description originale (sync).")
+    else:
+        normalized_language = "it"
+
+    benchmark_job_description_hash = hashlib.sha256(
+        benchmark_job_description.encode("utf-8")
+    ).hexdigest()
     
     # --- 1. Prova a caricare benchmark pre-calcolato se position_id disponibile ---
     market_df = None
@@ -54,6 +90,8 @@ def run_market_benchmark_from_text(
             chart_cat_base64 = cached_benchmark.get("chart_cat_base64")
             market_skills_list = cached_benchmark.get("market_skills_list")
             market_json_from_cache = cached_benchmark.get("market_json")
+            if cached_benchmark.get("translated_for_benchmark"):
+                print("   ↳ Il benchmark in cache è stato generato con traduzione EN→IT.")
             if market_json_from_cache:
                 print(f"✓ market_json presente nella cache con {len(market_json_from_cache)} categorie.")
             else:
@@ -78,7 +116,7 @@ def run_market_benchmark_from_text(
         
         llm_analysis, _ = pipeline.run_full_pipeline(
             offer_title,
-            job_description_text,
+            benchmark_job_description,
             candidates_data_filtered
         )
 
@@ -109,7 +147,10 @@ def run_market_benchmark_from_text(
                                 market_df,
                                 chart_cat_base64,
                                 market_skills_list,
-                                tenant_id=tenant_id
+                                tenant_id=tenant_id,
+                                job_language=normalized_language,
+                                translated_for_benchmark=translated_for_benchmark,
+                                job_description_hash=benchmark_job_description_hash,
                             )
     
     # La logica che usa chart_path è stata rimossa, non serve più.
@@ -185,7 +226,8 @@ def run_market_benchmark_from_text(
     qualitative_text = generate_qualitative_llm_report(
         candidate_json=candidate_json,
         market_json=market_json,
-        job_offer_text=job_description_text
+        job_offer_text=original_job_description_text,
+        language=normalized_language
     )
     
     if qualitative_text:
@@ -196,7 +238,6 @@ def run_market_benchmark_from_text(
     # --- 5. Restituzione dei risultati pronti per MongoDB ---
     return qualitative_text, chart_cat_base64, market_skills_list 
 
-import hashlib
 import pandas as pd
 from pymongo.database import Database
 import datetime
@@ -208,7 +249,8 @@ async def run_market_benchmark_from_text_async(
     offer_title: str,
     db: Database,
     position_id: str = None,
-    tenant_id: str = None
+    tenant_id: str = None,
+    job_language: str | None = None
 ) -> tuple[str | None, str | None, list[str] | None]:
     
     from backend.app import recruitment_pipeline_instance, cv_normalizer_instance
@@ -216,6 +258,36 @@ async def run_market_benchmark_from_text_async(
     if db is None:
         print("ERRORE CRITICO: Oggetto Database non fornito.")
         return None, None, None
+
+    original_job_description_text = job_description_text or ""
+    normalized_language = (
+        validate_language(job_language)
+        if job_language
+        else detect_language(original_job_description_text)
+    )
+    benchmark_job_description = original_job_description_text
+    translated_for_benchmark = False
+
+    if normalized_language == "en":
+        translated_text = await translate_to_italian_async(
+            original_job_description_text,
+            source_language="en",
+        )
+        if translated_text and translated_text.strip():
+            if translated_text.strip() != original_job_description_text.strip():
+                benchmark_job_description = translated_text
+                translated_for_benchmark = True
+                print("🌐 [Benchmark] Traduzione EN→IT applicata per la job description (async).")
+            else:
+                print("ℹ️ [Benchmark] Traduzione EN→IT identica all'originale, uso testo originale (async).")
+        else:
+            print("⚠ [Benchmark] Traduzione EN→IT fallita, uso job description originale (async).")
+    else:
+        normalized_language = "it"
+
+    benchmark_job_description_hash = hashlib.sha256(
+        benchmark_job_description.encode("utf-8")
+    ).hexdigest()
 
     # --- 1. Prova a caricare benchmark pre-calcolato se position_id disponibile ---
     market_df = None
@@ -234,6 +306,8 @@ async def run_market_benchmark_from_text_async(
             chart_cat_base64 = cached_benchmark.get("chart_cat_base64")
             market_skills_list = cached_benchmark.get("market_skills_list")
             market_json_from_cache_async = cached_benchmark.get("market_json")
+            if cached_benchmark.get("translated_for_benchmark"):
+                print("   ↳ Il benchmark cached era stato generato con traduzione EN→IT (async).")
             if market_json_from_cache_async:
                 print(f"✓ market_json presente nella cache (async) con {len(market_json_from_cache_async)} categorie.")
             else:
@@ -244,7 +318,7 @@ async def run_market_benchmark_from_text_async(
     # --- 2. Se non trovato, fallback al vecchio sistema con hash JD (backward compatibility) ---
     if market_df is None:
         print("CACHE MISS: Benchmark pre-calcolato non trovato. Provo cache per hash JD...")
-        jd_hash = hashlib.sha256(job_description_text.encode('utf-8')).hexdigest()
+        jd_hash = benchmark_job_description_hash
         cache_collection = db["market_benchmark_cache"]
         cached_data = cache_collection.find_one({"_id": jd_hash})
         
@@ -279,7 +353,11 @@ async def run_market_benchmark_from_text_async(
         
         loop = asyncio.get_running_loop()
         llm_analysis, _ = await loop.run_in_executor(
-            None, pipeline.run_full_pipeline, offer_title, job_description_text, candidates_data_filtered
+            None,
+            pipeline.run_full_pipeline,
+            offer_title,
+            benchmark_job_description,
+            candidates_data_filtered,
         )
 
         if llm_analysis:
@@ -318,17 +396,25 @@ async def run_market_benchmark_from_text_async(
                                 chart_cat_base64,
                                 market_skills_list,
                                 tenant_id=tenant_id,
-                                market_json=market_json_temp  # Passa market_json per evitare ricalcolo
+                                market_json=market_json_temp,  # Passa market_json per evitare ricalcolo
+                                job_language=normalized_language,
+                                translated_for_benchmark=translated_for_benchmark,
+                                job_description_hash=benchmark_job_description_hash,
                             )
         
         # Fallback: salva anche nel vecchio sistema con hash JD per backward compatibility
         if market_df is not None:
-            jd_hash = hashlib.sha256(job_description_text.encode('utf-8')).hexdigest()
+            jd_hash = benchmark_job_description_hash
             cache_collection = db["market_benchmark_cache"]
             cache_payload = {
-                "_id": jd_hash, "market_data": market_df.to_dict('records'),
-                "chart_cat_base64": chart_cat_base64, "market_skills_list": market_skills_list,
-                "created_at": datetime.utcnow()
+                "_id": jd_hash,
+                "market_data": market_df.to_dict('records'),
+                "chart_cat_base64": chart_cat_base64,
+                "market_skills_list": market_skills_list,
+                "created_at": datetime.utcnow(),
+                "job_language": normalized_language,
+                "translated_for_benchmark": translated_for_benchmark,
+                "benchmark_job_description_hash": benchmark_job_description_hash,
             }
             cache_collection.replace_one({"_id": jd_hash}, cache_payload, upsert=True)
             print(f"Dati di mercato salvati in cache per JD hash: {jd_hash}")
@@ -389,7 +475,10 @@ async def run_market_benchmark_from_text_async(
         print(f"✓ market_json caricato con {len(market_json)} categorie professionali (async).")
     
     qualitative_text = await generate_qualitative_llm_report_async(
-        candidate_json=candidate_json, market_json=market_json, job_offer_text=job_description_text
+        candidate_json=candidate_json,
+        market_json=market_json,
+        job_offer_text=original_job_description_text,
+        language=normalized_language
     )
 
     return qualitative_text, chart_cat_base64, market_skills_list

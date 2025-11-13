@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Target, User, Lightbulb, X, Clock, Search, CheckCircle2, Rocket, ArrowLeft } from 'lucide-react'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://vertigo-ai-backend-tbia7kjh7a-oc.a.run.app'
 
@@ -122,7 +123,7 @@ export function TokenLanding() {
             fontSize: '24px',
             margin: '0 auto 16px'
           }}>
-            {step === 'token' ? '🎯' : '👤'}
+            {step === 'token' ? <Target size={24} color="white" /> : <User size={24} color="white" />}
           </div>
           <h1 style={{ 
             fontSize: '24px',
@@ -151,7 +152,9 @@ export function TokenLanding() {
               fontSize: '14px',
               color: '#1976d2'
             }}>
-              <strong>💡 Tip:</strong> Check your email for the interview invitation. The token should look like: <code>abc123def456</code>
+              <strong style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Lightbulb size={16} /> Tip:
+              </strong> Check your email for the interview invitation. The token should look like: <code>abc123def456</code>
             </div>
           )}
         </div>
@@ -203,9 +206,12 @@ export function TokenLanding() {
                 padding: '12px',
                 marginBottom: '24px',
                 color: '#c62828',
-                fontSize: '14px'
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
               }}>
-                ❌ {error}
+                <X size={16} /> {error}
               </div>
             )}
 
@@ -231,7 +237,7 @@ export function TokenLanding() {
                 gap: '8px'
               }}
             >
-              {loading ? '⏳' : '🔍'} {loading ? 'Verifying...' : 'Verify Token'}
+              {loading ? <Clock size={18} /> : <Search size={18} />} {loading ? 'Verifying...' : 'Verify Token'}
             </button>
           </form>
         )}
@@ -247,7 +253,7 @@ export function TokenLanding() {
               marginBottom: '24px'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                <div style={{ fontSize: '20px' }}>✅</div>
+                <CheckCircle2 size={20} color="#2e7d32" />
                 <strong style={{ color: '#2e7d32' }}>Token Verified!</strong>
               </div>
               <div style={{ fontSize: '14px', color: '#388e3c' }}>
@@ -335,9 +341,12 @@ export function TokenLanding() {
                   padding: '12px',
                   marginBottom: '24px',
                   color: '#c62828',
-                  fontSize: '14px'
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
                 }}>
-                  ❌ {error}
+                  <X size={16} /> {error}
                 </div>
               )}
 
@@ -364,7 +373,7 @@ export function TokenLanding() {
                     gap: '8px'
                   }}
                 >
-                  {loading ? '⏳' : '🚀'} {loading ? 'Starting Interview...' : 'Start Interview'}
+                  {loading ? <Clock size={18} /> : <Rocket size={18} />} {loading ? 'Starting Interview...' : 'Start Interview'}
                 </button>
 
                 <button
@@ -382,7 +391,7 @@ export function TokenLanding() {
                     transition: 'all 0.2s ease'
                   }}
                 >
-                  ← Back to Token Entry
+                  <ArrowLeft size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Back to Token Entry
                 </button>
               </div>
             </form>

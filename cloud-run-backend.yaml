@@ -43,6 +43,14 @@ spec:
           value: "JWT_SECRET_PLACEHOLDER"
         - name: PYTHON_ENV
           value: "production"
+        - name: GPU_SERVICE_URL
+          value: "http://VERTIGO_GPU_SERVICE_IP:8080"
+        - name: ENABLE_GPU_SERVICE
+          value: "true"
+        - name: GPU_SERVICE_TIMEOUT
+          value: "30"
+        - name: GPU_SERVICE_RETRY_ATTEMPTS
+          value: "3"
         resources:
           limits:
             cpu: "2"

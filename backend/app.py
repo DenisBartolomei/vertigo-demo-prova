@@ -680,6 +680,9 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
         # Get CV text from session data
         cv_text_for_market = original_cv_report or ""
         role_title = position_data.get("position_name", target_role) if position_data else target_role
+        language = (position_data or {}).get("language", "it")
+        if language not in ("it", "en"):
+            language = "it"
         
         if jd_text and cv_text_for_market:
             # Estrai tenant_id dal nome della collection (formato: {tenant_id}_sessions)
@@ -692,7 +695,8 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
                 parsed_experiences=cv_text_for_market,  # Passa come parsed_experiences
                 offer_title=role_title,
                 position_id=target_role,  # Passa position_id per usare cache pre-calcolata
-                tenant_id=tenant_id  # Passa tenant_id per multi-tenant
+                tenant_id=tenant_id,  # Passa tenant_id per multi-tenant
+                job_language=language
             )
             if qualitative_text:
                 save_stage_output_tenant(session_id, "market_benchmark_text", qualitative_text, collection_name)
@@ -733,6 +737,7 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
     create_feedback_pdf(
         report_content=final_report_content,
         output_path=temp_pdf_path,
+        language=language,
         market_benchmark_text=qualitative_text,
         market_chart_categories_base64=chart_cat_b64,
         market_skills_list=market_skills_list 
@@ -807,13 +812,27 @@ async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: s
         original_cv_report = stages_data.get("cv_analysis_report")
         case_eval_report = stages_data.get("case_evaluation_report")
 
+        positions_collection_name = collection_name.replace("_sessions", "_positions_data")
+        position_data = get_single_position_data_tenant(target_role_id, positions_collection_name) if target_role_id else None
+        language = (position_data or {}).get("language", "it")
+        if language not in ("it", "en"):
+            print(f"ATTENZIONE: Lingua posizione non supportata '{language}', defaulto a 'it'")
+            language = "it"
+
+        role_title = (position_data or {}).get("position_name", target_role_id)
+        jd_text = (position_data or {}).get("job_description", "")
+
         # STEP 1: Consolidamento (rimane sequenziale)
         consolidated_report = stages_data.get("consolidated_report")
         if not consolidated_report:
             print("\n[STEP 1/6] Generazione report consolidato...")
             if not original_cv_report or not case_eval_report:
                 raise ValueError("Report di analisi CV o valutazione del caso mancanti.")
-            consolidated_report = await create_consolidated_report_async(original_cv_report, case_eval_report)
+            consolidated_report = await create_consolidated_report_async(
+                original_cv_report,
+                case_eval_report,
+                language=language
+            )
             if not consolidated_report: 
                 raise ValueError("Fallimento nella generazione del report consolidato.")
             save_stage_output_tenant(session_id, "consolidated_report", consolidated_report, collection_name)
@@ -822,11 +841,9 @@ async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: s
     
         # --- INIZIO PARALLELIZZAZIONE PESANTE ---
         print("\n[STEP 2 & 4] Avvio in parallelo di Gap Analysis e Market Benchmark...")
-        position_data = get_single_position_data_tenant(target_role_id, collection_name.replace("_sessions", "_positions_data"))
-        jd_text = position_data.get("job_description", "") if position_data else ""
-        role_title = position_data.get("position_name", target_role_id) if position_data else target_role_id
-        
-        gap_task = asyncio.create_task(identify_skill_gaps_async(consolidated_report))
+        gap_task = asyncio.create_task(
+            identify_skill_gaps_async(consolidated_report, language=language)
+        )
         parsed_experiences = stages_data.get("parsed_experience", [])
         if not parsed_experiences:
             print("ATTENZIONE: Esperienze parsate non trovate. Il benchmark di mercato potrebbe essere incompleto.")
@@ -844,7 +861,8 @@ async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: s
                 offer_title=role_title,
                 db=db,
                 position_id=target_role_id,  # Passa position_id per usare cache pre-calcolata
-                tenant_id=tenant_id  # Passa tenant_id per multi-tenant
+                tenant_id=tenant_id,  # Passa tenant_id per multi-tenant
+                job_language=language
             )
         )
 
@@ -876,7 +894,11 @@ async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: s
 
         async def get_courses_for_family(family):
             skill_gaps = [gap.skill_gap for gap in family.skill_gaps]
-            refined_query = create_query_refinement_prompt(family.skill_family_gap, skill_gaps)
+            refined_query = create_query_refinement_prompt(
+                family.skill_family_gap,
+                skill_gaps,
+                language=language
+            )
             courses = await rag_service.search_async(refined_query, k=3) 
             return {
                 "skill_family_gap": family.skill_family_gap,
@@ -898,7 +920,8 @@ async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: s
             case_evaluation_report=case_eval_report,
             enriched_gaps_json_str=enriched_gaps_content_str,
             candidate_name=candidate_name,
-            target_role=role_title
+            target_role=role_title,
+            language=language
         )
         if not final_report_content: 
             raise ValueError("Fallimento nella creazione del contenuto del report finale.")
@@ -914,6 +937,7 @@ async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: s
         create_feedback_pdf(
             report_content=final_report_content,
             output_path=temp_pdf_path,
+            language=language,
             market_benchmark_text=qualitative_text,
             market_chart_categories_base64=chart_cat_b64,
             market_skills_list=market_skills_list 
@@ -2180,13 +2204,13 @@ async def retrieve_batch_results(batch_id: str):
 async def list_batches(auth_data: dict = Depends(hr_auth)):
     """Lista tutti i batch jobs"""
     try:
-        print(f"🔍 Tentativo di listare batch jobs per tenant: {auth_data.get('tenant_id')}")
+        print(f"Tentativo di listare batch jobs per tenant: {auth_data.get('tenant_id')}")
         
         batch_service = BatchService()
-        print(f"✅ BatchService inizializzato")
+        print(f"BatchService inizializzato")
         
         batches = batch_service.list_batches(limit=20)
-        print(f"✅ Batch jobs recuperati: {len(batches)} items")
+        print(f"Batch jobs recuperati: {len(batches)} items")
         
         return {"batches": batches}
     except Exception as e:
@@ -2203,26 +2227,26 @@ async def startup_event():
     
     try:
         # Initialize heavy services once at startup
-        print("🚀 [STARTUP] Inizializzazione RAGService...")
+        print("[STARTUP] Inizializzazione RAGService...")
         rag_service_instance = RAGService()
-        print("✅ [STARTUP] RAGService pronto.")
+        print("[STARTUP] RAGService pronto.")
         
-        print("🚀 [STARTUP] Inizializzazione RecruitmentPipeline...")
+        print("[STARTUP] Inizializzazione RecruitmentPipeline...")
         recruitment_pipeline_instance = RecruitmentPipeline() 
-        print("✅ [STARTUP] RecruitmentPipeline pronto.")
+        print("[STARTUP] RecruitmentPipeline pronto.")
         
-        print("🚀 [STARTUP] Inizializzazione CVNormalizer (potrebbe essere lento)...")
+        print("[STARTUP] Inizializzazione CVNormalizer (potrebbe essere lento)...")
         cv_normalizer_instance = CVNormalizer()
-        print("✅ [STARTUP] CVNormalizer pronto.")
+        print("[STARTUP] CVNormalizer pronto.")
         
         # Avvia batch processor per monitoring automatico
         from services.batch_processor import get_processor
         processor = get_processor()
         processor.start_monitoring(check_interval_seconds=300)  # 5 minuti
-        print("✅ Batch processor avviato (controllo ogni 5 minuti)")
+        print("Batch processor avviato (controllo ogni 5 minuti)")
         
     except Exception as e:
-        print(f"❌ Errore inizializzazione servizi: {e}")
+        print(f"Errore inizializzazione servizi: {e}")
         import traceback
         traceback.print_exc()
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { BarChart3, Search, Mail, Clock, FileText, CheckCircle2, AlertTriangle, AlertCircle, Info, Lock, Download, MessageCircle, Target, TrendingUp, RefreshCw, Rocket } from 'lucide-react'
 import { SecurityReport } from '../components/SecurityReport'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://vertigo-ai-backend-tbia7kjh7a-oc.a.run.app'
@@ -130,7 +131,7 @@ function formatCVAnalysisReport(reportText: string) {
               padding: '12px 16px',
               borderRadius: '8px 8px 0 0'
             }}>
-              📋 {section.title}
+              <FileText size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> {section.title}
             </div>
           )}
           
@@ -261,7 +262,7 @@ function formatCaseEvaluationReport(reportText: string) {
                 alignItems: 'center',
                 gap: '8px'
               }}>
-                📊 {section.title}
+                <BarChart3 size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> {section.title}
               </div>
               <div style={{
                 fontSize: '13px',
@@ -624,12 +625,12 @@ export function Candidati() {
     const riskLevel = securityReport.risk_assessment?.level || 'MINIMAL'
     const color = securityReport.risk_assessment?.color || '#6c757d'
     
-    let icon = '✅'
-    if (riskLevel === 'HIGH') icon = '🚨'
-    else if (riskLevel === 'MEDIUM') icon = '⚠️'
-    else if (riskLevel === 'LOW') icon = 'ℹ️'
+    let IconComponent = CheckCircle2
+    if (riskLevel === 'HIGH') IconComponent = AlertTriangle
+    else if (riskLevel === 'MEDIUM') IconComponent = AlertCircle
+    else if (riskLevel === 'LOW') IconComponent = Info
     
-    return { level: riskLevel, color, icon }
+    return { level: riskLevel, color, IconComponent }
   }
 
 
@@ -665,7 +666,7 @@ export function Candidati() {
           fontSize: '16px',
           fontWeight: '600'
         }}>
-          🔍 Filtri e Ordinamento
+          <Search size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Filtri e Ordinamento
         </h4>
         <div style={{ 
           display: 'grid', 
@@ -750,7 +751,7 @@ export function Candidati() {
                 color: 'var(--text-secondary)'
               }}
             >
-              🔄 Reset
+              <RefreshCw size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Reset
             </button>
             <div style={{ 
               fontSize: '11px', 
@@ -764,8 +765,8 @@ export function Candidati() {
       </div>
       {loading ? (
         <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
-          Caricamento report...
+          <Clock size={24} color="#9CA3AF" style={{ marginBottom: '8px' }} />
+          <div style={{ marginTop: '8px' }}>Caricamento report...</div>
         </div>
       ) : rows.length === 0 ? (
         <div style={{ 
@@ -775,7 +776,7 @@ export function Candidati() {
           background: 'var(--bg-secondary)',
           borderRadius: 'var(--radius-lg)'
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
+          <BarChart3 size={48} color="#9CA3AF" style={{ marginBottom: '16px' }} />
           <div style={{ fontSize: '18px', marginBottom: '8px' }}>Nessun report disponibile</div>
           <div>I report appariranno qui quando i candidati completeranno l'intero processo di selezione</div>
         </div>
@@ -787,7 +788,7 @@ export function Candidati() {
           background: 'var(--bg-secondary)',
           borderRadius: 'var(--radius-lg)'
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
+          <Search size={48} color="#9CA3AF" style={{ marginBottom: '16px' }} />
           <div style={{ fontSize: '18px', marginBottom: '8px' }}>Nessun candidato trovato</div>
           <div>Prova a modificare i filtri per vedere più risultati</div>
         </div>
@@ -817,7 +818,7 @@ export function Candidati() {
                         fontWeight: '600',
                         color: overallMeans[r.session_id] !== undefined ? 'var(--primary-purple)' : '#9CA3AF'
                       }}>
-                        <span>📊</span>
+                        <BarChart3 size={14} />
                         <span>
                           {overallMeans[r.session_id] !== undefined 
                             ? `${overallMeans[r.session_id].toFixed(1)}/4` 
@@ -852,7 +853,10 @@ export function Candidati() {
                                    riskInfo.color === '#28a745' ? '#28A745' :
                                    '#9CA3AF'
                           }}>
-                            <span>{riskInfo.icon}</span>
+                            {(() => {
+                              const Icon = riskInfo.IconComponent
+                              return <Icon size={14} />
+                            })()}
                             <span>{riskInfo.level}</span>
                           </div>
                         )
@@ -868,7 +872,7 @@ export function Candidati() {
                         gap: '4px',
                         marginTop: '2px'
                       }}>
-                        <span>📧</span>
+                        <Mail size={14} />
                         <span>{r.candidate_email}</span>
                       </div>
                     )}
@@ -927,7 +931,7 @@ export function Candidati() {
                           e.currentTarget.style.transform = 'scale(1)'
                         }}
                       >
-                        <span>🔒</span>
+                        <Lock size={14} />
                         <span>Report Sicurezza</span>
                         {securityReports[r.session_id]?.security_summary?.total_events > 0 && (
                           <span style={{
@@ -1021,7 +1025,7 @@ export function Candidati() {
                               textAlign: 'center'
                             }}
                         >
-                            <span>🚀</span>
+                            <Rocket size={14} />
                             <span>Genera Feedback</span>
                         </button>
                     )}
@@ -1050,7 +1054,7 @@ export function Candidati() {
                               textAlign: 'center'
                             }}
                         >
-                            <span>⏳</span>
+                            <Clock size={14} />
                             <span>In elaborazione</span>
                         </button>
                     )}
@@ -1079,7 +1083,7 @@ export function Candidati() {
                               textAlign: 'center'
                             }}
                         >
-                            <span>📥</span>
+                            <Download size={14} />
                             <span>Download Feedback</span>
                         </button>
                     )}
@@ -1099,7 +1103,9 @@ export function Candidati() {
                           borderRadius: 'var(--radius-md)',
                           textAlign: 'center'
                         }}>
-                            <span style={{ color: '#991B1B', fontSize: '11px', fontWeight: '600' }}>⚠️ Errore</span>
+                            <span style={{ color: '#991B1B', fontSize: '11px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <AlertCircle size={14} /> Errore
+                            </span>
                             <button 
                                 onClick={() => handleGenerateFeedback(r.session_id)}
                                 style={{ fontSize: '10px', padding: '4px 8px', background: '#DC2626', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '600' }}
@@ -1129,7 +1135,7 @@ export function Candidati() {
                         lineHeight: '1.3',
                         gap: '2px'
                       }}>
-                        <span>📥</span>
+                        <Download size={12} />
                         <span>Scaricato da</span>
                         <span style={{ fontWeight: '700' }}>{r.downloaded_by_name || r.downloaded_by}</span>
                         <span style={{ fontSize: '8px' }}>il {new Date(r.downloaded_at).toLocaleDateString('it-IT')}</span>
@@ -1227,7 +1233,7 @@ export function Candidati() {
                           fontSize: '16px',
                           fontWeight: '600'
                         }}>
-                          📊 Valutazione Competenze
+                          <BarChart3 size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Valutazione Competenze
                         </h4>
                         <div style={{
                           background: 'rgba(255, 255, 255, 0.9)',
@@ -1360,7 +1366,7 @@ export function Candidati() {
                                           alignItems: 'center',
                                           gap: '4px'
                                         }}>
-                                          📄 CV
+                                          <FileText size={12} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> CV
                                         </div>
                                         <div style={{
                                           fontSize: '12px',
@@ -1389,7 +1395,7 @@ export function Candidati() {
                                           alignItems: 'center',
                                           gap: '4px'
                                         }}>
-                                          💬 Colloquio
+                                          <MessageCircle size={12} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Colloquio
                                         </div>
                                         <div style={{
                                           fontSize: '12px',
@@ -1438,7 +1444,7 @@ export function Candidati() {
                                     color: 'var(--primary-purple)',
                                     fontSize: '13px'
                                   }}>
-                                    📈 Media Generale
+                                    <TrendingUp size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Media Generale
                                   </div>
                                   <div style={{ 
                                     display: 'flex', 
@@ -1492,7 +1498,7 @@ export function Candidati() {
                         color: 'var(--text-secondary)',
                         fontSize: '14px'
                       }}>
-                        📊 Nessuna valutazione competenze disponibile
+                        <BarChart3 size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Nessuna valutazione competenze disponibile
                       </div>
                     )}
                   </div>

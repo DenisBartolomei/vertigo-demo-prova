@@ -1,6 +1,6 @@
 import json
 from typing import List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, AliasChoices
 from datetime import datetime
 from interviewer.llm_service import get_structured_llm_response
 from . import prompts_pathway
@@ -20,19 +20,34 @@ class FinalReportContent(BaseModel):
     target_role: str = Field(description="Il ruolo per cui il candidato è stato valutato.")
     
     # Sintesi generale.
-    profile_summary: str = Field(description="Profilo sintetico di 3-4 righe sul candidato (Talent Passport).", alias="Profilo sintetico")    
+    profile_summary: str = Field(
+        description="Profilo sintetico di 3-4 righe sul candidato (Talent Passport).",
+        validation_alias=AliasChoices("profile_summary", "Profilo sintetico", "Profile summary")
+    )
     
     # Contiene la sintesi specifica dell'analisi del CV.
-    cv_analysis_outcome: str = Field(description="Paragrafo che riassume gli esiti (punti di forza e carenze) emersi dall'analisi del solo Curriculum Vitae.")
+    cv_analysis_outcome: str = Field(
+        description="Paragrafo che riassume gli esiti (punti di forza e carenze) emersi dall'analisi del solo Curriculum Vitae.",
+        validation_alias=AliasChoices("cv_analysis_outcome", "cv_analysis", "Analisi CV")
+    )
     
     # Contiene la sintesi specifica della performance nel colloquio.
-    interview_outcome: str = Field(description="Paragrafo che riassume gli esiti (punti di forza e carenze) emersi dalla performance del candidato durante il colloquio/caso di studio.")
+    interview_outcome: str = Field(
+        description="Paragrafo che riassume gli esiti (punti di forza e carenze) emersi dalla performance del candidato durante il colloquio/caso di studio.",
+        validation_alias=AliasChoices("interview_outcome", "interview_analysis", "Analisi colloquio")
+    )
     
     # Placeholder per la futura analisi di mercato.
-    market_benchmark: str = Field(description="Paragrafo per il benchmark di mercato.")
+    market_benchmark: str = Field(
+        description="Paragrafo per il benchmark di mercato.",
+        validation_alias=AliasChoices("market_benchmark", "Benchmark di mercato", "marketBenchmark")
+    )
     
     # Il percorso formativo rimane una parte cruciale.
-    suggested_pathway: List[SuggestedCourse] = Field(description="Lista ordinata di corsi che costituiscono il percorso formativo suggerito.")
+    suggested_pathway: List[SuggestedCourse] = Field(
+        description="Lista ordinata di corsi che costituiscono il percorso formativo suggerito.",
+        validation_alias=AliasChoices("suggested_pathway", "Percorso formativo", "training_pathway")
+    )
 
 # --- 2. Logica di Generazione ---
 
@@ -79,7 +94,7 @@ def create_final_feedback_content(
     structured_response_str = get_structured_llm_response(
         prompt=prompt,
         model=ARCHITECT_MODEL,
-        system_prompt=prompts_pathway.SYSTEM_PROMPT[language],
+        system_prompt=prompts_pathway.SYSTEM_PROMPT.get(language, prompts_pathway.SYSTEM_PROMPT["it"]),
         tool_name="save_final_feedback_report",
         tool_schema=FinalReportContent.model_json_schema()
     )
@@ -122,7 +137,7 @@ async def create_final_feedback_content_async(
     structured_response_str = await get_structured_llm_response_async( # <-- MODIFICA: usa await
         prompt=prompt,
         model=ARCHITECT_MODEL,
-        system_prompt=prompts_pathway.SYSTEM_PROMPT[language],
+        system_prompt=prompts_pathway.SYSTEM_PROMPT.get(language, prompts_pathway.SYSTEM_PROMPT["it"]),
         tool_name="save_final_feedback_report",
         tool_schema=FinalReportContent.model_json_schema()
     )
@@ -150,6 +165,18 @@ async def create_final_feedback_content_async(
         if "Profilo sintetico" in parsed_json and "profile_summary" not in parsed_json:
             parsed_json["profile_summary"] = parsed_json.pop("Profilo sintetico")
             print("⚠ ATTENZIONE: Convertito alias 'Profilo sintetico' in 'profile_summary'")
+        if "Analisi CV" in parsed_json and "cv_analysis_outcome" not in parsed_json:
+            parsed_json["cv_analysis_outcome"] = parsed_json.pop("Analisi CV")
+            print("⚠ ATTENZIONE: Convertito alias 'Analisi CV' in 'cv_analysis_outcome'")
+        if "Analisi colloquio" in parsed_json and "interview_outcome" not in parsed_json:
+            parsed_json["interview_outcome"] = parsed_json.pop("Analisi colloquio")
+            print("⚠ ATTENZIONE: Convertito alias 'Analisi colloquio' in 'interview_outcome'")
+        if "Benchmark di mercato" in parsed_json and "market_benchmark" not in parsed_json:
+            parsed_json["market_benchmark"] = parsed_json.pop("Benchmark di mercato")
+            print("⚠ ATTENZIONE: Convertito alias 'Benchmark di mercato' in 'market_benchmark'")
+        if "Percorso formativo" in parsed_json and "suggested_pathway" not in parsed_json:
+            parsed_json["suggested_pathway"] = parsed_json.pop("Percorso formativo")
+            print("⚠ ATTENZIONE: Convertito alias 'Percorso formativo' in 'suggested_pathway'")
         
         validated_data = FinalReportContent.model_validate(parsed_json)
         print("4. [Report Finale] Contenuto generato e validato.")
@@ -178,7 +205,15 @@ async def create_final_feedback_content_async(
             # Gestione alias anche nel fallback
             if "Profilo sintetico" in parsed_json and "profile_summary" not in parsed_json:
                 parsed_json["profile_summary"] = parsed_json.pop("Profilo sintetico")
-            
+            if "Analisi CV" in parsed_json and "cv_analysis_outcome" not in parsed_json:
+                parsed_json["cv_analysis_outcome"] = parsed_json.pop("Analisi CV")
+            if "Analisi colloquio" in parsed_json and "interview_outcome" not in parsed_json:
+                parsed_json["interview_outcome"] = parsed_json.pop("Analisi colloquio")
+            if "Benchmark di mercato" in parsed_json and "market_benchmark" not in parsed_json:
+                parsed_json["market_benchmark"] = parsed_json.pop("Benchmark di mercato")
+            if "Percorso formativo" in parsed_json and "suggested_pathway" not in parsed_json:
+                parsed_json["suggested_pathway"] = parsed_json.pop("Percorso formativo")
+
             # Riprova la validazione dopo il fallback
             validated_data = FinalReportContent.model_validate(parsed_json, strict=False)
             print("⚠ [FALLBACK] Validazione riuscita dopo correzione dei campi mancanti")

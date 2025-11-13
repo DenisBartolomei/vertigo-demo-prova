@@ -2,6 +2,7 @@ import { Link, Outlet } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { AutoLogout } from '../components/AutoLogout'
 import { VertigoLogo } from '../components/AstronautLogo'
+import { LayoutDashboard, FileText, Settings, Users, Plus, BarChart3, LogOut, Building2, Mail } from 'lucide-react'
 import '../styles.css'
 
 export function App() {
@@ -102,28 +103,28 @@ export function App() {
             />
           </h3>
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <Link to="/app/dashboard">
-              <span style={{ fontSize: '18px' }}>📊</span>
+            <Link to="/app/dashboard" className="nav-link">
+              <LayoutDashboard size={20} />
               Dashboard
             </Link>
-            <Link to="/app/positions">
-              <span style={{ fontSize: '18px' }}>📋</span>
+            <Link to="/app/positions" className="nav-link">
+              <FileText size={20} />
               Annunci
             </Link>
-            <Link to="/app/setup-colloqui">
-              <span style={{ fontSize: '18px' }}>⚙️</span>
+            <Link to="/app/setup-colloqui" className="nav-link">
+              <Settings size={20} />
               Setup Colloqui
             </Link>
-            <Link to="/app/candidati">
-              <span style={{ fontSize: '18px' }}>📈</span>
+            <Link to="/app/candidati" className="nav-link">
+              <BarChart3 size={20} />
               Reportistica Candidati
             </Link>
-            <Link to="/app/nuova-sessione">
-              <span style={{ fontSize: '18px' }}>➕</span>
+            <Link to="/app/nuova-sessione" className="nav-link">
+              <Plus size={20} />
               Nuova Sessione
             </Link>
-            <Link to="/app/users">
-              <span style={{ fontSize: '18px' }}>👥</span>
+            <Link to="/app/users" className="nav-link">
+              <Users size={20} />
               Gestione Utenti
             </Link>
           </nav>
@@ -145,21 +146,58 @@ export function App() {
             {user && (
               <div style={{
                 display: 'flex',
-                flexDirection: 'column',
-                gap: '4px'
+                alignItems: 'center',
+                gap: '12px'
               }}>
                 <div style={{
-                  fontSize: '14px',
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
                   fontWeight: '600',
-                  color: 'var(--text-primary)'
+                  fontSize: '16px',
+                  flexShrink: 0
                 }}>
-                  📧 {user.email}
+                  {user.email[0].toUpperCase()}
                 </div>
                 <div style={{
-                  fontSize: '12px',
-                  color: 'var(--text-secondary)'
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                  flex: 1,
+                  minWidth: 0
                 }}>
-                  🏢 {user.company}
+                  <div style={{
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: 'var(--text-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    <Mail size={14} style={{ flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.email}</span>
+                  </div>
+                  <div style={{
+                    fontSize: '12px',
+                    color: 'var(--text-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    <Building2 size={14} style={{ flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.company}</span>
+                  </div>
                 </div>
               </div>
             )}
@@ -169,27 +207,27 @@ export function App() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                padding: '8px 16px',
+                padding: '10px 18px',
                 background: 'linear-gradient(135deg, #ef4444, #dc2626)',
                 color: 'white',
                 border: 'none',
-                borderRadius: 'var(--radius-md)',
+                borderRadius: 'var(--radius-lg)',
                 fontSize: '14px',
-                fontWeight: '500',
+                fontWeight: '600',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
-                boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
+                boxShadow: '0 2px 8px rgba(239, 68, 68, 0.2)'
               }}
               onMouseOver={(e) => {
                 e.currentTarget.style.transform = 'translateY(-1px)'
-                e.currentTarget.style.boxShadow = '0 4px 8px rgba(239, 68, 68, 0.3)'
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.3)'
               }}
               onMouseOut={(e) => {
                 e.currentTarget.style.transform = 'translateY(0)'
-                e.currentTarget.style.boxShadow = '0 2px 4px rgba(239, 68, 68, 0.2)'
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(239, 68, 68, 0.2)'
               }}
             >
-              <span style={{ fontSize: '16px' }}>🚪</span>
+              <LogOut size={18} />
               Logout
             </button>
           </header>

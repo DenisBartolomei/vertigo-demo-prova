@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { BarChart3, Clock, Target, MessageCircle, Mail, Copy, Link2, CheckCircle2, FileText, Plus } from 'lucide-react'
 import { BatchStatusMonitor } from '../components/BatchStatusMonitor'
 import { CreateSessionPanel } from '../components/CreateSessionPanel'
 import '../components/batch-components.css'
@@ -263,7 +264,7 @@ export function NuovaSessione() {
           className="create-session-btn"
           onClick={() => setIsPanelOpen(true)}
         >
-          <div className="btn-icon">+</div>
+          <Plus size={20} style={{ marginRight: '8px' }} />
           Crea Nuove Sessioni
         </button>
       </div>
@@ -274,25 +275,25 @@ export function NuovaSessione() {
           className={`filter-button ${statusFilter === 'all' ? 'active' : ''}`}
           onClick={() => setStatusFilter('all')}
         >
-          📊 Tutti
+          <BarChart3 size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Tutti
         </button>
         <button 
           className={`filter-button ${statusFilter === 'processing' ? 'active' : ''}`}
           onClick={() => setStatusFilter('processing')}
         >
-          ⏳ Batch in corso
+          <Clock size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Batch in corso
         </button>
         <button 
           className={`filter-button ${statusFilter === 'ready' ? 'active' : ''}`}
           onClick={() => setStatusFilter('ready')}
         >
-          🎯 Token pronto
+          <Target size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Token pronto
         </button>
         <button 
           className={`filter-button ${statusFilter === 'ongoing' ? 'active' : ''}`}
           onClick={() => setStatusFilter('ongoing')}
         >
-          💬 Colloquio in corso
+          <MessageCircle size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Colloquio in corso
         </button>
         
         <div className="sort-controls">
@@ -310,26 +311,25 @@ export function NuovaSessione() {
       {/* Unified Candidate Cards */}
       <div className="card fade-in">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-          <div style={{ 
-            width: '40px', 
-            height: '40px', 
-            borderRadius: '50%', 
-            background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontSize: '18px'
-          }}>
-            📊
-          </div>
+            <div style={{ 
+              width: '40px', 
+              height: '40px', 
+              borderRadius: '50%', 
+              background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white'
+            }}>
+              <BarChart3 size={20} />
+            </div>
           <h3>Candidati Attivi ({filteredAndSortedSessions.length})</h3>
         </div>
         
         {loading ? (
           <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-            <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
-            Caricamento sessioni...
+            <Clock size={24} color="#9CA3AF" style={{ marginBottom: '8px' }} />
+            <div style={{ marginTop: '8px' }}>Caricamento sessioni...</div>
           </div>
         ) : (
           <div style={{ display: 'grid', gap: '16px' }}>
@@ -340,7 +340,9 @@ export function NuovaSessione() {
                     <h5>{session.candidate_name || 'Nome da inserire'}</h5>
                     <p>{session.position_name || session.position_id}</p>
                     {session.candidate_email && (
-                      <p className="card-email">📧 {session.candidate_email}</p>
+                      <p className="card-email" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Mail size={14} /> {session.candidate_email}
+                      </p>
                     )}
                   </div>
                   <div className="card-status">
@@ -362,7 +364,7 @@ export function NuovaSessione() {
                           alert('Token copiato!')
                         }}
                       >
-                        📋 Copia Token
+                        <Copy size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Copia Token
                       </button>
                     ) : (
                       <button
@@ -373,7 +375,7 @@ export function NuovaSessione() {
                           }
                         }}
                       >
-                        🔗 Genera Token
+                        <Link2 size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Genera Token
                       </button>
                     )}
                     
@@ -386,7 +388,7 @@ export function NuovaSessione() {
                           }
                         }}
                       >
-                        ✅ Marca Inviato
+                        <CheckCircle2 size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Marca Inviato
                       </button>
                     )}
                   </div>
@@ -416,7 +418,7 @@ export function NuovaSessione() {
                 background: 'var(--bg-secondary)',
                 borderRadius: 'var(--radius-lg)'
               }}>
-                <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
+                <FileText size={48} color="#9CA3AF" style={{ marginBottom: '16px' }} />
                 <div style={{ fontSize: '18px', marginBottom: '8px' }}>Nessuna sessione attiva</div>
                 <div>Carica i tuoi primi CV usando il pulsante "Crea Nuove Sessioni"</div>
               </div>

@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react'
+import { FileText, BarChart3, Clock, Save, Rocket, Trash2, Briefcase, Pin, Settings, ChevronDown, X } from 'lucide-react'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://vertigo-ai-backend-tbia7kjh7a-oc.a.run.app'
 
@@ -274,12 +277,7 @@ export function Positions() {
             alignItems: 'flex-start',
             marginBottom: '16px'
           }}>
-            <div style={{ 
-              fontSize: '32px', 
-              marginRight: '12px'
-            }}>
-              ⚙️
-            </div>
+            <Settings size={32} color="#7C3AED" style={{ marginRight: '12px' }} />
             <button
               onClick={() => setIsPreparing(false)}
               style={{
@@ -306,7 +304,7 @@ export function Positions() {
                 e.currentTarget.style.color = 'var(--text-secondary)'
               }}
             >
-              ✕
+              <X size={16} />
             </button>
           </div>
           <h3 style={{ 
@@ -332,7 +330,7 @@ export function Positions() {
             fontSize: '12px',
             color: 'var(--text-secondary)'
           }}>
-            ⏳ Il processo continua in background
+            <Clock size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} /> Il processo continua in background
           </div>
         </div>
       )}
@@ -368,20 +366,16 @@ export function Positions() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: 'white',
-              fontSize: '18px'
+              color: 'white'
             }}>
-              📋
+              <FileText size={20} />
             </div>
             <h3>Crea Nuova Posizione</h3>
           </div>
-          <div style={{ 
-            fontSize: '20px',
+          <ChevronDown size={20} style={{
             transform: isCreateFormExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
             transition: 'transform 0.3s ease'
-          }}>
-            ▼
-          </div>
+          }} />
         </div>
         
         {isCreateFormExpanded && (
@@ -489,7 +483,7 @@ export function Positions() {
             disabled={!form.position_name || !form.job_description}
             style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }}
           >
-            💾 Salva Posizione & Avvia Preparazione Dati
+            <Save size={18} style={{ marginRight: '8px' }} /> Salva Posizione & Avvia Preparazione Dati
           </button>
           </div>
         )}
@@ -498,26 +492,25 @@ export function Positions() {
       {/* Existing Positions */}
       <div className="card fade-in">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-          <div style={{ 
-            width: '40px', 
-            height: '40px', 
-            borderRadius: '50%', 
-            background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontSize: '18px'
-          }}>
-            📊
-          </div>
+            <div style={{ 
+              width: '40px', 
+              height: '40px', 
+              borderRadius: '50%', 
+              background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white'
+            }}>
+              <BarChart3 size={20} />
+            </div>
           <h3>Posizioni Esistenti</h3>
         </div>
         
         {loading ? (
           <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-            <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
-            Caricamento posizioni...
+            <Clock size={24} color="#9CA3AF" style={{ marginBottom: '8px' }} />
+            <div style={{ marginTop: '8px' }}>Caricamento posizioni...</div>
           </div>
         ) : (
           <div style={{ display: 'grid', gap: '20px' }}>
@@ -529,7 +522,7 @@ export function Positions() {
                 background: 'var(--bg-secondary)',
                 borderRadius: 'var(--radius-lg)'
               }}>
-                <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
+                <FileText size={48} color="#9CA3AF" style={{ marginBottom: '16px' }} />
                 <div style={{ fontSize: '18px', marginBottom: '8px' }}>Nessuna posizione ancora</div>
                 <div>Crea la tua prima posizione qui sopra</div>
               </div>
@@ -593,7 +586,7 @@ export function Positions() {
                               transition: 'all 0.2s ease'
                             }}
                           >
-                            📄 Testo annuncio
+                            <FileText size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Testo annuncio
                           </button>
                           <button
                             onClick={() => handleTabClick(p._id, 'cases')}
@@ -610,7 +603,7 @@ export function Positions() {
                               transition: 'all 0.2s ease'
                             }}
                           >
-                            💼 Casi da colloquio
+                            <Briefcase size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Casi da colloquio
                           </button>
                           <button
                             onClick={() => {
@@ -632,7 +625,7 @@ export function Positions() {
                               transition: 'all 0.2s ease'
                             }}
                           >
-                            📊 Griglia valutativa
+                            <BarChart3 size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Griglia valutativa
                           </button>
                         </div>
 
@@ -764,8 +757,8 @@ export function Positions() {
                                     background: 'rgba(255, 255, 255, 0.5)',
                                     borderRadius: 'var(--radius-md)'
                                   }}>
-                                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
-                                    Nessun caso disponibile ancora. Esegui la preparazione dati per generare i casi di colloquio.
+                                    <Clock size={24} color="#9CA3AF" style={{ marginBottom: '8px' }} />
+                                    <div style={{ marginTop: '8px' }}>Nessun caso disponibile ancora. Esegui la preparazione dati per generare i casi di colloquio.</div>
                                   </div>
                                 )}
                               </div>
@@ -806,7 +799,7 @@ export function Positions() {
                                                 borderRadius: '6px',
                                                 flex: 1
                                               }}>
-                                                📌 {req.requirement}
+                                                <Pin size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> {req.requirement}
                                               </div>
                                               <button
                                                 onClick={() => toggleCriterionExpansion(p._id, idx)}
@@ -890,7 +883,15 @@ export function Positions() {
                                           transition: 'all 0.2s ease'
                                         }}
                                       >
-                                        {savingCriteria ? '⏳ Salvataggio...' : '💾 Salva Modifiche'}
+                                        {savingCriteria ? (
+                                          <>
+                                            <Clock size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Salvataggio...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Save size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Salva Modifiche
+                                          </>
+                                        )}
                                       </button>
                                     )}
                                   </div>
@@ -902,8 +903,8 @@ export function Positions() {
                                     background: 'rgba(255, 255, 255, 0.5)',
                                     borderRadius: 'var(--radius-md)'
                                   }}>
-                                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
-                                    Nessun criterio di valutazione disponibile. Esegui la preparazione dati per generarli.
+                                    <Clock size={24} color="#9CA3AF" style={{ marginBottom: '8px' }} />
+                                    <div style={{ marginTop: '8px' }}>Nessun criterio di valutazione disponibile. Esegui la preparazione dati per generarli.</div>
                                   </div>
                                 )}
                               </div>
@@ -917,8 +918,8 @@ export function Positions() {
                             background: 'linear-gradient(135deg, var(--light-purple), var(--pastel-pink))',
                             borderRadius: 'var(--radius-md)'
                           }}>
-                            <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
-                            Caricamento dettagli...
+                            <Clock size={24} color="#9CA3AF" style={{ marginBottom: '8px' }} />
+                            <div style={{ marginTop: '8px' }}>Caricamento dettagli...</div>
                           </div>
                         )}
                         
@@ -934,7 +935,15 @@ export function Positions() {
                             className="primary"
                             style={{ flex: 1 }}
                           >
-                            {isPreparing ? '⏳ Elaborazione...' : '🚀 Esegui Preparazione Dati'}
+                            {isPreparing ? (
+                              <>
+                                <Clock size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Elaborazione...
+                              </>
+                            ) : (
+                              <>
+                                <Rocket size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Esegui Preparazione Dati
+                              </>
+                            )}
                           </button>
                           <button 
                             onClick={() => deletePosition(p._id, p.position_name)}
@@ -947,7 +956,7 @@ export function Positions() {
                               minWidth: '120px'
                             }}
                           >
-                            🗑️ Elimina
+                            <Trash2 size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Elimina
                           </button>
                         </div>
                       </div>

@@ -1,4 +1,8 @@
 import { useEffect, useState } from 'react'
+import { Users, FileText, AlertCircle, Plus, CheckCircle2, X, Trash2 } from 'lucide-react'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Badge } from '../components/ui/Badge'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://vertigo-ai-backend-tbia7kjh7a-oc.a.run.app'
 
@@ -139,7 +143,9 @@ export function UserManagement() {
           border: '1px solid #F59E0B',
           color: '#92400E'
         }}>
-          <div style={{ fontWeight: '600', marginBottom: '8px' }}>⚠️ Accesso Limitato</div>
+          <div style={{ fontWeight: '600', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertCircle size={18} /> Accesso Limitato
+          </div>
           <div style={{ fontSize: '14px' }}>
             Solo gli amministratori possono creare e gestire utenti. 
             Il tuo ruolo attuale è: <strong>{currentUser.role === 'hr' ? 'Utente HR' : currentUser.role}</strong>
@@ -162,7 +168,7 @@ export function UserManagement() {
               color: 'white',
               fontSize: '18px'
             }}>
-              👥
+              <Users size={20} />
             </div>
             <h3>Aggiungi Nuovo Utente</h3>
           </div>
@@ -172,7 +178,7 @@ export function UserManagement() {
               onClick={() => setShowCreateForm(true)}
               style={{ width: '100%', justifyContent: 'center' }}
             >
-              ➕ Aggiungi Nuovo Utente
+              <Plus size={18} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Aggiungi Nuovo Utente
             </button>
           ) : (
             <div style={{ display: 'grid', gap: '20px' }}>
@@ -229,7 +235,7 @@ export function UserManagement() {
                   onClick={createUser}
                   style={{ flex: 1, justifyContent: 'center' }}
                 >
-                  ✅ Crea Utente
+                  <CheckCircle2 size={18} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Crea Utente
                 </button>
                 <button 
                   onClick={() => {
@@ -238,7 +244,7 @@ export function UserManagement() {
                   }}
                   style={{ flex: 1, justifyContent: 'center', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
                 >
-                  ❌ Annulla
+                  <X size={18} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Annulla
                 </button>
               </div>
             </div>
@@ -260,7 +266,7 @@ export function UserManagement() {
             color: 'white',
             fontSize: '18px'
           }}>
-            📋
+            <FileText size={20} />
           </div>
           <h3>Utenti Attuali</h3>
         </div>
@@ -280,7 +286,7 @@ export function UserManagement() {
                 background: 'var(--bg-secondary)',
                 borderRadius: 'var(--radius-lg)'
               }}>
-                <div style={{ fontSize: '48px', marginBottom: '16px' }}>👥</div>
+                <Users size={48} color="#9CA3AF" style={{ marginBottom: '16px' }} />
                 <div style={{ fontSize: '18px', marginBottom: '8px' }}>Nessun utente trovato</div>
                 <div>Aggiungi il tuo primo utente per iniziare</div>
               </div>
@@ -332,7 +338,7 @@ export function UserManagement() {
                       }}
                       title="Disattiva utente"
                     >
-                      🗑️ Disattiva
+                      <Trash2 size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Disattiva
                     </button>
                   )}
                 </div>

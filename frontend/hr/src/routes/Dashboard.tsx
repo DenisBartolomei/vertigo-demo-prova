@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react'
+import { CheckCircle2, Clock, RefreshCw, Target, FileText, Star, TrendingUp, TrendingDown, Minus, BarChart3 } from 'lucide-react'
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
+import { Skeleton } from '../components/ui/Skeleton'
+import { Badge } from '../components/ui/Badge'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8001'
 
@@ -73,17 +77,37 @@ export function Dashboard() {
 
   if (loading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '400px',
-        fontSize: '18px',
-        color: 'var(--text-secondary)'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
-          <div>Caricamento dashboard...</div>
+      <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
+        <div style={{ marginBottom: '24px' }}>
+          <Skeleton width="200px" height="32px" />
+        </div>
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(3, 1fr)', 
+          gap: '24px',
+          marginBottom: '32px'
+        }}>
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} style={{
+              background: 'white',
+              borderRadius: '20px',
+              border: '1px solid #E5E7EB',
+              padding: '24px'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                marginBottom: '16px'
+              }}>
+                <Skeleton circle width={48} height={48} />
+                <div style={{ flex: 1 }}>
+                  <Skeleton width="60%" height="16px" />
+                  <Skeleton width="80%" height="24px" style={{ marginTop: '8px' }} />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     )
@@ -198,42 +222,42 @@ export function Dashboard() {
         <MetricCard
           title="Colloqui Completati"
           value={data.metrics.completed_interviews}
-          icon="✅"
+          icon={<CheckCircle2 />}
           color="#10b981"
           tooltip="Candidati che hanno terminato l'intervista con successo e ricevuto valutazione completa"
         />
         <MetricCard
           title="Candidati in Attesa di Token"
           value={data.metrics.waiting_token}
-          icon="⏳"
+          icon={<Clock />}
           color="#f59e0b"
           tooltip="CV analizzati con token generato ma non ancora inviato al candidato"
         />
         <MetricCard
           title="Colloquio in Corso"
           value={data.metrics.in_progress}
-          icon="🔄"
+          icon={<RefreshCw />}
           color="#3b82f6"
           tooltip="Candidati che hanno ricevuto il token ma non hanno ancora completato l'intervista"
         />
         <MetricCard
           title="Scoring Medio Colloqui"
           value={data.metrics.avg_interview_score.toFixed(2)}
-          icon="🎯"
+          icon={<Target />}
           color="#3b82f6"
           tooltip="Punteggio medio ottenuto dai candidati durante le interviste, su una scala da 0 a 4"
         />
         <MetricCard
           title="Scoring Medio CV"
           value={data.metrics.avg_cv_score.toFixed(2)}
-          icon="📄"
+          icon={<FileText />}
           color="#8b5cf6"
           tooltip="Punteggio medio ottenuto dai candidati nell'analisi dei CV, su una scala da 0 a 4"
         />
         <MetricCard
           title="Scoring Complessivo"
           value={data.metrics.avg_overall_score.toFixed(2)}
-          icon="⭐"
+          icon={<Star />}
           color="#6366f1"
           tooltip="Punteggio medio complessivo che combina la valutazione del CV e della performance in intervista"
         />
@@ -256,101 +280,112 @@ export function Dashboard() {
 function MetricCard({ title, value, icon, color, tooltip }: {
   title: string
   value: number | string
-  icon: string
+  icon: React.ReactNode
   color: string
   tooltip: string
 }) {
   const [showTooltip, setShowTooltip] = useState(false)
 
   return (
-    <div style={{
+    <div className="hover-lift" style={{
       background: 'white',
-      borderRadius: '16px',
+      borderRadius: '20px',
       padding: '24px',
-      boxShadow: 'var(--shadow-sm)',
+      boxShadow: 'var(--shadow-md)',
       border: '1px solid var(--border-light)',
-      position: 'relative'
+      position: 'relative',
+      overflow: 'hidden',
+      transition: 'all var(--transition-normal)'
     }}>
+      {/* Decorative background */}
       <div style={{
         position: 'absolute',
-        top: '0',
-        right: '0',
-        width: '100px',
-        height: '100px',
-        background: `linear-gradient(135deg, ${color}20, ${color}10)`,
+        top: '-20px',
+        right: '-20px',
+        width: '140px',
+        height: '140px',
+        background: `radial-gradient(circle, ${color}15, transparent)`,
         borderRadius: '50%',
-        transform: 'translate(30px, -30px)',
-        pointerEvents: 'none',
-        overflow: 'hidden'
+        pointerEvents: 'none'
       }} />
       
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-        <div style={{
-          fontSize: '24px',
-          width: '40px',
-          height: '40px',
-          borderRadius: '10px',
-          background: `${color}20`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          {icon}
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <h3 style={{ 
-              fontSize: '14px', 
-              fontWeight: '500', 
-              color: 'var(--text-secondary)',
-              margin: '0 0 4px 0'
-            }}>
-              {title}
-            </h3>
-            <div 
-              onMouseEnter={() => setShowTooltip(true)}
-              onMouseLeave={() => setShowTooltip(false)}
-              style={{ position: 'relative', display: 'inline-block' }}
-            >
-              <span style={{ 
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+              <h3 style={{ 
                 fontSize: '14px', 
-                color: 'var(--text-muted)', 
-                cursor: 'help',
-                marginLeft: '4px'
+                fontWeight: '600', 
+                color: 'var(--text-secondary)',
+                margin: 0,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
               }}>
-                ❓
-              </span>
-              {showTooltip && (
-                <div style={{
-                  position: 'fixed',
-                  background: 'rgba(0,0,0,0.95)',
-                  color: 'white',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  lineHeight: '1.4',
-                  maxWidth: '280px',
-                  zIndex: 10000,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                  whiteSpace: 'normal',
-                  pointerEvents: 'none',
-                  marginTop: '-8px',
-                  marginLeft: '8px'
+                {title}
+              </h3>
+              <div 
+                onMouseEnter={() => setShowTooltip(true)}
+                onMouseLeave={() => setShowTooltip(false)}
+                style={{ position: 'relative', display: 'inline-block', cursor: 'help' }}
+              >
+                <span style={{ 
+                  fontSize: '12px', 
+                  color: 'var(--text-muted)',
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '50%',
+                  border: '1.5px solid currentColor',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: '600'
                 }}>
-                  {tooltip}
-                </div>
-              )}
+                  ?
+                </span>
+                {showTooltip && (
+                  <div className="slide-down" style={{
+                    position: 'fixed',
+                    background: 'rgba(0,0,0,0.95)',
+                    color: 'white',
+                    padding: '12px 16px',
+                    borderRadius: '10px',
+                    fontSize: '13px',
+                    lineHeight: '1.5',
+                    maxWidth: '300px',
+                    zIndex: 10000,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                    whiteSpace: 'normal',
+                    pointerEvents: 'none',
+                    marginTop: '4px',
+                    marginLeft: '8px'
+                  }}>
+                    {tooltip}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div style={{ 
+              fontSize: '36px', 
+              fontWeight: '700', 
+              color: 'var(--text-primary)',
+              lineHeight: 1,
+              fontFamily: "'Manrope', 'Inter', sans-serif"
+            }}>
+              {value}
             </div>
           </div>
-          <div style={{ 
-            fontSize: '28px', 
-            fontWeight: '700', 
-            color: 'var(--text-primary)',
+          <div style={{
+            width: '56px',
+            height: '56px',
+            borderRadius: '16px',
+            background: `linear-gradient(135deg, ${color}20, ${color}10)`,
             display: 'flex',
             alignItems: 'center',
-            gap: '8px'
+            justifyContent: 'center',
+            color: color,
+            flexShrink: 0
           }}>
-            {value}
+            {icon}
           </div>
         </div>
       </div>
@@ -358,7 +393,7 @@ function MetricCard({ title, value, icon, color, tooltip }: {
   )
 }
 
-// Performance Pie Chart Component
+// Performance Pie Chart Component with Recharts
 function PerformancePieChart({ 
   recoveryCount, 
   underperformingCount, 
@@ -369,204 +404,195 @@ function PerformancePieChart({
   totalEvaluated: number
 }) {
   const neutralCount = totalEvaluated - recoveryCount - underperformingCount
-  const total = totalEvaluated || 1 // Evita divisione per zero
+  
+  const data = [
+    { name: 'Recupero', value: recoveryCount, color: '#10b981', icon: <TrendingUp size={16} /> },
+    { name: 'Neutri', value: neutralCount, color: '#94a3b8', icon: <Minus size={16} /> },
+    { name: 'Underperforming', value: underperformingCount, color: '#ef4444', icon: <TrendingDown size={16} /> }
+  ].filter(item => item.value > 0)
 
-  const recoveryPercent = total > 0 ? (recoveryCount / total) * 100 : 0
-  const underperformingPercent = total > 0 ? (underperformingCount / total) * 100 : 0
-  const neutralPercent = total > 0 ? (neutralCount / total) * 100 : 0
-
-  // Calcola gli angoli per il grafico a torta
-  const recoveryAngle = (recoveryPercent / 100) * 360
-  const underperformingAngle = (underperformingPercent / 100) * 360
-  const neutralAngle = (neutralPercent / 100) * 360
-
-  // Funzione per creare il path SVG di uno spicchio
-  const createSlice = (startAngle: number, endAngle: number, color: string) => {
-    const radius = 80
-    const centerX = 100
-    const centerY = 100
-
-    const startRad = (startAngle - 90) * (Math.PI / 180)
-    const endRad = (endAngle - 90) * (Math.PI / 180)
-
-    const x1 = centerX + radius * Math.cos(startRad)
-    const y1 = centerY + radius * Math.sin(startRad)
-    const x2 = centerX + radius * Math.cos(endRad)
-    const y2 = centerY + radius * Math.sin(endRad)
-
-    const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0
-
-    return {
-      path: `M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`,
-      color
-    }
-  }
-
-  const slices = []
-  let currentAngle = 0
-
-  // Se una categoria ha il 100%, mostra solo quella
-  if (recoveryPercent === 100) {
-    slices.push({
-      path: 'M 100 20 A 80 80 0 1 1 100 20 Z', // Cerchio completo
-      color: '#10b981',
-      label: 'Recupero',
-      count: recoveryCount,
-      percent: recoveryPercent
-    })
-  } else if (underperformingPercent === 100) {
-    slices.push({
-      path: 'M 100 20 A 80 80 0 1 1 100 20 Z', // Cerchio completo
-      color: '#ef4444',
-      label: 'Underperforming',
-      count: underperformingCount,
-      percent: underperformingPercent
-    })
-  } else if (neutralPercent === 100) {
-    slices.push({
-      path: 'M 100 20 A 80 80 0 1 1 100 20 Z', // Cerchio completo
-      color: '#94a3b8',
-      label: 'Neutri',
-      count: neutralCount,
-      percent: neutralPercent
-    })
-  } else {
-    // Caso normale: più categorie
-    if (recoveryPercent > 0) {
-      slices.push({
-        ...createSlice(currentAngle, currentAngle + recoveryAngle, '#10b981'),
-        label: 'Recupero',
-        count: recoveryCount,
-        percent: recoveryPercent
-      })
-      currentAngle += recoveryAngle
-    }
-
-    if (neutralPercent > 0) {
-      slices.push({
-        ...createSlice(currentAngle, currentAngle + neutralAngle, '#94a3b8'),
-        label: 'Neutri',
-        count: neutralCount,
-        percent: neutralPercent
-      })
-      currentAngle += neutralAngle
-    }
-
-    if (underperformingPercent > 0) {
-      slices.push({
-        ...createSlice(currentAngle, currentAngle + underperformingAngle, '#ef4444'),
-        label: 'Underperforming',
-        count: underperformingCount,
-        percent: underperformingPercent
-      })
-    }
-  }
+  const COLORS = data.map(item => item.color)
 
   return (
-    <div style={{
+    <div className="hover-lift" style={{
       background: 'white',
-      borderRadius: '16px',
-      padding: '24px',
-      boxShadow: 'var(--shadow-sm)',
+      borderRadius: '20px',
+      padding: '32px',
+      boxShadow: 'var(--shadow-md)',
       border: '1px solid var(--border-light)',
       gridColumn: 'span 2',
       minWidth: '280px'
     }}>
-      <h3 style={{ 
-        fontSize: '16px', 
-        fontWeight: '600', 
-        color: 'var(--text-primary)',
-        marginBottom: '20px',
-        textAlign: 'center'
-      }}>
-        📊 Distribuzione Performance Candidati
-      </h3>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+        <div style={{
+          width: '48px',
+          height: '48px',
+          borderRadius: '14px',
+          background: 'linear-gradient(135deg, #7C3AED20, #EC489910)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#7C3AED'
+        }}>
+          <BarChart3 size={24} />
+        </div>
+        <h3 style={{ 
+          fontSize: '18px', 
+          fontWeight: '700', 
+          color: 'var(--text-primary)',
+          margin: 0
+        }}>
+          Distribuzione Performance Candidati
+        </h3>
+      </div>
 
       {totalEvaluated === 0 ? (
         <div style={{
           textAlign: 'center',
-          padding: '40px',
+          padding: '60px 20px',
           color: 'var(--text-secondary)',
-          fontSize: '14px'
+          fontSize: '15px'
         }}>
-          Nessun dato disponibile per visualizzare il grafico
+          <div style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.3 }}>📊</div>
+          <p style={{ margin: 0 }}>Nessun dato disponibile per visualizzare il grafico</p>
         </div>
       ) : (
-        <div style={{ 
-          display: 'flex', 
-          gap: '32px', 
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexWrap: 'wrap'
-        }}>
-          {/* Grafico a torta SVG */}
-          <svg width="200" height="200" viewBox="0 0 200 200" style={{ display: 'block' }}>
-            {slices.length === 0 ? (
-              <circle cx="100" cy="100" r="80" fill="#e5e7eb" />
-            ) : slices.length === 1 && (slices[0].percent === 100) ? (
-              // Cerchio completo per una categoria al 100%
-              <circle cx="100" cy="100" r="80" fill={slices[0].color} />
-            ) : (
-              slices.map((slice, index) => (
-                <path
-                  key={index}
-                  d={slice.path}
-                  fill={slice.color}
-                  stroke="white"
-                  strokeWidth="2"
-                />
-              ))
-            )}
-          </svg>
+        <div>
+          <div style={{ 
+            display: 'flex', 
+            gap: '48px', 
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+            marginBottom: '24px'
+          }}>
+            {/* Recharts Pie Chart */}
+            <div style={{ width: '260px', height: '260px' }}>
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie
+                    data={data}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    outerRadius={100}
+                    innerRadius={60}
+                    fill="#8884d8"
+                    dataKey="value"
+                    animationBegin={0}
+                    animationDuration={800}
+                  >
+                    {data.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{
+                      background: 'rgba(0,0,0,0.9)',
+                      border: 'none',
+                      borderRadius: '8px',
+                      color: 'white',
+                      padding: '8px 12px',
+                      fontSize: '13px'
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
 
-        {/* Leggenda */}
-        <div style={{ 
-          display: 'flex', 
-          flexDirection: 'column', 
-          gap: '12px' 
-        }}>
-          {slices.map((slice, index) => (
-            <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{
-                width: '16px',
-                height: '16px',
-                borderRadius: '4px',
-                background: slice.color,
-                flexShrink: 0
-              }} />
-              <div>
-                <div style={{ 
-                  fontSize: '14px', 
-                  fontWeight: '600', 
-                  color: 'var(--text-primary)' 
-                }}>
-                  {slice.label}
+            {/* Legend */}
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: '16px' 
+            }}>
+              {data.map((item, index) => (
+                <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '10px',
+                    background: `${item.color}20`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: item.color,
+                    flexShrink: 0
+                  }}>
+                    {item.icon}
+                  </div>
+                  <div>
+                    <div style={{ 
+                      fontSize: '15px', 
+                      fontWeight: '600', 
+                      color: 'var(--text-primary)',
+                      marginBottom: '2px'
+                    }}>
+                      {item.name}
+                    </div>
+                    <div style={{ 
+                      fontSize: '13px', 
+                      color: 'var(--text-secondary)' 
+                    }}>
+                      {item.value} candidati ({((item.value / totalEvaluated) * 100).toFixed(1)}%)
+                    </div>
+                  </div>
                 </div>
-                <div style={{ 
-                  fontSize: '12px', 
-                  color: 'var(--text-secondary)' 
-                }}>
-                  {slice.count} candidati ({slice.percent.toFixed(1)}%)
-                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Info Box */}
+          <div style={{ 
+            marginTop: '24px', 
+            paddingTop: '24px', 
+            borderTop: '1px solid var(--border-light)',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '16px'
+          }}>
+            <div style={{
+              padding: '12px',
+              background: '#10b98110',
+              borderRadius: '10px',
+              borderLeft: '3px solid #10b981'
+            }}>
+              <div style={{ fontSize: '12px', fontWeight: '600', color: '#10b981', marginBottom: '4px' }}>
+                RECUPERO
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                Miglioramento ≥0.5 punti rispetto al CV
               </div>
             </div>
-          ))}
-        </div>
+            <div style={{
+              padding: '12px',
+              background: '#ef444410',
+              borderRadius: '10px',
+              borderLeft: '3px solid #ef4444'
+            }}>
+              <div style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444', marginBottom: '4px' }}>
+                UNDERPERFORMING
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                Peggioramento ≥0.5 punti rispetto al CV
+              </div>
+            </div>
+            <div style={{
+              padding: '12px',
+              background: '#94a3b810',
+              borderRadius: '10px',
+              borderLeft: '3px solid #94a3b8'
+            }}>
+              <div style={{ fontSize: '12px', fontWeight: '600', color: '#94a3b8', marginBottom: '4px' }}>
+                NEUTRI
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                Performance allineata tra CV e colloquio
+              </div>
+            </div>
+          </div>
         </div>
       )}
-
-      <div style={{ 
-        marginTop: '16px', 
-        paddingTop: '16px', 
-        borderTop: '1px solid var(--border-light)',
-        fontSize: '13px',
-        color: 'var(--text-secondary)',
-        textAlign: 'center'
-      }}>
-        <strong>Recupero:</strong> Candidati che hanno performato meglio in colloquio rispetto al CV (miglioramento ≥0.5 punti)<br/>
-        <strong>Underperforming:</strong> Candidati che hanno performato peggio in colloquio rispetto al CV (peggioramento ≥0.5 punti)<br/>
-        <strong>Neutri:</strong> Candidati con performance allineata tra CV e colloquio
-      </div>
     </div>
   )
 }

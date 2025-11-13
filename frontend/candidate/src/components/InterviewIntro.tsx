@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Target, FileText, Lock, AlertCircle, CheckCircle2, Clock, Rocket } from 'lucide-react'
 
 interface InterviewIntroProps {
   positionName: string
@@ -21,7 +22,9 @@ export function InterviewIntro({ positionName, candidateName, onStart, onAcceptT
   return (
     <div className="interview-intro">
       <div className="intro-header">
-        <div className="intro-icon">🎯</div>
+        <div className="intro-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Target size={36} color="white" />
+        </div>
         <h1 className="intro-title">Welcome to Your Interview</h1>
         <p className="intro-subtitle">
           {candidateName}, you're about to begin your interview for the <strong>{positionName}</strong> position.
@@ -30,7 +33,9 @@ export function InterviewIntro({ positionName, candidateName, onStart, onAcceptT
 
       <div className="intro-content">
         <div className="intro-section">
-          <h3>📋 Interview Guidelines</h3>
+          <h3>
+            <FileText size={18} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Interview Guidelines
+          </h3>
           <ul>
             <li>This is a written interview that will assess your skills and experience</li>
             <li>Take your time to provide thoughtful, detailed answers</li>
@@ -43,7 +48,9 @@ export function InterviewIntro({ positionName, candidateName, onStart, onAcceptT
         </div>
 
         <div className="intro-section security-section">
-          <h3>🔒 Security Measures</h3>
+          <h3>
+            <Lock size={18} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Security Measures
+          </h3>
           <p>
             To ensure the integrity of the interview process, we have implemented several security measures:
           </p>
@@ -58,7 +65,9 @@ export function InterviewIntro({ positionName, candidateName, onStart, onAcceptT
           ) : (
             <div className="security-details">
               <div className="security-warning">
-                <strong>⚠️ IMPORTANT:</strong> All activities during this interview are monitored and recorded.
+                <strong style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <AlertCircle size={16} /> IMPORTANT:
+                </strong> All activities during this interview are monitored and recorded.
               </div>
               
               <h4>What We Monitor:</h4>
@@ -86,7 +95,9 @@ export function InterviewIntro({ positionName, candidateName, onStart, onAcceptT
         </div>
 
         <div className="intro-section">
-          <h3>✅ Terms and Conditions</h3>
+          <h3>
+            <CheckCircle2 size={18} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Terms and Conditions
+          </h3>
           <div className="terms-box">
             <p>
               By proceeding with this interview, you acknowledge and agree to:
@@ -117,7 +128,19 @@ export function InterviewIntro({ positionName, candidateName, onStart, onAcceptT
           onClick={handleStart}
           disabled={!acceptedTerms || loading}
         >
-          {loading ? '⏳ Starting...' : acceptedTerms ? '🚀 Start the case' : '⚠️ Agree to terms and conditions'}
+          {loading ? (
+            <>
+              <Clock size={18} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Starting...
+            </>
+          ) : acceptedTerms ? (
+            <>
+              <Rocket size={18} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Start the case
+            </>
+          ) : (
+            <>
+              <AlertCircle size={18} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Agree to terms and conditions
+            </>
+          )}
         </button>
       </div>
 

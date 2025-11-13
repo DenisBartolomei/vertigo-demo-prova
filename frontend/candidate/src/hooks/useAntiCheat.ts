@@ -39,8 +39,14 @@ export function useAntiCheat(config: AntiCheatConfig) {
   const screenshotAttemptCount = useRef(0)
   const multipleDisplayCount = useRef(0)
   const lastScreenCheck = useRef<{ width: number; height: number; availWidth: number; availHeight: number } | null>(null)
+  const cleanupRef = useRef<(() => void) | null>(null)
 
   const addEvent = useCallback((event: CheatingEvent) => {
+    // NON registrare eventi se il monitoraggio è fermo
+    if (!isMonitoring) {
+      return
+    }
+    
     setEvents(prev => [...prev, event])
     config.onCheatingDetected(event)
     
@@ -48,7 +54,7 @@ export function useAntiCheat(config: AntiCheatConfig) {
     if (event.severity === 'high') {
       setWarnings(prev => prev + 1)
     }
-  }, [config])
+  }, [config, isMonitoring])
 
   const handleVisibilityChange = useCallback(() => {
     if (document.hidden) {
@@ -216,7 +222,7 @@ export function useAntiCheat(config: AntiCheatConfig) {
         addEvent(event)
         
         // Mostra alert visibile
-        alert('⚠️ ATTENZIONE: Il tentativo di screenshot è stato rilevato e registrato nel report di valutazione.')
+        alert('ATTENZIONE: Il tentativo di screenshot è stato rilevato e registrato nel report di valutazione.')
         return true
       }
     }
@@ -234,6 +240,11 @@ export function useAntiCheat(config: AntiCheatConfig) {
   }, [])
 
   const handleFullscreenChange = useCallback(() => {
+    // NON registrare eventi se il monitoraggio è fermo
+    if (!isMonitoring) {
+      return
+    }
+    
     const isNowFullscreen = !!document.fullscreenElement
     
     if (isFullscreen.current && !isNowFullscreen) {
@@ -274,7 +285,7 @@ export function useAntiCheat(config: AntiCheatConfig) {
     }
     
     isFullscreen.current = isNowFullscreen
-  }, [addEvent, config])
+  }, [addEvent, config, isMonitoring])
 
   // NUOVO: Blocco tasto ESC in fullscreen
   const handleEscapeKey = useCallback((e: KeyboardEvent) => {
@@ -364,6 +375,12 @@ export function useAntiCheat(config: AntiCheatConfig) {
   }, [detectMultipleDisplays])
 
   const startMonitoring = useCallback(() => {
+    // Rimuovi eventuali listener precedenti prima di aggiungerne di nuovi
+    if (cleanupRef.current) {
+      cleanupRef.current()
+      cleanupRef.current = null
+    }
+    
     setIsMonitoring(true)
     
     // Document events
@@ -397,7 +414,8 @@ export function useAntiCheat(config: AntiCheatConfig) {
       }, 500)
     }
     
-    return () => {
+    // Salva la funzione di cleanup
+    const cleanup = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       document.removeEventListener('contextmenu', handleContextMenu)
       document.removeEventListener('copy', handleCopyPaste)
@@ -417,6 +435,9 @@ export function useAntiCheat(config: AntiCheatConfig) {
       clearInterval(devToolsInterval)
       clearInterval(multipleDisplayInterval)
     }
+    
+    cleanupRef.current = cleanup
+    return cleanup
   }, [
     handleVisibilityChange,
     handleContextMenu,
@@ -436,6 +457,12 @@ export function useAntiCheat(config: AntiCheatConfig) {
 
   const stopMonitoring = useCallback(() => {
     setIsMonitoring(false)
+    
+    // Rimuovi tutti gli event listener
+    if (cleanupRef.current) {
+      cleanupRef.current()
+      cleanupRef.current = null
+    }
   }, [])
 
   const resetCounters = useCallback(() => {

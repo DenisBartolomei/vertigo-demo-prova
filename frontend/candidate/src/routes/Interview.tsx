@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
+import { AlertTriangle, Clock, Monitor, AlertCircle, Pin, Lock, Target, Rocket, Bot, User, Send, CheckCircle2 } from 'lucide-react'
 import { useAntiCheat } from '../hooks/useAntiCheat'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { AntiCheatWarning } from '../components/AntiCheatWarning'
@@ -186,7 +187,7 @@ export function Interview() {
     },
     onInterviewTerminated: () => {
       // Chiamato quando il colloquio viene terminato per violazioni di sicurezza
-      setError('⛔ COLLOQUIO TERMINATO: Hai superato il numero massimo di violazioni delle regole di sicurezza.')
+      setError('COLLOQUIO TERMINATO: Hai superato il numero massimo di violazioni delle regole di sicurezza.')
       setIsCompleted(true)
       setIsStarted(false)
       // Notifica il backend della terminazione
@@ -235,6 +236,15 @@ export function Interview() {
       window.removeEventListener('beforeunload', handleBeforeUnload)
     }
   }, [isStarted])
+
+  // Stop security monitoring when interview is completed
+  useEffect(() => {
+    if (isCompleted) {
+      // Ferma il monitoraggio di sicurezza quando il colloquio è finito
+      antiCheat.stopMonitoring()
+      console.log('Monitoraggio sicurezza fermato: colloquio completato')
+    }
+  }, [isCompleted, antiCheat])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -427,7 +437,7 @@ export function Interview() {
     return (
       <div className="chat-container">
         <div className="welcome-screen">
-          <div className="welcome-icon">⚠️</div>
+          <AlertTriangle size={36} color="white" style={{ marginBottom: '24px' }} />
           <h1 className="welcome-title">Something went wrong</h1>
           <p className="welcome-subtitle">{error}</p>
           <button className="start-button" onClick={() => window.location.reload()}>
@@ -442,7 +452,7 @@ export function Interview() {
     return (
       <div className="chat-container">
         <div className="welcome-screen">
-          <div className="welcome-icon">⏳</div>
+          <Clock size={36} color="white" style={{ marginBottom: '24px' }} />
           <h1 className="welcome-title">Loading your interview...</h1>
           <p className="welcome-subtitle">Please wait while we prepare everything for you</p>
         </div>
@@ -474,18 +484,22 @@ export function Interview() {
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
           }}>
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <div style={{ fontSize: '64px', marginBottom: '16px' }}>🖥️</div>
+              <Monitor size={64} color="#dc2626" style={{ marginBottom: '16px' }} />
               <h2 style={{ fontSize: '24px', fontWeight: '600', color: '#dc2626', marginBottom: '12px' }}>
                 Doppio Schermo Rilevato
               </h2>
             </div>
             <div style={{ fontSize: '16px', lineHeight: '1.6', color: '#4a4a4a', marginBottom: '24px' }}>
               <p style={{ marginBottom: '16px' }}>
-                <strong>⚠️ ATTENZIONE:</strong> Il sistema ha rilevato la presenza di più schermi collegati al tuo computer.
+                <strong style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <AlertCircle size={18} /> ATTENZIONE:
+                </strong> Il sistema ha rilevato la presenza di più schermi collegati al tuo computer.
               </p>
               <div style={{ backgroundColor: '#fee2e2', border: '1px solid #dc2626', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
                 <p style={{ margin: 0, color: '#991b1b' }}>
-                  <strong>🚨 Regola di sicurezza:</strong>
+                  <strong style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <AlertTriangle size={16} /> Regola di sicurezza:
+                  </strong>
                 </p>
                 <ul style={{ marginTop: '12px', paddingLeft: '20px', color: '#991b1b' }}>
                   <li>Per garantire l'integrità del colloquio, è necessario utilizzare <strong>un solo schermo</strong></li>
@@ -494,7 +508,7 @@ export function Interview() {
                 </ul>
               </div>
               <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>
-                📌 Questo controllo viene eseguito anche durante il colloquio per garantire la sicurezza del processo.
+                <Pin size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Questo controllo viene eseguito anche durante il colloquio per garantire la sicurezza del processo.
               </p>
             </div>
             <button
@@ -515,7 +529,7 @@ export function Interview() {
               onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#15803d'}
               onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#16a34a'}
             >
-              ✅ Verifica di nuovo
+              <CheckCircle2 size={18} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Verifica di nuovo
             </button>
           </div>
         </div>
@@ -543,18 +557,22 @@ export function Interview() {
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
           }}>
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <div style={{ fontSize: '64px', marginBottom: '16px' }}>🔒</div>
+              <Lock size={64} color="#7c3aed" style={{ marginBottom: '16px' }} />
               <h2 style={{ fontSize: '24px', fontWeight: '600', color: '#1a1a1a', marginBottom: '12px' }}>
                 Modalità Schermo Intero Obbligatoria
               </h2>
             </div>
             <div style={{ fontSize: '16px', lineHeight: '1.6', color: '#4a4a4a', marginBottom: '24px' }}>
               <p style={{ marginBottom: '16px' }}>
-                <strong>⚠️ IMPORTANTE:</strong> Quando cliccherai "Ho capito", il colloquio inizierà in modalità schermo intero.
+                <strong style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <AlertCircle size={18} /> IMPORTANTE:
+                </strong> Quando cliccherai "Ho capito", il colloquio inizierà in modalità schermo intero.
               </p>
               <div style={{ backgroundColor: '#fff3cd', border: '1px solid #ffc107', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
                 <p style={{ margin: 0, color: '#856404' }}>
-                  <strong>🚨 Regole di sicurezza:</strong>
+                  <strong style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <AlertTriangle size={16} /> Regole di sicurezza:
+                  </strong>
                 </p>
                 <ul style={{ marginTop: '12px', paddingLeft: '20px', color: '#856404' }}>
                   <li>Devi rimanere in modalità schermo intero per tutta la durata del colloquio</li>
@@ -564,7 +582,7 @@ export function Interview() {
                 </ul>
               </div>
               <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>
-                📌 Per uscire dallo schermo intero temporaneamente, ti verrà mostrato un pulsante per rientrare.
+                <Pin size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Per uscire dallo schermo intero temporaneamente, ti verrà mostrato un pulsante per rientrare.
               </p>
             </div>
             <button
@@ -584,7 +602,7 @@ export function Interview() {
               onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#6d28d9'}
               onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#7c3aed'}
             >
-              ✅ Ho capito, avvia il colloquio
+              <CheckCircle2 size={18} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Ho capito, avvia il colloquio
             </button>
           </div>
         </div>
@@ -612,7 +630,7 @@ export function Interview() {
             textAlign: 'center',
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
           }}>
-            <div style={{ fontSize: '64px', marginBottom: '16px' }}>⚠️</div>
+            <AlertTriangle size={64} color="#dc2626" style={{ marginBottom: '16px' }} />
             <h2 style={{ fontSize: '28px', fontWeight: '700', color: '#dc2626', marginBottom: '16px' }}>
               ATTENZIONE!
             </h2>
@@ -651,7 +669,7 @@ export function Interview() {
                 e.currentTarget.style.transform = 'scale(1)'
               }}
             >
-              🔒 Ritorna alla Sessione a Tutto Schermo
+              <Lock size={18} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Ritorna alla Sessione a Tutto Schermo
             </button>
           </div>
         </div>
@@ -665,7 +683,9 @@ export function Interview() {
       />
       
       <div className="chat-header">
-        <div className="chat-header-icon">🎯</div>
+        <div className="chat-header-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Target size={20} color="white" />
+        </div>
         <div className="chat-header-content">
           <h1>{session.position_name}</h1>
           <p>Interview for {session.candidate_name}</p>
@@ -685,7 +705,7 @@ export function Interview() {
           textAlign: 'center',
           fontWeight: '500'
         }}>
-          ⚠️ <strong>ATTENTION:</strong> If you close the page or exit the interview, the interview will be terminated and sent for evaluation.
+          <AlertCircle size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> <strong>ATTENTION:</strong> If you close the page or exit the interview, the interview will be terminated and sent for evaluation.
         </div>
       )}
 
@@ -701,7 +721,9 @@ export function Interview() {
           />
         ) : !isStarted ? (
           <div className="welcome-screen">
-            <div className="welcome-icon">🚀</div>
+            <div className="welcome-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Rocket size={36} color="white" />
+            </div>
             <h1 className="welcome-title">Ready to start your interview?</h1>
             <p className="welcome-subtitle">
               This interview will help us understand your skills and experience for the {session.position_name} position. 
@@ -712,15 +734,23 @@ export function Interview() {
               onClick={startInterview} 
               disabled={loading}
             >
-              {loading ? '⏳ Starting...' : '🎯 Start Interview'}
+              {loading ? (
+                <>
+                  <Clock size={18} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Starting...
+                </>
+              ) : (
+                <>
+                  <Target size={18} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Start Interview
+                </>
+              )}
             </button>
           </div>
         ) : (
           <>
             {messages.map((msg, i) => (
               <div key={i} className={`message ${msg.role}`}>
-                <div className="message-avatar">
-                  {msg.role === 'assistant' ? '🤖' : '👤'}
+                <div className="message-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {msg.role === 'assistant' ? <Bot size={14} color="white" /> : <User size={14} />}
                 </div>
                 <div className="message-content">
                   <div className="message-bubble">
@@ -735,7 +765,9 @@ export function Interview() {
             
             {loading && (
               <div className="message assistant">
-                <div className="message-avatar">🤖</div>
+                <div className="message-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Bot size={14} color="white" />
+                </div>
                 <div className="message-content">
                   <div className="typing-indicator">
                     <span>Thinking</span>

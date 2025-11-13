@@ -15,6 +15,7 @@ from recruitment_suite.app.models.schemas import EvaluationResponse
 from recruitment_suite.config import settings
 from recruitment_suite.app.core.shared_embedding_model import get_shared_embedding_model
 from recruitment_suite.app.core.cloud_optimizer import log_memory_usage, cleanup_tensors, monitor_memory_usage, get_dynamic_chunk_size, get_memory_usage_percent
+from services.gpu_embedding_client import get_gpu_embedding_client
 from recruitment_suite.app.core.benchmark_cache import (
     get_candidate_embedding_from_cache,
     save_candidate_embedding_to_cache,
@@ -30,18 +31,30 @@ class RecruitmentPipeline:
     def __init__(self):
         print("Inizializzazione della Recruitment Pipeline...")
         self.offer_embedding = None
-        # Usa il modello condiviso invece di creare una nuova istanza
+        # Usa GPU client invece del modello locale
+        self.gpu_client = get_gpu_embedding_client()
+        print(f"  - GPU Service disponibile: {self.gpu_client.is_gpu_available()}")
+        # Mantieni embedding_model per backward compatibility (fallback)
         self.embedding_model = get_shared_embedding_model(device="cpu")
         
     def _calculate_affinity_score(self, candidate_exp_text: str) -> float:
         if self.offer_embedding is None or not candidate_exp_text: return 0.0
-        candidate_embedding = self.embedding_model.encode(candidate_exp_text, convert_to_tensor=True)
+        
+        # Usa GPU client per generare embedding candidato
+        candidate_embedding_np = self.gpu_client.embed(
+            candidate_exp_text,
+            model_name=settings.EMBEDDING_MODEL_NAME,
+            normalize=True
+        )
+        candidate_embedding = torch.tensor(candidate_embedding_np, dtype=torch.float32)
         
         # Normalizza entrambi a float32 per consistenza dtype
-        offer_emb = self.offer_embedding.to(torch.float32) if self.offer_embedding.dtype != torch.float32 else self.offer_embedding
-        candidate_emb = candidate_embedding.to(torch.float32) if candidate_embedding.dtype != torch.float32 else candidate_embedding
+        if isinstance(self.offer_embedding, np.ndarray):
+            offer_emb = torch.tensor(self.offer_embedding, dtype=torch.float32)
+        else:
+            offer_emb = self.offer_embedding.to(torch.float32) if self.offer_embedding.dtype != torch.float32 else self.offer_embedding
         
-        return util.cos_sim(offer_emb, candidate_emb).item()
+        return util.cos_sim(offer_emb, candidate_embedding).item()
 
     def _get_llm_evaluation_for_batch(self, offer_title: str, offer_desc: str, batch_dossiers: list[dict]) -> list[dict]:
         profiles_text = "".join([
@@ -82,11 +95,13 @@ class RecruitmentPipeline:
 
         offer_full_text = f"{offer_title} {offer_desc}".strip()
         print("Creazione embedding per l'offerta di lavoro...")
-        self.offer_embedding = self.embedding_model.encode(offer_full_text, convert_to_tensor=True)
-        
-        # Normalizza a float32 per consistenza dtype (evita mismatch con embedding candidati)
-        if self.offer_embedding is not None:
-            self.offer_embedding = self.offer_embedding.to(torch.float32)
+        # Usa GPU client per generare embedding offerta
+        offer_embedding_np = self.gpu_client.embed(
+            offer_full_text,
+            model_name=settings.EMBEDDING_MODEL_NAME,
+            normalize=True
+        )
+        self.offer_embedding = torch.tensor(offer_embedding_np, dtype=torch.float32)
 
         profile_ram("Dopo Embedding Offerta")
 
@@ -124,19 +139,35 @@ class RecruitmentPipeline:
 
             # Carica embedding dalla cache o calcola
             chunk_embeddings_list = []
+            texts_to_embed = []
+            indices_to_embed = []
+            
+            # Prima passata: identifica quali embeddings servono
             for j, profile_id in enumerate(chunk_profile_ids):
                 if profile_id in cached_embeddings:
                     # Usa embedding dalla cache
                     chunk_embeddings_list.append(cached_embeddings[profile_id])
                 else:
-                    # Calcola embedding
-                    candidate_embedding = self.embedding_model.encode(
-                        chunk_texts[j], convert_to_tensor=False, show_progress_bar=False
-                    )
-                    # Normalizza a float32 per consistenza dtype
-                    candidate_embedding_float32 = np.array(candidate_embedding, dtype=np.float32)
-                    chunk_embeddings_list.append(candidate_embedding_float32)
-                    # Salva per cache (aggiungeremo al batch)
+                    # Raccogli testi da processare in batch
+                    texts_to_embed.append(chunk_texts[j])
+                    indices_to_embed.append((j, profile_id))
+                    # Placeholder per mantenere ordine
+                    chunk_embeddings_list.append(None)
+            
+            # Calcola embeddings in batch se ci sono testi da processare
+            if texts_to_embed:
+                embeddings_batch = self.gpu_client.embed_batch(
+                    texts_to_embed,
+                    model_name=settings.EMBEDDING_MODEL_NAME,
+                    normalize=True,
+                    batch_size=16
+                )
+                
+                # Inserisci embeddings nella posizione corretta
+                for idx, (j, profile_id) in enumerate(indices_to_embed):
+                    candidate_embedding_float32 = np.array(embeddings_batch[idx], dtype=np.float32)
+                    chunk_embeddings_list[j] = candidate_embedding_float32
+                    # Salva per cache
                     embeddings_to_cache.append((profile_id, candidate_embedding_float32, chunk_data[j]))
             
             # Converti lista a tensore per calcolo similarità

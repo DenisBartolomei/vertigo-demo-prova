@@ -19,6 +19,7 @@ from interviewer.llm_service import get_llm_response, get_llm_response_async
 
 from recruitment_suite.config import settings
 from recruitment_suite.app.core.shared_embedding_model import get_shared_embedding_model
+from services.gpu_embedding_client import get_gpu_embedding_client
 from recruitment_suite.app.core.llm_cache import get_prompt_hash, get_cached_llm_response, save_cached_llm_response
 from recruitment_suite.app.core.benchmark_cache import get_candidate_embedding_from_cache, save_candidate_embedding_to_cache
 
@@ -27,8 +28,10 @@ class CVNormalizer:
         print("Inizializzazione del Normalizzatore CV...")
         # Non si valida più la chiave localmente: viene gestita da llm_service
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        # Usa il modello condiviso invece di creare una nuova istanza
-        # Nota: Il primo chiamante determina il device del modello condiviso
+        # Usa GPU client invece del modello locale
+        self.gpu_client = get_gpu_embedding_client()
+        print(f"  - GPU Service disponibile: {self.gpu_client.is_gpu_available()}")
+        # Mantieni embedding_model per backward compatibility (fallback)
         self.embedding_model = get_shared_embedding_model(device=self.device)
         print(f"Normalizzazione CV: Modello '{settings.EMBEDDING_MODEL_NAME}' disponibile (device richiesto: {self.device.upper()}).")
 
@@ -272,13 +275,19 @@ class CVNormalizer:
         if enriched_texts_for_batch:
             print(f"  → Encoding batch transformer per {len(enriched_texts_for_batch)} esperienze...")
             try:
-                # Encoding batch (più efficiente)
-                batch_embeddings = self.embedding_model.encode(
+                # Usa GPU client per encoding batch (più efficiente)
+                embeddings_batch = self.gpu_client.embed_batch(
                     enriched_texts_for_batch,
-                    batch_size=4,  # Batch size piccolo per limiti RAM
-                    convert_to_tensor=True,
+                    model_name=settings.EMBEDDING_MODEL_NAME,
+                    normalize=True,
+                    batch_size=16
+                )
+                
+                # Converti a tensore per calcolo similarità
+                batch_embeddings = torch.tensor(
+                    np.array(embeddings_batch, dtype=np.float32),
                     device=self.device,
-                    show_progress_bar=False
+                    dtype=torch.float32
                 )
                 
                 # Mappa embeddings batch ai risultati

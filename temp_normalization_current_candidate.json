@@ -7,19 +7,19 @@
         "duration_months": 19,
         "esco_matches": [
           {
-            "esco_title": "responsabile della distribuzione di legno e materiali edili",
-            "similarity": "0.7839"
+            "esco_title": "responsabile della pianificazione strategica",
+            "similarity": "0.8412"
           },
           {
-            "esco_title": "sarto da uomo/sarta da uomo",
-            "similarity": "0.7522"
+            "esco_title": "consulente di gestione aziendale",
+            "similarity": "0.7857"
           },
           {
-            "esco_title": "addetto all’ispezione dei sigari/addetta all’ispezione dei sigari",
-            "similarity": "0.7471"
+            "esco_title": "analista di business",
+            "similarity": "0.7738"
           }
         ],
-        "enriched_text": "Il Senior Strategy Consultant coordina team multidisciplinari e gestisce direttamente la relazione con clienti nel settore dei servizi finanziari, occupandosi di pianificazione strategica, modellizzazione dei costi, analisi di business case, due diligence tecnologica (Tech CDD) in operazioni di M&A e Project Management Office IT. Svolge analisi di mercato e normative, benchmarking competitivo, supporta la definizione di linee guida strategiche e presenta deliverable a stakeholder senior, fornendo consulenza e supporto decisionale al top management per l’ottimizzazione dei processi aziendali e l’implementazione di strategie innovative.",
+        "enriched_text": "Il Senior Strategy Consultant coordina team di progetto e gestisce direttamente le relazioni con i clienti nell’ambito della pianificazione strategica, fusioni e acquisizioni (M&A) e Project Management Office (PMO) IT per il settore dei servizi finanziari. Svolge analisi di mercato e normative, benchmarking competitivo e supporta il top management nei processi decisionali, contribuendo all’identificazione di opportunità di crescita, all’ottimizzazione dei processi aziendali e alla gestione del cambiamento organizzativo, garantendo l’allineamento delle strategie aziendali agli obiettivi di business e alle evoluzioni del contesto regolatorio.",
         "embedding_from_cache": false
       },
       {
@@ -27,19 +27,19 @@
         "duration_months": 19,
         "esco_matches": [
           {
-            "esco_title": "conducente di macchina battipalo",
-            "similarity": "0.8300"
+            "esco_title": "responsabile dell’analisi commerciale TIC",
+            "similarity": "0.9055"
           },
           {
-            "esco_title": "console",
-            "similarity": "0.8136"
+            "esco_title": "analista di sistemi TIC",
+            "similarity": "0.8884"
           },
           {
-            "esco_title": "responsabile della sicurezza",
-            "similarity": "0.7937"
+            "esco_title": "responsabile dello sviluppo commerciale delle TIC",
+            "similarity": "0.8841"
           }
         ],
-        "enriched_text": "Il ruolo di IT Strategy Consultant prevede l’analisi e la definizione di strategie IT innovative, con particolare attenzione all’intelligenza artificiale generativa e ai trend tecnologici emergenti. La posizione include la collaborazione con stakeholder di alto livello per la trasformazione digitale, la ristrutturazione dei modelli operativi IT, la creazione di centri di eccellenza, la partecipazione a progetti di fusione e acquisizione tecnologica (Tech M&A), la revisione di IT Target Operating Model e la gestione di progetti complessi per clienti enterprise.",
+        "enriched_text": "Il Consulente di Strategia IT analizza e sviluppa strategie innovative per l’ottimizzazione dei processi informatici aziendali, con particolare attenzione alle tecnologie emergenti come l’Intelligenza Artificiale Generativa. Collabora con la direzione IT di grandi organizzazioni per la revisione dei modelli operativi, la gestione di progetti di trasformazione digitale, l’internalizzazione di servizi precedentemente esternalizzati e la valutazione di operazioni di fusione e acquisizione tecnologica, garantendo l’allineamento tra obiettivi di business e soluzioni tecnologiche avanzate.",
         "embedding_from_cache": false
       }
     ]
