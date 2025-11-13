@@ -8,9 +8,9 @@ set -e
 # Configuration
 PROJECT_ID="${GCP_PROJECT_ID:-poetic-orb-474016-q7}"
 REGION="${GCP_REGION:-europe-west8}"
-ZONE="${GCP_ZONE:-europe-west8-a}"
+ZONE="${GCP_ZONE:-europe-west1-b}"  # Belgium - supporta N1+T4
 VM_NAME="${GPU_VM_NAME:-vertigo-gpu-service}"
-MACHINE_TYPE="${GPU_MACHINE_TYPE:-n1-standard-4}"
+MACHINE_TYPE="${GPU_MACHINE_TYPE:-n1-standard-2}"
 GPU_TYPE="${GPU_TYPE:-nvidia-tesla-t4}"
 GPU_COUNT="${GPU_COUNT:-1}"
 IMAGE_FAMILY="${IMAGE_FAMILY:-ubuntu-2204-lts}"
@@ -42,6 +42,23 @@ gcloud config set project ${PROJECT_ID}
 echo "📋 Abilitazione API necessarie..."
 gcloud services enable compute.googleapis.com
 gcloud services enable containerregistry.googleapis.com
+
+# Verifica disponibilità machine type e GPU nella zona
+echo "🔍 Verifica disponibilità machine type e GPU nella zona..."
+MACHINE_TYPES=$(gcloud compute machine-types list --zones=${ZONE} --filter="name:${MACHINE_TYPE}" --format="value(name)" 2>/dev/null || echo "")
+if [ -z "${MACHINE_TYPES}" ]; then
+    echo "   ⚠️  Machine type ${MACHINE_TYPE} non disponibile in ${ZONE}"
+    echo "   💡 Provo con n1-standard-2..."
+    MACHINE_TYPE="n1-standard-2"
+    MACHINE_TYPES=$(gcloud compute machine-types list --zones=${ZONE} --filter="name:${MACHINE_TYPE}" --format="value(name)" 2>/dev/null || echo "")
+    if [ -z "${MACHINE_TYPES}" ]; then
+        echo "   ❌ Errore: Machine type non disponibile in questa zona"
+        echo "   💡 Suggerimento: Cambia zona o verifica machine types disponibili con:"
+        echo "      gcloud compute machine-types list --zones=${ZONE} --filter='name~n1'"
+        exit 1
+    fi
+fi
+echo "   ✓ Machine type ${MACHINE_TYPE} disponibile"
 
 # Crea la VM con GPU
 echo "🖥️  Creazione VM con GPU..."

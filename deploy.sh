@@ -4,8 +4,8 @@ set -e
 
 # Configuration
 PROJECT_ID="poetic-orb-474016-q7"
-REGION="europe-west8"  # Milan, Italy
-ZONE="europe-west8-a"  # Zone per GPU VM
+REGION="europe-west8"  # Milan, Italy (per Cloud Run)
+GPU_ZONE="europe-west1-b"  # Zone per GPU VM (Belgium - supporta N1+T4)
 SERVICE_ACCOUNT="vertigo-ai-deploy@${PROJECT_ID}.iam.gserviceaccount.com"
 GPU_VM_NAME="vertigo-gpu-service"
 
@@ -24,10 +24,10 @@ gcloud services enable compute.googleapis.com
 echo "🖥️  Verifica e setup GPU Service..."
 export GCP_PROJECT_ID="${PROJECT_ID}"
 export GCP_REGION="${REGION}"
-export GCP_ZONE="${ZONE}"
+export GCP_ZONE="${GPU_ZONE}"
 
 # Verifica se la VM GPU esiste già
-if ! gcloud compute instances describe ${GPU_VM_NAME} --zone=${ZONE} --project=${PROJECT_ID} &>/dev/null; then
+if ! gcloud compute instances describe ${GPU_VM_NAME} --zone=${GPU_ZONE} --project=${PROJECT_ID} &>/dev/null; then
     echo "   GPU VM non trovata, creazione in corso..."
     if [ -f "./gpu_service/setup-gpu-vm.sh" ]; then
         chmod +x ./gpu_service/setup-gpu-vm.sh
@@ -35,8 +35,8 @@ if ! gcloud compute instances describe ${GPU_VM_NAME} --zone=${ZONE} --project=$
     else
         echo "   ⚠️  Script setup-gpu-vm.sh non trovato, creazione VM manuale..."
         gcloud compute instances create ${GPU_VM_NAME} \
-            --zone=${ZONE} \
-            --machine-type=n1-standard-4 \
+            --zone=${GPU_ZONE} \
+            --machine-type=n1-standard-2 \
             --accelerator=type=nvidia-tesla-t4,count=1 \
             --maintenance-policy=TERMINATE \
             --image-family=ubuntu-2204-lts \
@@ -68,7 +68,7 @@ echo "🚀 Building and Deploying GPU Service sulla VM..."
 if [ -f "./gpu_service/deploy-to-vm.sh" ]; then
     chmod +x ./gpu_service/deploy-to-vm.sh
     # deploy-to-vm.sh fa già il build e il deploy
-    ./gpu_service/deploy-to-vm.sh ${GPU_VM_NAME} ${ZONE}
+    ./gpu_service/deploy-to-vm.sh ${GPU_VM_NAME} ${GPU_ZONE}
 else
     echo "   ⚠️  Script deploy-to-vm.sh non trovato, build e deploy manuale..."
     # Build immagine
@@ -79,7 +79,7 @@ else
     fi
     # Deploy sulla VM
     IMAGE_NAME="gcr.io/${PROJECT_ID}/vertigo-gpu-service:latest"
-    gcloud compute ssh ${GPU_VM_NAME} --zone=${ZONE} --project=${PROJECT_ID} --command="
+    gcloud compute ssh ${GPU_VM_NAME} --zone=${GPU_ZONE} --project=${PROJECT_ID} --command="
         docker pull ${IMAGE_NAME} || true
         docker stop vertigo-gpu-service || true
         docker rm vertigo-gpu-service || true
@@ -96,7 +96,7 @@ fi
 
 # Recupera IP della VM e imposta GPU_SERVICE_URL
 echo "🔍 Recupero IP della GPU VM..."
-GPU_VM_IP=$(gcloud compute instances describe ${GPU_VM_NAME} --zone=${ZONE} --project=${PROJECT_ID} --format="get(networkInterfaces[0].accessConfigs[0].natIP)" 2>/dev/null || echo "")
+GPU_VM_IP=$(gcloud compute instances describe ${GPU_VM_NAME} --zone=${GPU_ZONE} --project=${PROJECT_ID} --format="get(networkInterfaces[0].accessConfigs[0].natIP)" 2>/dev/null || echo "")
 if [ -z "${GPU_VM_IP}" ]; then
     echo "   ⚠️  Impossibile recuperare IP della VM, uso variabile d'ambiente GPU_SERVICE_URL se disponibile"
     GPU_SERVICE_URL="${GPU_SERVICE_URL:-}"
@@ -118,7 +118,7 @@ gcloud run deploy vertigo-ai-backend \
     --timeout 900 \
     --max-instances 10 \
     --min-instances 0 \
-    --set-env-vars MONGODB_URI="${MONGODB_URI}",AZURE_OPENAI_ENDPOINT="${AZURE_OPENAI_ENDPOINT}",AZURE_OPENAI_API_KEY="${AZURE_OPENAI_API_KEY}",AZURE_OPENAI_API_VERSION="${AZURE_OPENAI_API_VERSION}",AZURE_OPENAI_DEPLOYMENT_NAME="${AZURE_OPENAI_DEPLOYMENT_NAME}",JWT_SECRET="${JWT_SECRET}",PYTHON_ENV=production,AZURE_OPENAI_BATCH_ENDPOINT="${AZURE_OPENAI_BATCH_ENDPOINT}",AZURE_OPENAI_BATCH_API_KEY="${AZURE_OPENAI_BATCH_API_KEY}",AZURE_OPENAI_BATCH_API_VERSION="${AZURE_OPENAI_BATCH_API_VERSION}",AZURE_OPENAI_BATCH_DEPLOYMENT_NAME="${AZURE_OPENAI_BATCH_DEPLOYMENT_NAME}",GPU_SERVICE_URL="${GPU_SERVICE_URL}",ENABLE_GPU_SERVICE="${ENABLE_GPU_SERVICE:-true}",GPU_SERVICE_TIMEOUT="${GPU_SERVICE_TIMEOUT:-30}",GPU_SERVICE_RETRY_ATTEMPTS="${GPU_SERVICE_RETRY_ATTEMPTS:-3}",ENABLE_VM_AUTO_MANAGEMENT="${ENABLE_VM_AUTO_MANAGEMENT:-true}",VM_IDLE_TIMEOUT="${VM_IDLE_TIMEOUT:-120}",GCP_PROJECT_ID="${PROJECT_ID}",GCP_ZONE="${ZONE}",GPU_VM_NAME="${GPU_VM_NAME}"
+    --set-env-vars MONGODB_URI="${MONGODB_URI}",AZURE_OPENAI_ENDPOINT="${AZURE_OPENAI_ENDPOINT}",AZURE_OPENAI_API_KEY="${AZURE_OPENAI_API_KEY}",AZURE_OPENAI_API_VERSION="${AZURE_OPENAI_API_VERSION}",AZURE_OPENAI_DEPLOYMENT_NAME="${AZURE_OPENAI_DEPLOYMENT_NAME}",JWT_SECRET="${JWT_SECRET}",PYTHON_ENV=production,AZURE_OPENAI_BATCH_ENDPOINT="${AZURE_OPENAI_BATCH_ENDPOINT}",AZURE_OPENAI_BATCH_API_KEY="${AZURE_OPENAI_BATCH_API_KEY}",AZURE_OPENAI_BATCH_API_VERSION="${AZURE_OPENAI_BATCH_API_VERSION}",AZURE_OPENAI_BATCH_DEPLOYMENT_NAME="${AZURE_OPENAI_BATCH_DEPLOYMENT_NAME}",GPU_SERVICE_URL="${GPU_SERVICE_URL}",ENABLE_GPU_SERVICE="${ENABLE_GPU_SERVICE:-true}",GPU_SERVICE_TIMEOUT="${GPU_SERVICE_TIMEOUT:-30}",GPU_SERVICE_RETRY_ATTEMPTS="${GPU_SERVICE_RETRY_ATTEMPTS:-3}",ENABLE_VM_AUTO_MANAGEMENT="${ENABLE_VM_AUTO_MANAGEMENT:-true}",VM_IDLE_TIMEOUT="${VM_IDLE_TIMEOUT:-120}",GCP_PROJECT_ID="${PROJECT_ID}",GCP_ZONE="${GPU_ZONE}",GPU_VM_NAME="${GPU_VM_NAME}"
 
 # 2. Get backend URL
 BACKEND_URL=$(gcloud run services describe vertigo-ai-backend --region=${REGION} --format="value(status.url)")
