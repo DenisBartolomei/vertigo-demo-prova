@@ -617,7 +617,7 @@ export function Candidati() {
       }
   }
 
-  function getSecurityRiskLevel(securityReport: any): { level: string; color: string; IconComponent: React.ComponentType<{ size?: number }> } {
+  function getSecurityRiskLevel(securityReport: any): { level: string; color: string; IconComponent: React.ComponentType<any> } {
     if (!securityReport) {
       return { level: 'Unknown', color: '#6c757d', IconComponent: Info }
     }
