@@ -79,21 +79,32 @@ class BatchService:
             cv_text = session.get("stages", {}).get("uploaded_cv_text", "")
             position_id = session.get("position_id")
             
-            # Recupera JD dal tenant specifico
+            # Recupera JD, hr_special_needs e language dal tenant specifico
             if db is not None:
                 positions_collection = db[f"{tenant_id}_positions_data"]
                 position = positions_collection.find_one({"_id": position_id})
                 jd_text = position.get("job_description", "") if position else ""
+                hr_special_needs = position.get("hr_special_needs", "") if position else ""
+                language = position.get("language", "it") if position else "it"
             else:
                 jd_text = ""
+                hr_special_needs = ""
+                language = "it"
             
-            # Crea prompt usando la funzione esistente
+            # Crea prompt usando la funzione esistente con hr_special_needs e language
             try:
                 from analyzer.prompts_analyzer import create_cv_analysis_prompt
-                prompt = create_cv_analysis_prompt(cv_text, jd_text, "")
+                prompt = create_cv_analysis_prompt(cv_text, jd_text, hr_special_needs, language)
             except ImportError:
                 # Fallback prompt se import fallisce
                 prompt = f"Analizza questo CV per la posizione:\n\nCV:\n{cv_text}\n\nJob Description:\n{jd_text}"
+            
+            # System prompt bilingue basato sulla lingua
+            system_prompts = {
+                "it": "Agisci come un recruiter AI. Il tuo compito è seguire SCRUPOLOSAMENTE le istruzioni e il formato di output richiesto nel prompt dell'utente, producendo prima il report testuale e poi il blocco JSON.",
+                "en": "Act as an AI recruiter. Your task is to SCRUPULOUSLY follow the instructions and the output format required in the user prompt, producing first the textual report and then the JSON block."
+            }
+            analyzer_system_prompt = system_prompts.get(language, system_prompts["it"])
             
             # Formato batch API Azure OpenAI
             batch_requests.append({
@@ -105,12 +116,12 @@ class BatchService:
                     "messages": [
                         {
                             "role": "system", 
-                            "content": "Agisci come un recruiter aziendale esperto. Il tuo compito è valutare un CV in modo critico rispetto a un annuncio di lavoro. L'obiettivo è produrre un report professionale, chiaro e leggibile velocemente, che evidenzi i punti di allineamento e le carenze del profilo."
+                            "content": analyzer_system_prompt
                         },
                         {"role": "user", "content": prompt}
                     ],
-                    "max_tokens": 2000,
-                    "temperature": 0.4
+                    "max_tokens": 2500,
+                    "temperature": 0.2
                 }
             })
         
@@ -279,11 +290,24 @@ class BatchService:
                     response_body = result["response"]["body"]
                     analysis_text = response_body["choices"][0]["message"]["content"]
                     
+                    # Parsa la risposta per estrarre report_text e structured_experience
+                    try:
+                        from analyzer.cv_analyzer import parse_mixed_llm_response
+                        parsed_data = parse_mixed_llm_response(analysis_text)
+                        report_text = parsed_data.get("report_text", analysis_text)
+                        structured_experience = parsed_data.get("structured_experience", [])
+                    except Exception as e:
+                        print(f"[WARN] Errore durante il parsing della risposta per sessione {session_id}: {e}")
+                        # Fallback: salva il testo grezzo
+                        report_text = analysis_text
+                        structured_experience = []
+                    
                     # Salva in sessione (tenant-specific)
                     sessions_collection.update_one(
                         {"_id": session_id},
                         {"$set": {
-                            "stages.cv_analysis_report": analysis_text,
+                            "stages.cv_analysis_report": report_text,
+                            "stages.parsed_experience": structured_experience,
                             "stages.cv_analysis_status": "Completed",
                             "stages.cv_analysis_completed_at": datetime.utcnow().isoformat()
                         }}

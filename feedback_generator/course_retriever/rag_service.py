@@ -1,9 +1,9 @@
 import faiss
 import numpy as np
 import streamlit as st 
+from sentence_transformers import SentenceTransformer
 # Importiamo l'oggetto 'db' dal nostro servizio dati centralizzato
 from services.data_manager import db
-from services.gpu_embedding_client import get_gpu_embedding_client
 import asyncio
 
 # --- Configurazione ---
@@ -20,9 +20,8 @@ class RAGService:
     # La logica interna della classe rimane la stessa, cambiamo solo da dove carica i dati.
     def __init__(self):
         print("Inizializzazione del RAG Service...")
-        # Usa GPU client invece di SentenceTransformer locale
-        self.gpu_client = get_gpu_embedding_client()
-        print(f"  - GPU Service disponibile: {self.gpu_client.is_gpu_available()}")
+        # Usa SentenceTransformer locale (CPU) - più veloce per poche query singole
+        self.model = SentenceTransformer(EMBEDDING_MODEL_NAME)
         # --- MODIFICA CHIAVE: Carichiamo i dati da MongoDB ---
         self.courses_data = self._load_courses_from_mongo()
         # Il resto del processo di indicizzazione rimane invariato
@@ -79,14 +78,7 @@ class RAGService:
             descriptions = [f"{course.get('Course Name', '')}. {course.get('Description', '')}" 
                            for course in self.courses_data]
             print(f"  - Creazione embeddings per {len(descriptions)} corsi...")
-            # Usa GPU client per generare embeddings
-            embeddings_list = self.gpu_client.embed_batch(
-                descriptions,
-                model_name=EMBEDDING_MODEL_NAME,
-                normalize=True,
-                batch_size=16
-            )
-            embeddings = np.array(embeddings_list, dtype=np.float32)
+            embeddings = self.model.encode(descriptions, convert_to_tensor=False)
             courses_with_embeddings = self.courses_data
         
         # Costruisci indice FAISS
@@ -103,13 +95,8 @@ class RAGService:
         if not self.index:
             print("Ricerca saltata: l'indice FAISS non è stato inizializzato.")
             return []
-        # Usa GPU client per generare embedding della query
-        query_embedding = self.gpu_client.embed(
-            query,
-            model_name=EMBEDDING_MODEL_NAME,
-            normalize=True
-        )
-        distances, indices = self.index.search(np.array([query_embedding], dtype=np.float32), k)
+        query_embedding = self.model.encode([query])
+        distances, indices = self.index.search(np.array(query_embedding, dtype=np.float32), k)
         results = [self.course_map[i] for i in indices[0]]
         return results
 
