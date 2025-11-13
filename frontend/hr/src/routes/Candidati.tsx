@@ -617,9 +617,9 @@ export function Candidati() {
       }
   }
 
-  function getSecurityRiskLevel(securityReport: any): { level: string; color: string; icon: string } {
+  function getSecurityRiskLevel(securityReport: any): { level: string; color: string; IconComponent: React.ComponentType<{ size?: number }> } {
     if (!securityReport) {
-      return { level: 'Unknown', color: '#6c757d', icon: '❓' }
+      return { level: 'Unknown', color: '#6c757d', IconComponent: Info }
     }
     
     const riskLevel = securityReport.risk_assessment?.level || 'MINIMAL'
