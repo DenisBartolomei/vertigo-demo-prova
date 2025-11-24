@@ -39,22 +39,22 @@ spec:
           value: "AZURE_OPENAI_BATCH_API_KEY_PLACEHOLDER"
         - name: AZURE_OPENAI_BATCH_API_VERSION
           value: "AZURE_OPENAI_BATCH_API_VERSION_PLACEHOLDER"
+        - name: AZURE_OPENAI_CLASSIFICATION_ENDPOINT
+          value: "AZURE_OPENAI_CLASSIFICATION_ENDPOINT_PLACEHOLDER"
+        - name: AZURE_OPENAI_CLASSIFICATION_API_KEY
+          value: "AZURE_OPENAI_CLASSIFICATION_API_KEY_PLACEHOLDER"
+        - name: AZURE_OPENAI_CLASSIFICATION_DEPLOYMENT_NAME
+          value: "gpt-4.1-mini"
+        - name: AZURE_OPENAI_CLASSIFICATION_API_VERSION
+          value: "AZURE_OPENAI_CLASSIFICATION_API_VERSION_PLACEHOLDER"
         - name: JWT_SECRET
           value: "JWT_SECRET_PLACEHOLDER"
         - name: PYTHON_ENV
           value: "production"
-        - name: GPU_SERVICE_URL
-          value: "http://VERTIGO_GPU_SERVICE_IP:8080"
-        - name: ENABLE_GPU_SERVICE
-          value: "true"
-        - name: GPU_SERVICE_TIMEOUT
-          value: "30"
-        - name: GPU_SERVICE_RETRY_ATTEMPTS
-          value: "3"
         resources:
           limits:
             cpu: "2"
-            memory: "6Gi"
+            memory: "10Gi"
           requests:
-            cpu: "1"
-            memory: "2Gi"
+            cpu: "2"
+            memory: "10Gi"

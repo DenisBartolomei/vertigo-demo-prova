@@ -15,7 +15,6 @@ from recruitment_suite.app.models.schemas import EvaluationResponse
 from recruitment_suite.config import settings
 from recruitment_suite.app.core.shared_embedding_model import get_shared_embedding_model
 from recruitment_suite.app.core.cloud_optimizer import log_memory_usage, cleanup_tensors, monitor_memory_usage, get_dynamic_chunk_size, get_memory_usage_percent
-from services.gpu_embedding_client import get_gpu_embedding_client
 from recruitment_suite.app.core.benchmark_cache import (
     get_candidate_embedding_from_cache,
     save_candidate_embedding_to_cache,
@@ -31,20 +30,18 @@ class RecruitmentPipeline:
     def __init__(self):
         print("Inizializzazione della Recruitment Pipeline...")
         self.offer_embedding = None
-        # Usa GPU client invece del modello locale
-        self.gpu_client = get_gpu_embedding_client()
-        print(f"  - GPU Service disponibile: {self.gpu_client.is_gpu_available()}")
-        # Mantieni embedding_model per backward compatibility (fallback)
+        # Usa modello locale su CPU
         self.embedding_model = get_shared_embedding_model(device="cpu")
+        print(f"  - Modello embedding caricato su CPU")
         
     def _calculate_affinity_score(self, candidate_exp_text: str) -> float:
         if self.offer_embedding is None or not candidate_exp_text: return 0.0
         
-        # Usa GPU client per generare embedding candidato
-        candidate_embedding_np = self.gpu_client.embed(
+        # Usa modello locale per generare embedding candidato
+        candidate_embedding_np = self.embedding_model.encode(
             candidate_exp_text,
-            model_name=settings.EMBEDDING_MODEL_NAME,
-            normalize=True
+            normalize_embeddings=True,
+            convert_to_numpy=True
         )
         candidate_embedding = torch.tensor(candidate_embedding_np, dtype=torch.float32)
         
@@ -95,11 +92,11 @@ class RecruitmentPipeline:
 
         offer_full_text = f"{offer_title} {offer_desc}".strip()
         print("Creazione embedding per l'offerta di lavoro...")
-        # Usa GPU client per generare embedding offerta
-        offer_embedding_np = self.gpu_client.embed(
+        # Usa modello locale per generare embedding offerta
+        offer_embedding_np = self.embedding_model.encode(
             offer_full_text,
-            model_name=settings.EMBEDDING_MODEL_NAME,
-            normalize=True
+            normalize_embeddings=True,
+            convert_to_numpy=True
         )
         self.offer_embedding = torch.tensor(offer_embedding_np, dtype=torch.float32)
 
@@ -156,11 +153,12 @@ class RecruitmentPipeline:
             
             # Calcola embeddings in batch se ci sono testi da processare
             if texts_to_embed:
-                embeddings_batch = self.gpu_client.embed_batch(
+                embeddings_batch = self.embedding_model.encode(
                     texts_to_embed,
-                    model_name=settings.EMBEDDING_MODEL_NAME,
-                    normalize=True,
-                    batch_size=16
+                    normalize_embeddings=True,
+                    batch_size=16,
+                    convert_to_numpy=True,
+                    show_progress_bar=False
                 )
                 
                 # Inserisci embeddings nella posizione corretta

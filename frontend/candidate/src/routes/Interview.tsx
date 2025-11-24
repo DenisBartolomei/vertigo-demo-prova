@@ -200,6 +200,10 @@ export function Interview() {
     onFullscreenExit: () => {
       // Mostra il prompt per rientrare in fullscreen
       setShowFullscreenReturnPrompt(true)
+    },
+    onMultipleDisplayDetected: () => {
+      // Blocca l'interfaccia quando viene rilevato un doppio schermo durante il colloquio
+      setShowMultipleDisplayBlock(true)
     }
   })
 
@@ -351,9 +355,16 @@ export function Interview() {
   function handleCheckMultipleDisplaysAgain() {
     // Controlla di nuovo se il doppio schermo è ancora presente
     if (!antiCheat.checkMultipleDisplays()) {
-      // Se non è più presente, chiudi il popup e procedi
+      // Se non è più presente, resetta il flag e chiudi il popup
+      antiCheat.resetMultipleDisplayBlock()
       setShowMultipleDisplayBlock(false)
-      setShowFullscreenWarning(true)
+      
+      // Se il colloquio non è ancora iniziato, mostra il warning fullscreen
+      // Se il colloquio è già iniziato, continua normalmente
+      if (!isStarted) {
+        setShowFullscreenWarning(true)
+      }
+      // Se il colloquio è già iniziato, il popup si chiude e l'utente può continuare
     }
     // Se è ancora presente, il popup rimane aperto
   }

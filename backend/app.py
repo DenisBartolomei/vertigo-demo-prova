@@ -65,7 +65,7 @@ from services.tenant_data_manager import (
     SESSION_STATUS
 )
 from services.batch_service import BatchService
-from services.email_parser import extract_email_from_text
+from services.email_parser import extract_email_from_text, extract_phone_from_text
 from services.interview_config_service import (
     get_interview_config,
     save_interview_config,
@@ -73,16 +73,17 @@ from services.interview_config_service import (
     InterviewConfig,
 )
 from services.email_service import send_interview_link
+from backend.routers.whatsapp import router as whatsapp_router
 
 # Async imports for feedback generation
-from feedback_generator.report_consolidator.consolidator import create_consolidated_report_async
 from feedback_generator.gap_analyzer.gap_identifier import identify_skill_gaps_async
 from feedback_generator.pathway_architect.architect import create_final_feedback_content_async
 from feedback_generator.market_integration import run_market_benchmark_from_text_async
-from feedback_generator.course_retriever.prompts_retriever import create_query_refinement_prompt
+# Rimosso: create_query_refinement_prompt (non più necessario, usiamo query dirette)
 from feedback_generator.course_retriever.rag_service import RAGService
 from recruitment_suite.app.core.pipeline import RecruitmentPipeline
 from recruitment_suite.app.core.normalizer import CVNormalizer
+from recruitment_suite.app.core.benchmark_cache import load_offer_benchmark_from_cache
 
 
 
@@ -161,6 +162,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(whatsapp_router)
 
 
 @app.post("/sessions/{session_id}/generate-token")
@@ -491,6 +495,39 @@ def get_position(position_id: str, auth_data=Depends(hr_auth)):
     return doc
 
 
+@app.get("/positions/{position_id}/benchmark")
+def get_position_benchmark(position_id: str, auth_data=Depends(hr_auth)):
+    """Recupera i dati di benchmark di mercato per una posizione"""
+    tenant_id = auth_data.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=401, detail="No tenant ID in token")
+    
+    # Carica i dati di benchmark dalla cache
+    benchmark_data = load_offer_benchmark_from_cache(position_id, tenant_id=tenant_id)
+    
+    if not benchmark_data:
+        raise HTTPException(
+            status_code=404, 
+            detail="Benchmark non disponibile per questa posizione. Esegui prima la data preparation."
+        )
+    
+    # Recupera il nome della posizione
+    collections = get_tenant_collections_from_auth(auth_data)
+    position_doc = get_single_position_data_tenant(position_id, collections["positions"])
+    position_name = position_doc.get("position_name", position_id) if position_doc else position_id
+    
+    # Restituisci i dati di benchmark incluso il grafico Sunburst
+    return {
+        "position_id": position_id,
+        "position_name": position_name,
+        "market_json": benchmark_data.get("market_json", {}),
+        "market_skills_list": benchmark_data.get("market_skills_list", []),
+        "chart_cat_base64": benchmark_data.get("chart_cat_base64"),  # Grafico Sunburst
+        "created_at": benchmark_data.get("created_at"),
+        "updated_at": benchmark_data.get("updated_at")
+    }
+
+
 @app.post("/positions/{position_id}/data-prep")
 def run_data_prep(position_id: str, auth_data=Depends(hr_auth)):
     collections = get_tenant_collections_from_auth(auth_data)
@@ -612,54 +649,61 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
     stages_data = session_data.get("stages", {})
     
     # Import feedback generator modules
-    from feedback_generator.report_consolidator.consolidator import create_consolidated_report
     from feedback_generator.gap_analyzer.gap_identifier import identify_skill_gaps
-    from feedback_generator.course_retriever.prompts_retriever import create_query_refinement_prompt
+    # Rimosso: create_query_refinement_prompt (non più necessario, usiamo query dirette)
     from feedback_generator.pathway_architect.architect import create_final_feedback_content
     from feedback_generator.pathway_architect.pdf_service import create_feedback_pdf
     from feedback_generator.market_integration import run_market_benchmark_from_text
     from interviewer.llm_service import get_llm_response
     
-    # STEP 1: Consolidamento
-    consolidated_report = stages_data.get("consolidated_report")
+    # Verifica che i report necessari siano presenti
     original_cv_report = stages_data.get("cv_analysis_report")
     case_eval_report = stages_data.get("case_evaluation_report")
     
-    if not consolidated_report:
-        print("\n[STEP 1/5] Generazione report consolidato...")
-        if not original_cv_report or not case_eval_report:
-            print("Errore: Report di analisi CV o valutazione del caso mancanti.")
-            return None
-        consolidated_report = create_consolidated_report(original_cv_report, case_eval_report)
-        if not consolidated_report: 
-            return None
-        save_stage_output_tenant(session_id, "consolidated_report", consolidated_report, collection_name)
-    else:
-        print("\n[STEP 1/5] Report consolidato già presente.")
+    if not original_cv_report or not case_eval_report:
+        print("Errore: Report di analisi CV o valutazione del caso mancanti.")
+        return None
 
-    # STEP 2: Identificazione Gap
-    print("\n[STEP 2/5] Identificazione gap...")
-    gap_analysis = identify_skill_gaps(consolidated_report)
+    # STEP 1: Identificazione Gap (usa i due report separati)
+    print("\n[STEP 1/5] Identificazione gap...")
+    # Recupera language dalla posizione
+    position_data = get_single_position_data_tenant(target_role, collection_name.replace("_sessions", "_positions_data"))
+    language = (position_data or {}).get("language", "it")
+    if language not in ("it", "en"):
+        language = "it"
+    
+    gap_analysis = identify_skill_gaps(original_cv_report, case_eval_report, language)
     if not gap_analysis: 
         return None
     save_stage_output_tenant(session_id, "gap_analysis", gap_analysis.model_dump(), collection_name)
 
-    # STEP 3: Recupero Corsi
-    print("\n[STEP 3/5] Recupero corsi...")
+    # STEP 3: Recupero Corsi OTTIMIZZATO (batch search senza LLM refinement)
+    print("\n[STEP 3/5] Recupero corsi (ottimizzato - batch search)...")
     from feedback_generator.course_retriever.rag_service import get_rag_service
     rag_service = get_rag_service()
     
-    enriched_skill_families = []
+    # OTTIMIZZAZIONE: Crea query direttamente dai gap (senza LLM refinement)
+    queries = []
     for family in gap_analysis.skill_families:
-        # Extract skill gaps as list of strings
-        skill_gaps = [gap.skill_gap for gap in family.skill_gaps]
-        refined_query = create_query_refinement_prompt(family.skill_family_gap, skill_gaps)
-        courses = rag_service.search(refined_query, k=3)
-        
+        gap_names = [g.skill_gap for g in family.skill_gaps]
+        query = f"{family.skill_family_gap} {' '.join(gap_names)}"
+        queries.append(query)
+    
+    # OTTIMIZZAZIONE: Batch search (tutte le query in una volta - 1 encoding invece di 4)
+    if len(queries) > 1:
+        all_courses = rag_service.search_batch(queries, k=5)  # Batch: molto più veloce
+    elif len(queries) == 1:
+        all_courses = [rag_service.search(queries[0], k=5)]
+    else:
+        all_courses = []
+    
+    # Costruisci risultati
+    enriched_skill_families = []
+    for idx, family in enumerate(gap_analysis.skill_families):
         enriched_family = {
             "skill_family_gap": family.skill_family_gap,
             "skill_gaps": [gap.model_dump() for gap in family.skill_gaps],
-            "suggested_courses": courses
+            "suggested_courses": all_courses[idx] if idx < len(all_courses) else []
         }
         enriched_skill_families.append(enriched_family)
     
@@ -711,12 +755,16 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
 
     # STEP 5: Creazione Contenuto Report
     print("\n[STEP 5/5] Creazione contenuto report PDF...")
+    # OTTIMIZZATO: Usa i due report separati invece del report consolidato
+    role_title = position_data.get("position_name", target_role) if position_data else target_role
+    
     final_report_content = create_final_feedback_content(
         cv_analysis_report=original_cv_report,
         case_evaluation_report=case_eval_report,
         enriched_gaps_json_str=enriched_gaps_content_str,
         candidate_name=candidate_name,
-        target_role=target_role
+        target_role=role_title,
+        language=language
     )
     if not final_report_content: 
         return None
@@ -793,7 +841,7 @@ async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: s
     """
     #from feedback_generator.report_consolidator.consolidator import create_consolidated_report
     #from feedback_generator.gap_analyzer.gap_identifier import identify_skill_gaps
-    from feedback_generator.course_retriever.prompts_retriever import create_query_refinement_prompt
+    # Rimosso: create_query_refinement_prompt (non più necessario, usiamo query dirette)
     #from feedback_generator.pathway_architect.architect import create_final_feedback_content
     from feedback_generator.pathway_architect.pdf_service import create_feedback_pdf
     #from feedback_generator.market_integration import run_market_benchmark_from_text
@@ -822,27 +870,14 @@ async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: s
         role_title = (position_data or {}).get("position_name", target_role_id)
         jd_text = (position_data or {}).get("job_description", "")
 
-        # STEP 1: Consolidamento (rimane sequenziale)
-        consolidated_report = stages_data.get("consolidated_report")
-        if not consolidated_report:
-            print("\n[STEP 1/6] Generazione report consolidato...")
-            if not original_cv_report or not case_eval_report:
-                raise ValueError("Report di analisi CV o valutazione del caso mancanti.")
-            consolidated_report = await create_consolidated_report_async(
-                original_cv_report,
-                case_eval_report,
-                language=language
-            )
-            if not consolidated_report: 
-                raise ValueError("Fallimento nella generazione del report consolidato.")
-            save_stage_output_tenant(session_id, "consolidated_report", consolidated_report, collection_name)
-        else:
-            print("\n[STEP 1/6] Report consolidato già presente.")
+        # Verifica che i report necessari siano presenti
+        if not original_cv_report or not case_eval_report:
+            raise ValueError("Report di analisi CV o valutazione del caso mancanti.")
     
         # --- INIZIO PARALLELIZZAZIONE PESANTE ---
-        print("\n[STEP 2 & 4] Avvio in parallelo di Gap Analysis e Market Benchmark...")
+        print("\n[STEP 1 & 3] Avvio in parallelo di Gap Analysis e Market Benchmark...")
         gap_task = asyncio.create_task(
-            identify_skill_gaps_async(consolidated_report, language=language)
+            identify_skill_gaps_async(original_cv_report, case_eval_report, language=language)
         )
         parsed_experiences = stages_data.get("parsed_experience", [])
         if not parsed_experiences:
@@ -872,7 +907,7 @@ async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: s
         if isinstance(gap_analysis, Exception) or not gap_analysis:
             raise ValueError(f"Errore critico durante l'analisi dei gap: {gap_analysis}")
         save_stage_output_tenant(session_id, "gap_analysis", gap_analysis.model_dump(), collection_name)
-        print("[STEP 2/6] Analisi gap completata.")
+        print("[STEP 1/5] Analisi gap completata.")
 
         market_results = results[1]
         qualitative_text, chart_cat_b64, market_skills_list = None, None, None
@@ -883,75 +918,44 @@ async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: s
             if qualitative_text: save_stage_output_tenant(session_id, "market_benchmark_text", qualitative_text, collection_name)
             if chart_cat_b64: save_stage_output_tenant(session_id, "market_chart_categories_base64", chart_cat_b64, collection_name)
             if market_skills_list: save_stage_output_tenant(session_id, "market_chart_skills_base64", market_skills_list, collection_name)
-        print("[STEP 4/6] Benchmark di mercato completato.")
+        print("[STEP 3/5] Benchmark di mercato completato.")
 
-        # STEP 3: Recupero Corsi (parallelizzato al suo interno)
-        print("\n[STEP 3/6] Recupero corsi in parallelo...")
+        # STEP 2: Recupero Corsi OTTIMIZZATO (batch search senza LLM refinement)
+        print("\n[STEP 2/5] Recupero corsi in batch (ottimizzato)...")
         rag_service = rag_service_instance 
 
         if not rag_service:
             raise RuntimeError("Errore Critico: RAG Service non è stato inizializzato.")
 
-        async def get_courses_for_family(family):
-            skill_gaps = [gap.skill_gap for gap in family.skill_gaps]
-            refined_query = create_query_refinement_prompt(
-                family.skill_family_gap,
-                skill_gaps,
-                language=language
-            )
-            courses = await rag_service.search_async(refined_query, k=3) 
-            return {
+        # OTTIMIZZAZIONE: Crea query direttamente dai gap (senza LLM refinement)
+        queries = []
+        for family in gap_analysis.skill_families:
+            gap_names = [g.skill_gap for g in family.skill_gaps]
+            query = f"{family.skill_family_gap} {' '.join(gap_names)}"
+            queries.append(query)
+        
+        # OTTIMIZZAZIONE: Batch search async (tutte le query insieme - 1 encoding invece di 4)
+        all_courses = await rag_service.search_batch_async(queries, k=5)
+        
+        # Costruisci risultati
+        enriched_skill_families = []
+        for idx, family in enumerate(gap_analysis.skill_families):
+            enriched_skill_families.append({
                 "skill_family_gap": family.skill_family_gap,
                 "skill_gaps": [gap.model_dump() for gap in family.skill_gaps],
-                "suggested_courses": courses
-            }
-        
-        course_tasks = [get_courses_for_family(family) for family in gap_analysis.skill_families]
-        enriched_skill_families = await asyncio.gather(*course_tasks)
+                "suggested_courses": all_courses[idx] if idx < len(all_courses) else []
+            })
 
         enriched_gaps_content_str = json.dumps(enriched_skill_families, ensure_ascii=False, indent=2, cls=ObjectIdEncoder)
         save_stage_output_tenant(session_id, "enriched_gaps", enriched_gaps_content_str, collection_name)
-        print("[STEP 3/6] Recupero corsi completato.")
+        print("[STEP 2/5] Recupero corsi completato.")
 
-        # STEP 5: Creazione Contenuto Report
-        print("\n[STEP 5/6] Creazione contenuto report PDF...")
-        final_report_content = await create_final_feedback_content_async(
-            cv_analysis_report=original_cv_report,
-            case_evaluation_report=case_eval_report,
-            enriched_gaps_json_str=enriched_gaps_content_str,
-            candidate_name=candidate_name,
-            target_role=role_title,
-            language=language
-        )
-        if not final_report_content: 
-            raise ValueError("Fallimento nella creazione del contenuto del report finale.")
-        if qualitative_text:
-            final_report_content.market_benchmark = qualitative_text
-
-        # STEP 6: Generazione PDF
-        print("\n[STEP 6/6] Generazione del file PDF...")
-        temp_dir = "temp_pdf"
-        os.makedirs(temp_dir, exist_ok=True)
-        temp_pdf_path = os.path.join(temp_dir, f"{session_id}.pdf")
-        
-        create_feedback_pdf(
-            report_content=final_report_content,
-            output_path=temp_pdf_path,
-            language=language,
-            market_benchmark_text=qualitative_text,
-            market_chart_categories_base64=chart_cat_b64,
-            market_skills_list=market_skills_list 
-        )
-        
-        pdf_path = ""
-        if os.path.exists(temp_pdf_path):
-            with open(temp_pdf_path, "rb") as f:
-                pdf_bytes = f.read()
-            pdf_path = save_pdf_report_tenant(pdf_bytes, session_id, collection_name)
-            os.remove(temp_pdf_path)
-            
-        print(f"--- [PIPELINE ASYNC] Generazione Feedback completata per {session_id}. PDF Path: {pdf_path} ---")
-        return pdf_path
+        # STEP 4: Creazione Contenuto Report (ora in batch, non qui)
+        # I dati sono pronti: gap_analysis, enriched_gaps, cv_report, case_report
+        # Il report finale verrà generato in batch processing
+        print("\n[STEP 4/5] Dati pronti per generazione report finale in batch...")
+        print(f"--- [PIPELINE ASYNC] Preparazione dati completata per {session_id}. Report finale sarà generato in batch. ---")
+        return None  # Non generiamo più il PDF qui, sarà fatto in batch
 
     except Exception as e:
         print(f"🔥🔥🔥 ERRORE NEL PIPELINE ASINCRONO per sessione {session_id}: {e}")
@@ -964,29 +968,24 @@ async def run_and_update_feedback_status(session_id: str, collection_name: str):
     Funzione wrapper per eseguire il pipeline in background e aggiornare lo stato 
     della sessione in modo sicuro (successo o fallimento).
     
-    Utilizza un semaforo per garantire che solo un feedback venga generato alla volta,
-    creando una coda sequenziale automatica per tutte le richieste.
+    Ora esegue solo GAP analysis e RAG corsi in real-time, poi marca la sessione come
+    FEEDBACK_PENDING per la generazione del report finale in batch.
     """
-    # Acquisisce il lock: se occupato, aspetta che il feedback precedente finisca
-    async with FEEDBACK_GENERATION_LOCK:
-        print(f"🔒 [LOCK ACQUIRED] Inizio generazione feedback per sessione {session_id}")
+    print(f"🚀 [FEEDBACK PIPELINE] Avvio preparazione dati per sessione {session_id}")
+    
+    try:
+        # Esegue GAP analysis e RAG corsi (real-time)
+        result = await run_feedback_pipeline_tenant_async(session_id, collection_name)
         
-        try:
-            pdf_path = await run_feedback_pipeline_tenant_async(session_id, collection_name)
-                
-            if pdf_path:
-                save_stage_output_tenant(session_id, "feedback_pdf_path", pdf_path, collection_name)
-                save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_READY"], collection_name)
-                print(f"✅ Feedback PDF generato con successo per sessione {session_id}")
-            else:
-                raise ValueError("Il pipeline non ha prodotto un percorso PDF valido.")
-        except Exception as e:
-            print(f"❌ [ERRORE] Generazione feedback fallita per sessione {session_id}: {e}")
-            traceback.print_exc()
-            save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_GENERATION_FAILED"], collection_name)
-            save_stage_output_tenant(session_id, "feedback_error", str(e), collection_name)
-        finally:
-            print(f"🔓 [LOCK RELEASED] Fine generazione feedback per sessione {session_id}")
+        # Se il pipeline completa con successo (ritorna None), i dati sono pronti
+        # Marca la sessione come FEEDBACK_PENDING per la generazione batch
+        save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_PENDING"], collection_name)
+        print(f"✅ Dati preparati con successo per sessione {session_id}. Sessione marcata come FEEDBACK_PENDING per batch processing.")
+    except Exception as e:
+        print(f"❌ [ERRORE] Preparazione dati fallita per sessione {session_id}: {e}")
+        traceback.print_exc()
+        save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_GENERATION_FAILED"], collection_name)
+        save_stage_output_tenant(session_id, "feedback_error", str(e), collection_name)
 
 # Sessions (HR)
 @app.post("/sessions")
@@ -1013,6 +1012,25 @@ async def create_session(position_id: str = Form(...), cv_file: UploadFile = Fil
             raise HTTPException(status_code=400, detail="Unsupported CV format; provide PDF or UTF-8 text")
 
     save_stage_output_tenant(session_id, "uploaded_cv_text", cv_text, collections["sessions"])
+
+    # Estrai telefono dal CV
+    candidate_phone = extract_phone_from_text(cv_text)
+    
+    # Aggiorna sessione con telefono e stato WhatsApp se presente
+    if candidate_phone and db is not None:
+        tenant_id = auth_data.get("tenant_id")
+        sessions_collection = db[collections["sessions"]]
+        update_data = {
+            "candidate_contact": {
+                "phone_number": candidate_phone,
+                "phone_valid": True
+            },
+            "whatsapp_status": "ready"
+        }
+        sessions_collection.update_one(
+            {"_id": session_id},
+            {"$set": update_data}
+        )
 
     # Issue interview token/link (not yet initialized chatbot)
     token = issue_interview_token(session_id, collections["interview_links"])
@@ -2078,8 +2096,9 @@ async def bulk_upload_cvs(
                 print(f"⚠️ File {file.filename} troppo grande (>10MB), saltato")
                 continue
             
-            # 2. Estrai email con regex
+            # 2. Estrai email e telefono con regex
             candidate_email = extract_email_from_text(cv_text)
+            candidate_phone = extract_phone_from_text(cv_text)
             
             # 3. Crea sessione
             session_id = str(uuid.uuid4())
@@ -2108,18 +2127,28 @@ async def bulk_upload_cvs(
                 collection_name=collections["sessions"]
             )
             
-            # 5. Aggiungi metadata batch
+            # 5. Aggiungi metadata batch e info WhatsApp
             if db is not None:
                 sessions_collection = db[collections["sessions"]]
+                update_data = {
+                    "tenant_id": tenant_id,  # CRITICO: Aggiungi tenant_id
+                    "batch_id": batch_id,
+                    "batch_date": batch_date,
+                    "is_new_batch": True,
+                    "candidate_surname": "",  # Nuovo campo
+                    "whatsapp_status": "ready" if candidate_phone else None
+                }
+                
+                # Aggiungi telefono se trovato
+                if candidate_phone:
+                    update_data["candidate_contact"] = {
+                        "phone_number": candidate_phone,
+                        "phone_valid": True
+                    }
+                
                 sessions_collection.update_one(
                     {"_id": session_id},
-                    {"$set": {
-                        "tenant_id": tenant_id,  # CRITICO: Aggiungi tenant_id
-                        "batch_id": batch_id,
-                        "batch_date": batch_date,
-                        "is_new_batch": True,
-                        "candidate_surname": ""  # Nuovo campo
-                    }}
+                    {"$set": update_data}
                 )
             
             uploaded_sessions.append({

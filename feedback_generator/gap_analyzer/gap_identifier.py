@@ -23,19 +23,20 @@ class GapAnalysisReport(BaseModel):
 
 GAP_ANALYZER_MODEL = AZURE_DEPLOYMENT_NAME #"gpt-4.1-2025-04-14"
 
-def identify_skill_gaps(report_text: str, language: str = "it") -> GapAnalysisReport | None:
+def identify_skill_gaps(cv_analysis_report: str, case_evaluation_report: str, language: str = "it") -> GapAnalysisReport | None:
     """
-    Estrae e raggruppa le carenze di skill da un report di analisi.
+    Estrae e raggruppa le carenze di skill analizzando entrambi i report (CV e colloquio).
     
     Args:
-        report_text: Report consolidato da analizzare
+        cv_analysis_report: Report di analisi del CV
+        case_evaluation_report: Report di valutazione del colloquio
         language: Lingua del prompt ("it" o "en")
     
     Returns:
         Oggetto GapAnalysisReport validato o None
     """
     print("1. Creazione del prompt per l'analisi dei gap...")
-    prompt = prompts_gap.create_gap_analysis_prompt(report_text, language)
+    prompt = prompts_gap.create_gap_analysis_prompt(cv_analysis_report, case_evaluation_report, language)
     
     print(f"2. Invio della richiesta al modello '{GAP_ANALYZER_MODEL}' per l'analisi dei gap...")
     
@@ -63,10 +64,10 @@ def identify_skill_gaps(report_text: str, language: str = "it") -> GapAnalysisRe
     
 from interviewer.llm_service import get_structured_llm_response_async
 
-async def identify_skill_gaps_async(report_text: str, language: str = "it") -> GapAnalysisReport | None:
-    """Versione ASINCRONA: Estrae e raggruppa le carenze di skill."""
+async def identify_skill_gaps_async(cv_analysis_report: str, case_evaluation_report: str, language: str = "it") -> GapAnalysisReport | None:
+    """Versione ASINCRONA: Estrae e raggruppa le carenze di skill analizzando entrambi i report."""
     print("1. [Gap Analysis] Creazione del prompt...")
-    prompt = prompts_gap.create_gap_analysis_prompt(report_text, language)
+    prompt = prompts_gap.create_gap_analysis_prompt(cv_analysis_report, case_evaluation_report, language)
     system_prompt = prompts_gap.SYSTEM_PROMPT[language]
     
     # TASK 5: Caching LLM responses per Gap Analysis
@@ -101,7 +102,8 @@ async def identify_skill_gaps_async(report_text: str, language: str = "it") -> G
         )
 
     if not structured_response_str:
-        print("Errore critico: la chiamata LLM per l'analisi dei gap non ha restituito dati.")
+        print("❌ ERRORE CRITICO: la chiamata LLM per l'analisi dei gap non ha restituito dati.")
+        print(f"   Verifica che il deployment '{GAP_ANALYZER_MODEL}' sia configurato correttamente in Azure OpenAI.")
         return None
 
     try:

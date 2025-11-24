@@ -56,9 +56,12 @@ class BatchProcessor:
         print("🛑 Batch processor fermato")
     
     def _check_and_process_batches(self):
-        """Controlla batch in progress e recupera risultati se completati"""
+        """Controlla batch in progress e recupera risultati se completati, e crea nuovi batch se necessario"""
         try:
-            # Trova batch in progress
+            # 1. Controlla se creare nuovi batch di feedback
+            self._check_and_create_feedback_batch()
+            
+            # 2. Trova batch in progress
             in_progress_batches = self._get_in_progress_batches()
             
             if not in_progress_batches:
@@ -77,7 +80,12 @@ class BatchProcessor:
                     # Verifica che non sia già stato processato
                     if not batch_info.get("processed_at"):
                         print(f"   ✅ Batch {batch_id} completato! Recupero risultati...")
-                        success = self.batch_service.retrieve_batch_results(batch_id)
+                        # Usa il metodo appropriato in base al tipo di batch
+                        batch_type = batch_info.get("type", "cv_analysis")
+                        if batch_type == "feedback":
+                            success = self.batch_service.retrieve_feedback_batch_results(batch_id)
+                        else:
+                            success = self.batch_service.retrieve_batch_results(batch_id)
                         if success:
                             print(f"   ✅ Risultati batch {batch_id} salvati con successo")
                         else:
@@ -116,6 +124,96 @@ class BatchProcessor:
         except Exception as e:
             print(f"❌ Errore nel recupero batch in progress: {e}")
             return []
+    
+    def _check_and_create_feedback_batch(self):
+        """Controlla se ci sono abbastanza sessioni FEEDBACK_PENDING e crea un batch se necessario"""
+        try:
+            from services.data_manager import db
+            if db is None:
+                return
+            
+            # Conta sessioni FEEDBACK_PENDING con dati pronti
+            collections = db.list_collection_names()
+            session_collections = [c for c in collections if c.endswith("_sessions")]
+            
+            total_pending = 0
+            for collection_name in session_collections:
+                collection = db[collection_name]
+                count = collection.count_documents({
+                    "stages.status": "Feedback in coda batch (può richiedere fino a 24h)",
+                    "stages.gap_analysis": {"$exists": True},
+                    "stages.enriched_gaps": {"$exists": True},
+                    "stages.cv_analysis_report": {"$exists": True},
+                    "stages.case_evaluation_report": {"$exists": True}
+                })
+                total_pending += count
+            
+            if total_pending == 0:
+                return  # Nessuna sessione pending
+            
+            # Controlla se esiste un batch feedback precedente
+            last_feedback_batch = None
+            if self.batch_service.batch_collection is not None:
+                from datetime import timedelta
+                # Cerca l'ultimo batch feedback (qualsiasi, non solo quelli recenti)
+                last_feedback_batch = self.batch_service.batch_collection.find_one(
+                    {"type": "feedback"},
+                    sort=[("created_at", -1)]  # Ordina per data decrescente, prendi il più recente
+                )
+            
+            # Logica di creazione batch:
+            # 1. Se non ci sono batch precedenti → crea batch subito con almeno 1 sessione
+            # 2. Se >= 10 sessioni → crea batch subito (indipendentemente dal tempo)
+            # 3. Altrimenti, se è passato >= 60 minuti dall'ultimo batch → crea batch
+            # 4. Altrimenti → aspetta
+            
+            if last_feedback_batch is None:
+                # Primo batch: crea subito se ci sono sessioni pending
+                print(f"📦 Creazione primo batch feedback per {total_pending} sessioni pending...")
+                batch_id = self.batch_service.create_feedback_batch()
+                if batch_id:
+                    print(f"✅ Batch feedback creato: {batch_id}")
+                else:
+                    print(f"⚠️ Impossibile creare batch feedback")
+            elif total_pending >= 10:
+                # Abbastanza sessioni: crea batch subito (indipendentemente dal tempo)
+                print(f"📦 Creazione batch feedback per {total_pending} sessioni pending...")
+                batch_id = self.batch_service.create_feedback_batch()
+                if batch_id:
+                    print(f"✅ Batch feedback creato: {batch_id}")
+                else:
+                    print(f"⚠️ Impossibile creare batch feedback")
+            else:
+                # Controlla se sono passati >= 60 minuti dall'ultimo batch
+                from datetime import timedelta
+                last_batch_time = last_feedback_batch.get("created_at")
+                if last_batch_time:
+                    sixty_minutes_ago = datetime.utcnow() - timedelta(minutes=60)
+                    if last_batch_time <= sixty_minutes_ago:
+                        # Sono passati >= 60 minuti dall'ultimo batch → crea batch
+                        print(f"📦 Creazione batch feedback per {total_pending} sessioni pending (sono passati >= 60 minuti dall'ultimo batch)...")
+                        batch_id = self.batch_service.create_feedback_batch()
+                        if batch_id:
+                            print(f"✅ Batch feedback creato: {batch_id}")
+                        else:
+                            print(f"⚠️ Impossibile creare batch feedback")
+                    else:
+                        # Meno di 60 minuti dall'ultimo batch → aspetta
+                        minutes_since_last = (datetime.utcnow() - last_batch_time).total_seconds() / 60
+                        print(f"ℹ️ {total_pending} sessioni feedback pending (minimo 10 per creare batch, oppure aspetta 60 minuti dall'ultimo batch - ultimo batch {minutes_since_last:.1f} minuti fa)")
+                else:
+                    # Batch senza timestamp: crea comunque (caso edge)
+                    print(f"📦 Creazione batch feedback per {total_pending} sessioni pending (ultimo batch senza timestamp)...")
+                    batch_id = self.batch_service.create_feedback_batch()
+                    if batch_id:
+                        print(f"✅ Batch feedback creato: {batch_id}")
+                    else:
+                        print(f"⚠️ Impossibile creare batch feedback")
+                
+        except Exception as e:
+            print(f"❌ Errore nel controllo batch feedback: {e}")
+            import traceback
+            traceback.print_exc()
     
     def force_check_batch(self, batch_id: str) -> str:
         """Forza controllo di un batch specifico (per testing)"""

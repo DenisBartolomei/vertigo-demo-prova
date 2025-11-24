@@ -83,6 +83,11 @@ def save_candidate_embedding_to_cache(profile_id: str, embedding: np.ndarray, ca
     if db is None:
         return
     
+    # FIX: Valida profile_id - non può essere None o vuoto
+    if not profile_id or profile_id.strip() == "":
+        print(f"⚠ ATTENZIONE: profile_id è None o vuoto, salto salvataggio cache embedding")
+        return
+    
     try:
         collection = db[settings.MONGO_COLLECTION_CANDIDATE_VECTORS]
         text_hash = get_candidate_text_hash(candidate_data)
@@ -99,7 +104,11 @@ def save_candidate_embedding_to_cache(profile_id: str, embedding: np.ndarray, ca
         
         collection.replace_one({"_id": profile_id}, doc, upsert=True)
     except Exception as e:
-        print(f"Errore salvataggio embedding candidato in cache: {e}")
+        # FIX: Non crashare su duplicate key, solo log
+        if "duplicate key" in str(e).lower() or "E11000" in str(e):
+            print(f"⚠ ATTENZIONE: Embedding già presente in cache per profile_id '{profile_id}', skip salvataggio")
+        else:
+            print(f"⚠ Errore salvataggio embedding candidato in cache: {e}")
 
 def bulk_save_candidate_embeddings_to_cache(embeddings_batch: List[Tuple[str, np.ndarray, dict]]):
     """

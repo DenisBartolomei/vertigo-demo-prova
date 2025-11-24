@@ -2,7 +2,7 @@ import { Link, Outlet } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { AutoLogout } from '../components/AutoLogout'
 import { VertigoLogo } from '../components/AstronautLogo'
-import { LayoutDashboard, FileText, Settings, Users, Plus, BarChart3, LogOut, Building2, Mail } from 'lucide-react'
+import { LayoutDashboard, FileText, Settings, Users, Plus, BarChart3, LogOut, Building2, Mail, TrendingUp, MessageSquare } from 'lucide-react'
 import '../styles.css'
 
 export function App() {
@@ -111,10 +111,6 @@ export function App() {
               <FileText size={20} />
               Annunci
             </Link>
-            <Link to="/app/setup-colloqui" className="nav-link">
-              <Settings size={20} />
-              Setup Colloqui
-            </Link>
             <Link to="/app/candidati" className="nav-link">
               <BarChart3 size={20} />
               Reportistica Candidati
@@ -122,6 +118,14 @@ export function App() {
             <Link to="/app/nuova-sessione" className="nav-link">
               <Plus size={20} />
               Nuova Sessione
+            </Link>
+            <Link to="/app/benchmark" className="nav-link">
+              <TrendingUp size={20} />
+              Benchmark
+            </Link>
+            <Link to="/app/whatsapp-setup" className="nav-link">
+              <MessageSquare size={20} />
+              WhatsApp Screener
             </Link>
             <Link to="/app/users" className="nav-link">
               <Users size={20} />

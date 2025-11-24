@@ -156,7 +156,7 @@ def create_failed_transition_prompt(current_step_title: str, criteria: str, skil
         "it": (
             f"Il candidato ha esaurito i tentativi per lo step '{current_step_title}'.\n"
             "Il tuo compito è duplice:\n"
-            f"1. Riassumi brevemente e in modo costruttivo cosa mancava per completare il punto. Basati sia sul criterio di completamento ('{criteria}') sia sulle skill che si intendeva testare in questo step ('{skills_to_test}'). Ad esempio, puoi dire 'sarebbe stato utile dimostrare più [nome skill]'. Sii educato, non critico.\n"
+            f"1. Riassumi brevemente e in modo costruttivo cosa mancava per completare il punto. Basati sia sul criterio di completamento ('{criteria}') sia sulle skill che si intendeva testare in questo step ('{skills_to_test}'). Sii educato, sintetico, non critico.\n"
             f"2. Subito dopo, crea una transizione fluida per passare al prossimo argomento ('{next_step_title}'), ponendo una domanda ispirata a questa descrizione: '{next_step_description}'.\n"
             "Unisci questi due punti in un'unica risposta naturale, semplice. Se il contributo del candidato non è stato buono (ad esempio non ha risposto praticamente a nulla, oppure ha risposto con frasi inconcludenti) fallo notare senza problemi. Non essere accondiscendente e non dire sempre per forza che una cosa va bene, se poi non va bene. "
             "Fai attenzione che il candidato può aver già risposto ad alcune parti della nuova domanda che poni. Quindi analizza con cura la cronologia della conversazione e, qualora ci fosse qualcosa di utile, riproponilo al candidato facendogli notare che è stato lui a riportare tali info. "
@@ -166,7 +166,7 @@ def create_failed_transition_prompt(current_step_title: str, criteria: str, skil
         "en": (
             f"The candidate has exhausted attempts for step '{current_step_title}'.\n"
             "Your task is twofold:\n"
-            f"1. Summarize briefly and constructively what was missing to complete the point. Base yourself both on the completion criterion ('{criteria}') and on the skills that were intended to be tested in this step ('{skills_to_test}'). For example, you can say 'it would have been useful to demonstrate more [skill name]'. Be polite, not critical.\n"
+            f"1. Summarize briefly and constructively what was missing to complete the point. Base yourself both on the completion criterion ('{criteria}') and on the skills that were intended to be tested in this step ('{skills_to_test}'). Be polite, synthetic, not critical.\n"
             f"2. Immediately after, create a smooth transition to move on to the next topic ('{next_step_title}'), asking a question inspired by this description: '{next_step_description}'.\n"
             "Combine these two points in a single natural, simple answer. If the candidate's contribution was not good (for example they answered practically nothing, or answered with inconclusive sentences) point it out without problems. Do not be condescending and do not always necessarily say that something is good, if it is not good. "
             "Be careful that the candidate may have already answered some parts of the new question you are asking. So carefully analyze the conversation history and, if there is something useful, bring it back to the candidate noting that he was the one who reported that info. "

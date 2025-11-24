@@ -20,6 +20,7 @@ interface AntiCheatConfig {
   onCheatingDetected: (event: CheatingEvent) => void
   onInterviewTerminated?: () => void
   onFullscreenExit?: () => void
+  onMultipleDisplayDetected?: () => void
 }
 
 export function useAntiCheat(config: AntiCheatConfig) {
@@ -38,6 +39,7 @@ export function useAntiCheat(config: AntiCheatConfig) {
   const isFullscreen = useRef(false)
   const screenshotAttemptCount = useRef(0)
   const multipleDisplayCount = useRef(0)
+  const multipleDisplayBlocked = useRef(false)
   const lastScreenCheck = useRef<{ width: number; height: number; availWidth: number; availHeight: number } | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
 
@@ -305,7 +307,7 @@ export function useAntiCheat(config: AntiCheatConfig) {
     }
   }, [addEvent, config.enforceFullscreen])
 
-  // NUOVO: Rilevamento schermi multipli
+  // NUOVO: Rilevamento schermi multipli (migliorato)
   const detectMultipleDisplays = useCallback((): boolean => {
     try {
       const currentScreen = {
@@ -315,23 +317,29 @@ export function useAntiCheat(config: AntiCheatConfig) {
         availHeight: window.screen.availHeight
       }
 
-      // Se la finestra è posizionata fuori dallo schermo disponibile, potrebbe essere su un altro monitor
+      // Controllo 1: Risoluzione totale schermo molto grande (> 3000px larghezza) = probabile multi-monitor
+      const isVeryWideScreen = currentScreen.width > 3000
+
+      // Controllo 2: Differenza significativa tra screen.width e availWidth (spazio taskbar/barre)
+      // Se la differenza è molto grande, potrebbe indicare multi-monitor
+      const widthDiff = currentScreen.width - currentScreen.availWidth
+      const heightDiff = currentScreen.height - currentScreen.availHeight
+      const hasLargeDiff = widthDiff > 200 || heightDiff > 200
+
+      // Controllo 3: Se la finestra è posizionata fuori dallo schermo disponibile, potrebbe essere su un altro monitor
       const windowLeft = window.screenX || window.screenLeft || 0
       const windowTop = window.screenY || window.screenTop || 0
-      
-      // Controlla se la finestra è fuori dai bounds dello schermo principale
       const isOutOfBounds = 
         windowLeft < -50 || 
         windowLeft > currentScreen.availWidth + 50 ||
         windowTop < -50 ||
         windowTop > currentScreen.availHeight + 50
 
-      // Controlla se la risoluzione dello schermo è molto più grande della finestra visibile
-      // (possibile indicatore di multi-monitor setup)
+      // Controllo 4: Rapporto screen.width / window.innerWidth > 1.5 (finestra piccola su schermo grande)
       const screenVsWindowRatio = currentScreen.width / (window.innerWidth || 1)
-      const isSuspiciousRatio = screenVsWindowRatio > 1.5 && window.innerWidth > 0
+      const isSuspiciousRatio = screenVsWindowRatio > 1.5 && window.innerWidth > 0 && window.innerWidth < 2000
 
-      // Controlla se c'è stato un cambio significativo nella risoluzione dello schermo
+      // Controllo 5: Cambiamento improvviso di risoluzione (indicatore di connessione/disconnessione monitor)
       let hasResolutionChange = false
       if (lastScreenCheck.current) {
         const widthChanged = Math.abs(currentScreen.width - lastScreenCheck.current.width) > 100
@@ -342,8 +350,10 @@ export function useAntiCheat(config: AntiCheatConfig) {
         }
       }
 
-      // Se almeno uno dei controlli è positivo, c'è un doppio schermo
-      const hasMultipleDisplays = isOutOfBounds || isSuspiciousRatio || hasResolutionChange
+      // Se almeno due controlli sono positivi, c'è un doppio schermo (per ridurre falsi positivi)
+      const checks = [isVeryWideScreen, hasLargeDiff, isOutOfBounds, isSuspiciousRatio, hasResolutionChange]
+      const positiveChecks = checks.filter(Boolean).length
+      const hasMultipleDisplays = positiveChecks >= 2
 
       lastScreenCheck.current = currentScreen
 
@@ -356,7 +366,9 @@ export function useAntiCheat(config: AntiCheatConfig) {
 
   // Funzione per il controllo periodico durante il colloquio
   const checkMultipleDisplaysPeriodic = useCallback(() => {
-    if (detectMultipleDisplays()) {
+    const hasMultipleDisplays = detectMultipleDisplays()
+    
+    if (hasMultipleDisplays) {
       multipleDisplayCount.current++
       
       const event: CheatingEvent = {
@@ -366,8 +378,17 @@ export function useAntiCheat(config: AntiCheatConfig) {
         severity: 'high'
       }
       addEvent(event)
+      
+      // Chiama la callback per bloccare l'interfaccia se non è già bloccata
+      if (!multipleDisplayBlocked.current && config.onMultipleDisplayDetected) {
+        multipleDisplayBlocked.current = true
+        config.onMultipleDisplayDetected()
+      }
+    } else {
+      // Se non è più rilevato, resetta il flag per permettere nuove chiamate
+      multipleDisplayBlocked.current = false
     }
-  }, [detectMultipleDisplays, addEvent])
+  }, [detectMultipleDisplays, addEvent, config])
 
   // Funzione esportata per controllo esterno (prima dell'avvio)
   const checkMultipleDisplays = useCallback((): boolean => {
@@ -404,8 +425,8 @@ export function useAntiCheat(config: AntiCheatConfig) {
     // Dev tools detection interval
     const devToolsInterval = setInterval(detectDevTools, 1000)
     
-    // NUOVO: Monitoraggio schermi multipli ogni 30 secondi
-    const multipleDisplayInterval = setInterval(checkMultipleDisplaysPeriodic, 30000)
+    // NUOVO: Monitoraggio schermi multipli ogni 90 secondi
+    const multipleDisplayInterval = setInterval(checkMultipleDisplaysPeriodic, 90000)
     
     // NUOVO: Se enforceFullscreen è attivo, richiedi fullscreen all'inizio
     if (config.enforceFullscreen) {
@@ -504,6 +525,10 @@ export function useAntiCheat(config: AntiCheatConfig) {
     return summary
   }, [events, warnings, isBlocked, getCheatingScore])
 
+  const resetMultipleDisplayBlock = useCallback(() => {
+    multipleDisplayBlocked.current = false
+  }, [])
+
   return {
     events,
     isMonitoring,
@@ -515,6 +540,7 @@ export function useAntiCheat(config: AntiCheatConfig) {
     getCheatingScore,
     getCheatingSummary,
     reenterFullscreen: requestFullscreen,
-    checkMultipleDisplays
+    checkMultipleDisplays,
+    resetMultipleDisplayBlock
   }
 }

@@ -19,7 +19,6 @@ from interviewer.llm_service import get_llm_response, get_llm_response_async
 
 from recruitment_suite.config import settings
 from recruitment_suite.app.core.shared_embedding_model import get_shared_embedding_model
-from services.gpu_embedding_client import get_gpu_embedding_client
 from recruitment_suite.app.core.llm_cache import get_prompt_hash, get_cached_llm_response, save_cached_llm_response
 from recruitment_suite.app.core.benchmark_cache import get_candidate_embedding_from_cache, save_candidate_embedding_to_cache
 
@@ -28,12 +27,9 @@ class CVNormalizer:
         print("Inizializzazione del Normalizzatore CV...")
         # Non si valida più la chiave localmente: viene gestita da llm_service
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        # Usa GPU client invece del modello locale
-        self.gpu_client = get_gpu_embedding_client()
-        print(f"  - GPU Service disponibile: {self.gpu_client.is_gpu_available()}")
-        # Mantieni embedding_model per backward compatibility (fallback)
+        # Usa modello locale
         self.embedding_model = get_shared_embedding_model(device=self.device)
-        print(f"Normalizzazione CV: Modello '{settings.EMBEDDING_MODEL_NAME}' disponibile (device richiesto: {self.device.upper()}).")
+        print(f"Normalizzazione CV: Modello '{settings.EMBEDDING_MODEL_NAME}' disponibile (device: {self.device.upper()}).")
 
         self._prepare_esco_data()
 
@@ -275,12 +271,13 @@ class CVNormalizer:
         if enriched_texts_for_batch:
             print(f"  → Encoding batch transformer per {len(enriched_texts_for_batch)} esperienze...")
             try:
-                # Usa GPU client per encoding batch (più efficiente)
-                embeddings_batch = self.gpu_client.embed_batch(
+                # Usa modello locale per encoding batch
+                embeddings_batch = self.embedding_model.encode(
                     enriched_texts_for_batch,
-                    model_name=settings.EMBEDDING_MODEL_NAME,
-                    normalize=True,
-                    batch_size=16
+                    normalize_embeddings=True,
+                    batch_size=16,
+                    convert_to_numpy=True,
+                    show_progress_bar=False
                 )
                 
                 # Converti a tensore per calcolo similarità
@@ -322,18 +319,26 @@ class CVNormalizer:
                         normalized_list[result_idx]["esco_matches"] = matches
                         
                         # Salva embedding in cache per riutilizzo futuro
-                        text_hash = hashlib.sha256(enriched_text.encode('utf-8')).hexdigest()
-                        # Estrai embedding come numpy array (rimuovi dimensione batch)
-                        if query_embedding.dim() > 1:
-                            embedding_array = query_embedding.squeeze(0).cpu().numpy().astype(np.float32)
+                        # FIX: Verifica che enriched_text non sia None o vuoto prima di salvare
+                        if enriched_text and enriched_text.strip():
+                            try:
+                                text_hash = hashlib.sha256(enriched_text.encode('utf-8')).hexdigest()
+                                # Estrai embedding come numpy array (rimuovi dimensione batch)
+                                if query_embedding.dim() > 1:
+                                    embedding_array = query_embedding.squeeze(0).cpu().numpy().astype(np.float32)
+                                else:
+                                    embedding_array = query_embedding.cpu().numpy().astype(np.float32)
+                                candidate_data_for_cache = {"normalized_experiences": [{"llm_enriched_text": enriched_text}]}
+                                save_candidate_embedding_to_cache(
+                                    profile_id=text_hash,
+                                    embedding=embedding_array,
+                                    candidate_data=candidate_data_for_cache
+                                )
+                            except Exception as cache_err:
+                                # Non bloccare il processo se il salvataggio cache fallisce
+                                print(f"    ⚠ Errore salvataggio cache embedding (non critico): {cache_err}")
                         else:
-                            embedding_array = query_embedding.cpu().numpy().astype(np.float32)
-                        candidate_data_for_cache = {"normalized_experiences": [{"llm_enriched_text": enriched_text}]}
-                        save_candidate_embedding_to_cache(
-                            profile_id=text_hash,
-                            embedding=embedding_array,
-                            candidate_data=candidate_data_for_cache
-                        )
+                            print(f"    ⚠ ATTENZIONE: enriched_text vuoto o None, skip salvataggio cache")
                 
                 print(f"    ✓ Batch encoding completato per {len(enriched_texts_for_batch)} esperienze")
             except Exception as e:

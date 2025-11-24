@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field, AliasChoices
 from datetime import datetime
 from interviewer.llm_service import get_structured_llm_response
 from . import prompts_pathway
+import difflib
+from services.data_manager import db
 
 # --- 1. Definizione dello Schema Dati Pydantic per l'Output ---
 
@@ -53,10 +55,10 @@ class FinalReportContent(BaseModel):
 
 ARCHITECT_MODEL = "gpt-4.1-2025-04-14"
 
-# La firma della funzione è cambiata: ora accetta due report separati invece di uno solo consolidato.
+# OTTIMIZZATO: Usa i due report separati invece del report consolidato per ridurre i token.
 def create_final_feedback_content(
-    cv_analysis_report: str, 
-    case_evaluation_report: str, 
+    cv_analysis_report: str,
+    case_evaluation_report: str,
     enriched_gaps_json_str: str, 
     candidate_name: str, 
     target_role: str,
@@ -64,11 +66,11 @@ def create_final_feedback_content(
 ) -> FinalReportContent | None:
     """
     Genera il contenuto testuale e strutturato per il report finale in PDF.
-    Utilizza i report separati per creare sezioni distinte nel feedback.
+    OTTIMIZZATO: Usa i due report separati (CV e colloquio) invece del report consolidato.
     
     Args:
         cv_analysis_report: Report di analisi del CV
-        case_evaluation_report: Report di valutazione del case
+        case_evaluation_report: Report di valutazione del colloquio
         enriched_gaps_json_str: JSON con gap e corsi suggeriti
         candidate_name: Nome del candidato
         target_role: Ruolo target
@@ -77,12 +79,12 @@ def create_final_feedback_content(
     Returns:
         FinalReportContent validato o None
     """
-    print("1. Creazione del prompt per il report di feedback finale (versione aggiornata)...")
+    print("1. Creazione del prompt per il report di feedback finale con report CV e colloquio separati...")
     
-    # La chiamata al prompt ora passa i due report separatamente e la lingua.
+    # OTTIMIZZATO: Usa i due report separati invece del report consolidato
     prompt = prompts_pathway.create_final_report_prompt(
-        cv_analysis_report, 
-        case_evaluation_report, 
+        cv_analysis_report,
+        case_evaluation_report,
         enriched_gaps_json_str, 
         candidate_name, 
         target_role,
@@ -106,7 +108,13 @@ def create_final_feedback_content(
         print("3. Output strutturato ricevuto, validazione in corso...")
         parsed_json = json.loads(structured_response_str)
         validated_data = FinalReportContent.model_validate(parsed_json)
-        print("4. Contenuto del report finale generato e validato.")
+        
+        # 4. Match degli URL dei corsi con quelli del database
+        if validated_data.suggested_pathway:
+            print("4. [URL MATCH] Correzione URL dei corsi con match dal database...")
+            validated_data.suggested_pathway = _match_course_urls_from_db(validated_data.suggested_pathway)
+        
+        print("5. Contenuto del report finale generato e validato.")
         return validated_data
     except Exception as e:
         print(f"Errore critico durante la validazione del report finale: {e}")
@@ -115,18 +123,19 @@ def create_final_feedback_content(
 from interviewer.llm_service import get_structured_llm_response_async
 
 async def create_final_feedback_content_async(
-    cv_analysis_report: str, 
-    case_evaluation_report: str, 
+    cv_analysis_report: str,
+    case_evaluation_report: str,
     enriched_gaps_json_str: str, 
     candidate_name: str, 
     target_role: str,
     language: str = "it"
 ) -> FinalReportContent | None:
-    """Versione ASINCRONA: Genera il contenuto testuale e strutturato per il report finale."""
-    print("1. [Report Finale] Creazione del prompt...")
+    """Versione ASINCRONA: Genera il contenuto testuale e strutturato per il report finale.
+    OTTIMIZZATO: Usa i due report separati (CV e colloquio) invece del report consolidato."""
+    print("1. [Report Finale] Creazione del prompt con report CV e colloquio separati...")
     prompt = prompts_pathway.create_final_report_prompt(
-        cv_analysis_report, 
-        case_evaluation_report, 
+        cv_analysis_report,
+        case_evaluation_report,
         enriched_gaps_json_str, 
         candidate_name, 
         target_role,
@@ -143,6 +152,12 @@ async def create_final_feedback_content_async(
     )
 
     if not structured_response_str:
+        print("❌ ERRORE: Nessuna risposta strutturata ricevuta dall'LLM")
+        return None
+    
+    # FIX: Verifica se la risposta contiene un errore di rate limit
+    if "Rate limit" in structured_response_str or "429" in structured_response_str or "Errore: Rate limit" in structured_response_str:
+        print(f"❌ ERRORE: Rate limit rilevato nella risposta LLM: {structured_response_str}")
         return None
 
     parsed_json = None
@@ -179,7 +194,13 @@ async def create_final_feedback_content_async(
             print("⚠ ATTENZIONE: Convertito alias 'Percorso formativo' in 'suggested_pathway'")
         
         validated_data = FinalReportContent.model_validate(parsed_json)
-        print("4. [Report Finale] Contenuto generato e validato.")
+        
+        # 4. Match degli URL dei corsi con quelli del database
+        if validated_data.suggested_pathway:
+            print("4. [Report Finale] [URL MATCH] Correzione URL dei corsi con match dal database...")
+            validated_data.suggested_pathway = _match_course_urls_from_db(validated_data.suggested_pathway)
+        
+        print("5. [Report Finale] Contenuto generato e validato.")
         return validated_data
     except json.JSONDecodeError as e:
         print(f"✗ ERRORE: JSON non valido ricevuto dall'LLM: {e}")
@@ -217,9 +238,123 @@ async def create_final_feedback_content_async(
             # Riprova la validazione dopo il fallback
             validated_data = FinalReportContent.model_validate(parsed_json, strict=False)
             print("⚠ [FALLBACK] Validazione riuscita dopo correzione dei campi mancanti")
+            
+            # Match degli URL dei corsi anche nel fallback
+            if validated_data.suggested_pathway:
+                print("⚠ [FALLBACK] [URL MATCH] Correzione URL dei corsi con match dal database...")
+                validated_data.suggested_pathway = _match_course_urls_from_db(validated_data.suggested_pathway)
+            
             return validated_data
         except Exception as fallback_error:
             print(f"✗ ERRORE anche nel fallback: {fallback_error}")
             import traceback
             print(f"   Traceback: {traceback.format_exc()}")
             return None
+
+
+def _match_course_urls_from_db(suggested_courses: List[SuggestedCourse]) -> List[SuggestedCourse]:
+    """
+    Matcha gli URL dei corsi suggeriti con quelli nel database usando fuzzy matching sul nome.
+    
+    Per ogni corso generato dall'LLM, cerca il corso corrispondente nel database usando
+    fuzzy matching sul nome del corso. Se trova un match con similarità >= 0.7,
+    sostituisce l'URL generato con quello corretto dal database.
+    
+    Args:
+        suggested_courses: Lista di corsi generati dall'LLM con URL potenzialmente errati
+        
+    Returns:
+        Lista di corsi con URL corretti dal database
+    """
+    if not suggested_courses:
+        return suggested_courses
+    
+    # 1. Carica tutti i corsi dal database con URL
+    if db is None:
+        print("⚠️ [URL MATCH] Database non disponibile, mantengo URL originali")
+        return suggested_courses
+    
+    try:
+        courses_collection = db["courses"]
+        # Carica solo i campi necessari: Course Name e URL
+        db_courses = list(courses_collection.find(
+            {},
+            {"Course Name": 1, "URL": 1, "_id": 0}
+        ))
+        
+        if not db_courses:
+            print("⚠️ [URL MATCH] Nessun corso trovato nel database, mantengo URL originali")
+            return suggested_courses
+        
+        print(f"🔍 [URL MATCH] Caricati {len(db_courses)} corsi dal database per il match URL")
+        
+        # 2. Crea un dizionario per lookup veloce: nome_corso -> URL
+        # Normalizza i nomi per il matching (lowercase, rimuovi spazi extra)
+        db_courses_map = {}
+        for course in db_courses:
+            course_name = course.get("Course Name", "").strip()
+            course_url = course.get("URL", "").strip()
+            if course_name and course_url:
+                # Normalizza il nome per il matching
+                normalized_name = course_name.lower().strip()
+                db_courses_map[normalized_name] = {
+                    "original_name": course_name,
+                    "url": course_url
+                }
+        
+        # 3. Per ogni corso suggerito, trova il match migliore
+        matched_courses = []
+        matched_count = 0
+        
+        for suggested_course in suggested_courses:
+            suggested_name = suggested_course.course_name.strip()
+            normalized_suggested = suggested_name.lower().strip()
+            
+            # Prima prova match esatto (case-insensitive)
+            best_match = None
+            best_ratio = 0.0
+            
+            if normalized_suggested in db_courses_map:
+                # Match esatto trovato
+                best_match = db_courses_map[normalized_suggested]
+                best_ratio = 1.0
+            else:
+                # Fuzzy matching: trova il corso con la similarità più alta
+                for normalized_db_name, db_course_info in db_courses_map.items():
+                    # Usa SequenceMatcher per calcolare la similarità
+                    ratio = difflib.SequenceMatcher(None, normalized_suggested, normalized_db_name).ratio()
+                    if ratio > best_ratio:
+                        best_ratio = ratio
+                        best_match = db_course_info
+            
+            # Soglia minima di similarità: 0.7 (70%)
+            if best_match and best_ratio >= 0.7:
+                # Crea una nuova istanza con l'URL corretto (Pydantic models possono essere immutabili)
+                original_url = suggested_course.url
+                corrected_course = SuggestedCourse(
+                    course_name=suggested_course.course_name,
+                    justification=suggested_course.justification,
+                    level=suggested_course.level,
+                    duration_hours=suggested_course.duration_hours,
+                    url=best_match["url"]  # URL corretto dal database
+                )
+                matched_count += 1
+                print(f"✅ [URL MATCH] Corso '{suggested_name}' -> URL corretto (similarità: {best_ratio:.2f})")
+                if original_url != best_match["url"]:
+                    print(f"   URL originale: {original_url[:50]}...")
+                    print(f"   URL corretto: {best_match['url'][:50]}...")
+                matched_courses.append(corrected_course)
+            else:
+                # Nessun match trovato o similarità troppo bassa
+                print(f"⚠️ [URL MATCH] Nessun match per corso '{suggested_name}' (miglior ratio: {best_ratio:.2f}), mantengo URL originale")
+                matched_courses.append(suggested_course)
+        
+        print(f"✅ [URL MATCH] Completato: {matched_count}/{len(suggested_courses)} corsi con URL corretti")
+        return matched_courses
+        
+    except Exception as e:
+        print(f"❌ [URL MATCH] Errore durante il match degli URL: {e}")
+        import traceback
+        traceback.print_exc()
+        # In caso di errore, ritorna i corsi originali
+        return suggested_courses

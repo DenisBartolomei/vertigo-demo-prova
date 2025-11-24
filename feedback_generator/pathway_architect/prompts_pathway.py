@@ -82,7 +82,7 @@ Analyze the provided data to create a complete and personalized feedback report 
 3.  **Gap Analysis and Suggested Courses:** A JSON file that lists the overall gaps and a list of potentially useful courses.
 4.  **Candidate Data:** Name (`{candidate_name}`) and Target Role (`{target_role}`).
 
-**Output Structure (must be a JSON with keys exactly as listed):**
+**Output Structure (must be a JSON):**
 - `candidate_name`: "{candidate_name}"
 - `target_role`: "{target_role}"
 - `profile_summary`: Synthetic profile of 2-3 lines that merges impressions from CV and interview.

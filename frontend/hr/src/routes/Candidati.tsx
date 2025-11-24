@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, Search, Mail, Clock, FileText, CheckCircle2, AlertTriangle, AlertCircle, Info, Lock, Download, MessageCircle, Target, TrendingUp, RefreshCw, Rocket } from 'lucide-react'
+import { BarChart3, Search, Mail, Clock, FileText, CheckCircle2, AlertTriangle, AlertCircle, Info, Lock, Download, MessageCircle, Target, TrendingUp, RefreshCw, Rocket, MessageSquare, Send } from 'lucide-react'
 import { SecurityReport } from '../components/SecurityReport'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://vertigo-ai-backend-tbia7kjh7a-oc.a.run.app'
@@ -15,6 +15,8 @@ type Row = {
   downloaded_at?: string;
   downloaded_by?: string;
   downloaded_by_name?: string;
+  whatsapp_status?: string;
+  phone_number?: string;
 }
 
 function renderStars(rating: number) {
@@ -374,11 +376,14 @@ export function Candidati() {
   const [conversationData, setConversationData] = useState<Record<string, any[]>>({})
   const [selectedPosition, setSelectedPosition] = useState<string>('')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'none'>('none')
+  const [feedbackFilter, setFeedbackFilter] = useState<'all' | 'in_elaborazione' | 'da_scaricare' | 'scaricati'>('all')
   const [overallMeans, setOverallMeans] = useState<Record<string, number>>({})
   const [reportExpanded, setReportExpanded] = useState<Record<string, boolean>>({})
   const [securityReports, setSecurityReports] = useState<Record<string, any>>({})
   const [showSecurityReport, setShowSecurityReport] = useState<string | null>(null)
   const [expandedSkills, setExpandedSkills] = useState<Record<string, Set<number>>>({})
+  const [whatsappData, setWhatsappData] = useState<Record<string, { status?: string; phone_number?: string }>>({})
+  const [engaging, setEngaging] = useState<Record<string, boolean>>({})
   const token = localStorage.getItem('hr_jwt')
 
   // Toggle skill expansion
@@ -417,10 +422,22 @@ export function Candidati() {
       }
       if (res.ok) {
         const data = await res.json()
-        setRows(data.items || [])
+        const items = data.items || []
+        console.log(`[CANDIDATI] Caricati ${items.length} candidati. Stati trovati:`, 
+          items.map((r: Row) => ({ name: r.candidate_name, status: r.status })))
+        // Debug dettagliato per ogni item
+        items.forEach((r: Row) => {
+          if (r.status) {
+            console.log(`[CANDIDATI STATUS] ${r.candidate_name}: '${r.status}' (includes batch: ${r.status.includes('batch')})`)
+          }
+        })
+        setRows(items)
+        
+        // Load WhatsApp data for all sessions
+        await loadWhatsappData(items)
         
         // Load security reports and overall means for all sessions
-        await loadSecurityReportsAndMeans(data.items || [])
+        await loadSecurityReportsAndMeans(items)
       } else {
         console.error('Failed to load candidates:', res.statusText)
       }
@@ -428,6 +445,68 @@ export function Candidati() {
       console.error('Error loading candidates:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadWhatsappData(sessions: Row[]) {
+    const whatsappDataMap: Record<string, { status?: string; phone_number?: string }> = {}
+    
+    const promises = sessions.map(async (session) => {
+      try {
+        const res = await fetch(`${API_BASE}/whatsapp/session/${session.session_id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (res.ok) {
+          const data = await res.json()
+          whatsappDataMap[session.session_id] = {
+            status: data.whatsapp_status,
+            phone_number: data.phone_number
+          }
+        }
+      } catch (error) {
+        console.error(`Error loading WhatsApp data for ${session.session_id}:`, error)
+      }
+    })
+    
+    await Promise.all(promises)
+    setWhatsappData(whatsappDataMap)
+  }
+
+  async function engageCandidate(sessionId: string, phoneNumber: string) {
+    setEngaging(prev => ({ ...prev, [sessionId]: true }))
+    try {
+      const res = await fetch(`${API_BASE}/whatsapp/engage`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          phone_number: phoneNumber
+        })
+      })
+      
+      if (res.ok) {
+        const data = await res.json()
+        // Aggiorna lo stato locale
+        setWhatsappData(prev => ({
+          ...prev,
+          [sessionId]: {
+            ...prev[sessionId],
+            status: 'sent'
+          }
+        }))
+        alert('Messaggio WhatsApp inviato con successo!')
+      } else {
+        const error = await res.json()
+        alert(`Errore: ${error.detail || 'Errore nell\'invio del messaggio'}`)
+      }
+    } catch (error) {
+      console.error('Error engaging candidate:', error)
+      alert('Errore di connessione')
+    } finally {
+      setEngaging(prev => ({ ...prev, [sessionId]: false }))
     }
   }
 
@@ -637,9 +716,38 @@ export function Candidati() {
   // Get unique positions for filter dropdown
   const uniquePositions = Array.from(new Set(rows.map(r => r.position_name || r.position_id).filter(Boolean)))
   
+  // Helper function to determine feedback status
+  const getFeedbackStatus = (row: Row): 'in_elaborazione' | 'da_scaricare' | 'scaricati' | null => {
+    // Scaricati: se c'è downloaded_at
+    if (row.downloaded_at) {
+      return 'scaricati'
+    }
+    
+    // In elaborazione: se status indica generazione in corso o batch
+    if (row.status === 'Generazione feedback in corso...' || row.status?.includes('batch')) {
+      return 'in_elaborazione'
+    }
+    
+    // Da scaricare: se status è "Feedback pronto" o "Feedback ready" e non è stato scaricato
+    if (row.status === 'Feedback pronto' || row.status === 'Feedback ready') {
+      return 'da_scaricare'
+    }
+    
+    return null
+  }
+
   // Filter and sort rows
   const filteredAndSortedRows = rows
-    .filter(row => !selectedPosition || row.position_name === selectedPosition || row.position_id === selectedPosition)
+    .filter(row => {
+      // Filter by position
+      const positionMatch = !selectedPosition || row.position_name === selectedPosition || row.position_id === selectedPosition
+      
+      // Filter by feedback status
+      const feedbackStatus = getFeedbackStatus(row)
+      const feedbackMatch = feedbackFilter === 'all' || feedbackStatus === feedbackFilter
+      
+      return positionMatch && feedbackMatch
+    })
     .sort((a, b) => {
       if (sortOrder === 'none') return 0
       const meanA = overallMeans[a.session_id] || 0
@@ -670,7 +778,7 @@ export function Candidati() {
         </h4>
         <div style={{ 
           display: 'grid', 
-          gridTemplateColumns: '1fr 1fr auto', 
+          gridTemplateColumns: '1fr 1fr 1fr auto', 
           gap: '12px', 
           alignItems: 'end' 
         }}>
@@ -711,6 +819,35 @@ export function Candidati() {
               color: 'var(--text-secondary)',
               marginBottom: '4px'
             }}>
+              Stato Feedback Report
+            </label>
+            <select 
+              value={feedbackFilter} 
+              onChange={e => setFeedbackFilter(e.target.value as 'all' | 'in_elaborazione' | 'da_scaricare' | 'scaricati')}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-light)',
+                background: 'white',
+                fontSize: '14px'
+              }}
+            >
+              <option value="all">Tutti gli stati</option>
+              <option value="in_elaborazione">In elaborazione</option>
+              <option value="da_scaricare">Da scaricare</option>
+              <option value="scaricati">Scaricati</option>
+            </select>
+          </div>
+          
+          <div>
+            <label style={{ 
+              display: 'block', 
+              fontSize: '12px', 
+              fontWeight: '600', 
+              color: 'var(--text-secondary)',
+              marginBottom: '4px'
+            }}>
               Ordina per Media Generale
             </label>
             <select 
@@ -740,6 +877,7 @@ export function Candidati() {
               onClick={() => {
                 setSelectedPosition('')
                 setSortOrder('none')
+                setFeedbackFilter('all')
               }}
               style={{
                 padding: '8px 12px',
@@ -796,7 +934,8 @@ export function Candidati() {
         <div style={{ display: 'grid', gap: 12 }}>
           {filteredAndSortedRows.map((r) => {
             const isExpanded = expanded === r.session_id
-            console.log(`Candidato: ${r.candidate_name}, Stato ricevuto: '${r.status}'`);
+            // Debug: verifica lo status ricevuto per ogni candidato
+            console.log(`[RENDER] Candidato: ${r.candidate_name}, Status: '${r.status}', includes batch: ${r.status?.includes('batch') || false}`)
             const currentKind = reportKind[r.session_id] || 'cv'
             return (
               <div key={r.session_id} className="card">
@@ -886,14 +1025,95 @@ export function Candidati() {
                         marginTop: '4px',
                         background: r.status === 'Feedback pronto' ? '#D1FAE5' : 
                                     r.status === 'Pronto per generare feedback' ? '#FEF3C7' :
+                                    (r.status?.includes('batch') || r.status === 'Feedback in coda batch (può richiedere fino a 24h)') ? '#FEF3C7' :
                                     r.status === 'Colloquio completato' ? '#DBEAFE' :
                                     r.status === 'Errore generazione feedback' ? '#FEE2E2' : '#F3F4F6',
                         color: r.status === 'Feedback pronto' ? '#065F46' :
                                r.status === 'Pronto per generare feedback' ? '#92400E' :
+                               (r.status?.includes('batch') || r.status === 'Feedback in coda batch (può richiedere fino a 24h)') ? '#92400E' :
                                r.status === 'Colloquio completato' ? '#1E40AF' :
                                r.status === 'Errore generazione feedback' ? '#991B1B' : '#374151'
                       }}>
                         {r.status}
+                      </div>
+                    )}
+                    {/* WhatsApp Status Badge */}
+                    {whatsappData[r.session_id]?.status && (
+                      <div style={{
+                        display: 'inline-block',
+                        marginLeft: '8px',
+                        marginTop: '4px'
+                      }}>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          background: whatsappData[r.session_id].status === 'qualified' ? '#D1FAE5' :
+                                     whatsappData[r.session_id].status === 'disqualified' ? '#FEE2E2' :
+                                     whatsappData[r.session_id].status === 'active' ? '#DBEAFE' :
+                                     whatsappData[r.session_id].status === 'sent' ? '#FEF3C7' :
+                                     whatsappData[r.session_id].status === 'ready' ? '#E0E7FF' :
+                                     '#F3F4F6',
+                          color: whatsappData[r.session_id].status === 'qualified' ? '#065F46' :
+                                 whatsappData[r.session_id].status === 'disqualified' ? '#991B1B' :
+                                 whatsappData[r.session_id].status === 'active' ? '#1E40AF' :
+                                 whatsappData[r.session_id].status === 'sent' ? '#92400E' :
+                                 whatsappData[r.session_id].status === 'ready' ? '#3730A3' :
+                                 '#374151',
+                          border: `1px solid ${
+                            whatsappData[r.session_id].status === 'qualified' ? '#10B981' :
+                            whatsappData[r.session_id].status === 'disqualified' ? '#EF4444' :
+                            whatsappData[r.session_id].status === 'active' ? '#3B82F6' :
+                            whatsappData[r.session_id].status === 'sent' ? '#F59E0B' :
+                            whatsappData[r.session_id].status === 'ready' ? '#6366F1' :
+                            '#D1D5DB'
+                          }`
+                        }}>
+                          <MessageSquare size={14} />
+                          <span>
+                            {whatsappData[r.session_id].status === 'ready' ? 'Pronto' :
+                             whatsappData[r.session_id].status === 'sent' ? 'Inviato' :
+                             whatsappData[r.session_id].status === 'active' ? 'Attivo' :
+                             whatsappData[r.session_id].status === 'qualified' ? 'Qualificato' :
+                             whatsappData[r.session_id].status === 'disqualified' ? 'Squalificato' :
+                             whatsappData[r.session_id].status}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    {/* WhatsApp Engage Button */}
+                    {whatsappData[r.session_id]?.status === 'ready' && whatsappData[r.session_id]?.phone_number && (
+                      <div style={{
+                        display: 'inline-block',
+                        marginLeft: '8px',
+                        marginTop: '4px'
+                      }}>
+                        <button
+                          onClick={() => engageCandidate(r.session_id, whatsappData[r.session_id].phone_number!)}
+                          disabled={engaging[r.session_id]}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            border: 'none',
+                            background: engaging[r.session_id] ? '#9CA3AF' : 'linear-gradient(135deg, #8B5CF6, #A78BFA)',
+                            color: 'white',
+                            cursor: engaging[r.session_id] ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.2s ease',
+                            opacity: engaging[r.session_id] ? 0.7 : 1
+                          }}
+                        >
+                          <Send size={14} />
+                          <span>{engaging[r.session_id] ? 'Invio...' : 'Ingaggia'}</span>
+                        </button>
                       </div>
                     )}
                     {/* Security Report Button */}
@@ -999,17 +1219,53 @@ export function Candidati() {
                     </button>
                     
                                 
-                    {/* --- BLOCCO DI LOGICA RIPRISTINATO DAL VECCHIO FILE --- */}
-                                  
-                    {/* Stato: Pronto per generare */}
-                    {(r.status === 'Evaluation pending' || r.status === 'Feedback pending' || r.status === 'Pronto per generare feedback' || r.status === 'Evaluation completed') && (
+                    {/* --- GESTIONE STATI FEEDBACK --- */}
+                    
+                    {/* PRIORITÀ 1: Stato batch - mostra placeholder informativo e disabilita generazione */}
+                    {(r.status?.includes('batch') || r.status === 'Feedback in coda batch (può richiedere fino a 24h)') && (
+                        <div style={{ 
+                          width: '120px',
+                          minHeight: '60px',
+                          padding: '8px 6px', 
+                          background: '#FEF3C7', 
+                          border: '2px solid #F59E0B', 
+                          borderRadius: 'var(--radius-md)', 
+                          display: 'flex', 
+                          flexDirection: 'column',
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          gap: '4px',
+                          textAlign: 'center'
+                        }}>
+                            <Clock size={16} color="#92400E" />
+                            <span style={{ 
+                              fontSize: '10px', 
+                              fontWeight: '600',
+                              color: '#92400E',
+                              lineHeight: '1.2'
+                            }}>
+                              In coda batch
+                            </span>
+                            <span style={{ 
+                              fontSize: '9px', 
+                              color: '#92400E',
+                              opacity: 0.8,
+                              lineHeight: '1.1'
+                            }}>
+                              Può richiedere fino a 24h
+                            </span>
+                        </div>
+                    )}
+                    
+                    {/* PRIORITÀ 2: Stato pronto per download - mostra bottone download */}
+                    {(r.status === 'Feedback pronto' || r.status === 'Feedback ready') && (
                         <button 
-                            onClick={() => handleGenerateFeedback(r.session_id)}
+                            onClick={() => downloadFeedback(r.session_id)}
                             style={{ 
                               width: '85px',
                               height: '60px',
                               padding: '8px 6px', 
-                              background: '#8B5CF6', 
+                              background: '#10B981', 
                               color: 'white', 
                               border: 'none', 
                               borderRadius: 'var(--radius-md)', 
@@ -1025,12 +1281,12 @@ export function Candidati() {
                               textAlign: 'center'
                             }}
                         >
-                            <Rocket size={14} />
-                            <span>Genera Feedback</span>
+                            <Download size={14} />
+                            <span>Download Feedback</span>
                         </button>
                     )}
-                
-                    {/* Stato: In elaborazione */}
+                    
+                    {/* PRIORITÀ 3: Stato in elaborazione */}
                     {r.status === 'Generazione feedback in corso...' && (
                         <button 
                             disabled 
@@ -1058,16 +1314,20 @@ export function Candidati() {
                             <span>In elaborazione</span>
                         </button>
                     )}
-                
-                    {/* Stato: Pronto per il download */}
-                    {(r.status === 'Feedback pronto' || r.status === 'Feedback ready') && (
+                    
+                    {/* PRIORITÀ 4: Stato pronto per generare - SOLO se NON è in batch e NON è già pronto */}
+                    {!r.status?.includes('batch') && 
+                     r.status !== 'Feedback pronto' && 
+                     r.status !== 'Feedback ready' &&
+                     r.status !== 'Generazione feedback in corso...' &&
+                     (r.status === 'Evaluation pending' || r.status === 'Feedback pending' || r.status === 'Pronto per generare feedback' || r.status === 'Evaluation completed') && (
                         <button 
-                            onClick={() => downloadFeedback(r.session_id)}
+                            onClick={() => handleGenerateFeedback(r.session_id)}
                             style={{ 
                               width: '85px',
                               height: '60px',
                               padding: '8px 6px', 
-                              background: '#10B981', 
+                              background: '#8B5CF6', 
                               color: 'white', 
                               border: 'none', 
                               borderRadius: 'var(--radius-md)', 
@@ -1083,8 +1343,8 @@ export function Candidati() {
                               textAlign: 'center'
                             }}
                         >
-                            <Download size={14} />
-                            <span>Download Feedback</span>
+                            <Rocket size={14} />
+                            <span>Genera Feedback</span>
                         </button>
                     )}
                 

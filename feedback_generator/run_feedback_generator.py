@@ -8,7 +8,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Import dei moduli necessari (tutti DOPO l'append)
 from services.data_manager import get_session_data, save_stage_output, save_pdf_report, db
-from .report_consolidator.consolidator import create_consolidated_report
 from .gap_analyzer.gap_identifier import identify_skill_gaps
 from .course_retriever.prompts_retriever import create_query_refinement_prompt
 from .pathway_architect.architect import create_final_feedback_content
@@ -36,43 +35,57 @@ def run_feedback_pipeline(session_id: str) -> str | None:
     target_role = session_data.get("position_id", "Ruolo non specificato")
     stages_data = session_data.get("stages", {})
     
-    # STEP 1: Consolidamento. Rimane NECESSARIO per l'analisi dei gap, che ha bisogno di una visione unificata.
-    consolidated_report = stages_data.get("consolidated_report")
+    # Verifica che i report necessari siano presenti
     original_cv_report = stages_data.get("cv_analysis_report")
     case_eval_report = stages_data.get("case_evaluation_report")
     
-    if not consolidated_report:
-        print("\n[STEP 1/5] Generazione report consolidato...")
-        if not original_cv_report or not case_eval_report:
-            print("Errore: Report di analisi CV o valutazione del caso mancanti.")
-            return None
-        consolidated_report = create_consolidated_report(original_cv_report, case_eval_report, language)
-        if not consolidated_report: return None
-        save_stage_output(session_id, "consolidated_report", consolidated_report)
-    else:
-        print("\n[STEP 1/5] Report consolidato già presente.")
+    if not original_cv_report or not case_eval_report:
+        print("Errore: Report di analisi CV o valutazione del caso mancanti.")
+        return None
 
-    # STEP 2: Identificazione Gap. Usa il report consolidato.
-    print("\n[STEP 2/5] Identificazione gap...")
-    gap_analysis = identify_skill_gaps(consolidated_report, language)
+    # STEP 1: Identificazione Gap (usa i due report separati)
+    print("\n[STEP 1/5] Identificazione gap...")
+    # Recupera language dalla posizione (verrà fatto più avanti, per ora usa default)
+    language = "it"
+    try:
+        if db is not None:
+            positions_collection = db["positions_data"]
+            pos_doc = positions_collection.find_one({"_id": target_role}, {"language": 1})
+            if pos_doc:
+                language = pos_doc.get("language", "it")
+    except Exception:
+        pass
+    
+    gap_analysis = identify_skill_gaps(original_cv_report, case_eval_report, language)
     if not gap_analysis: return None
     save_stage_output(session_id, "gap_analysis", gap_analysis.model_dump())
 
-    # STEP 3: Recupero Corsi. Invariato.
-    print("\n[STEP 3/5] Recupero corsi...")
+    # STEP 3: Recupero Corsi OTTIMIZZATO (batch search senza LLM refinement)
+    print("\n[STEP 3/5] Recupero corsi (ottimizzato - batch search)...")
     from .course_retriever.rag_service import get_rag_service
     rag_service = get_rag_service()
     
-    enriched_skill_families = []
+    # OTTIMIZZAZIONE: Crea query direttamente dai gap (senza LLM refinement)
+    queries = []
     for family in gap_analysis.skill_families:
-        family_name, gap_names = family.skill_family_gap, [g.skill_gap for g in family.skill_gaps]
-        system_prompt = {"it": "Sei un esperto di formazione.", "en": "You are a training expert."}
-        query = get_llm_response(create_query_refinement_prompt(family_name, gap_names, language), "gpt-4o-mini", system_prompt.get(language, system_prompt["it"]), temperature=0.1)
-        
-        retrieved_courses = rag_service.search(query, k=8)
-
+        # Crea query semplice: "skill_family + gap1 + gap2 + ..."
+        gap_names = [g.skill_gap for g in family.skill_gaps]
+        query = f"{family.skill_family_gap} {' '.join(gap_names)}"
+        queries.append(query)
+    
+    # OTTIMIZZAZIONE: Batch search (tutte le query in una volta - 1 encoding invece di 4)
+    if len(queries) > 1:
+        all_courses = rag_service.search_batch(queries, k=5)  # Batch: molto più veloce
+    elif len(queries) == 1:
+        all_courses = [rag_service.search(queries[0], k=5)]
+    else:
+        all_courses = []
+    
+    # Costruisci risultati
+    enriched_skill_families = []
+    for idx, family in enumerate(gap_analysis.skill_families):
         family_dict = family.model_dump()
-        family_dict["suggested_courses"] = retrieved_courses 
+        family_dict["suggested_courses"] = all_courses[idx] if idx < len(all_courses) else []
         enriched_skill_families.append(family_dict)
     
     enriched_gaps_content_str = json.dumps(
@@ -140,12 +153,14 @@ def run_feedback_pipeline(session_id: str) -> str | None:
     # STEP 4: Creazione Contenuto Report. Ora passiamo i report originali e separati.
     # STEP 4: Creazione contenuto report PDF (già presente nel file)
     print("\n[STEP 4/5] Creazione contenuto report PDF (nuova struttura)...")
+    # OTTIMIZZATO: Usa i due report separati invece del report consolidato
+    
     final_report_content = create_final_feedback_content(
         cv_analysis_report=original_cv_report,
         case_evaluation_report=case_eval_report,
         enriched_gaps_json_str=enriched_gaps_content_str,
         candidate_name=candidate_name,
-        target_role=target_role,
+        target_role=role_title,
         language=language
     )
     if not final_report_content: return None

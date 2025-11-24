@@ -11,6 +11,7 @@ SESSION_STATUS = {
     "INTERVIEW_COMPLETED": "Colloquio completato",
     "EVALUATION_COMPLETED": "Pronto per generare feedback",
     "FEEDBACK_GENERATION_IN_PROGRESS": "Generazione feedback in corso...",
+    "FEEDBACK_PENDING": "Feedback in coda batch (può richiedere fino a 24h)",
     "FEEDBACK_READY": "Feedback pronto",
     "FEEDBACK_GENERATION_FAILED": "Errore generazione feedback"
 }
@@ -71,6 +72,42 @@ def save_stage_output_tenant(session_id: str, stage_name: str, data_content: dic
         print(f"💾 Stage '{stage_name}' data saved for session {session_id} in tenant collection: {collection_name}")
     except Exception as e:
         print(f"Error saving stage '{stage_name}': {e}")
+
+
+def save_pdf_report_tenant(pdf_bytes: bytes, session_id: str, collection_name: str) -> str:
+    """
+    Save PDF feedback report for a session in tenant-specific directory structure.
+    
+    Args:
+        pdf_bytes: The PDF file content as bytes
+        session_id: The session ID
+        collection_name: The tenant collection name (e.g., "tenant_id_sessions")
+    
+    Returns:
+        The file path where the PDF was saved
+    """
+    try:
+        # Estrai tenant_id dal nome della collection
+        tenant_id = collection_name.replace("_sessions", "")
+        
+        # Crea directory tenant-specific per i PDF
+        output_dir = os.path.join("data", "sessions", tenant_id, session_id)
+        os.makedirs(output_dir, exist_ok=True)
+        
+        file_path = os.path.join(output_dir, "Report_Feedback_Candidato.pdf")
+        
+        # Salva il PDF
+        with open(file_path, "wb") as f:
+            f.write(pdf_bytes)
+        
+        print(f"📄 PDF salvato in: {file_path}")
+        return file_path
+        
+    except Exception as e:
+        print(f"❌ Errore nel salvataggio del PDF per sessione {session_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        return ""
 
 
 def _convert_objectids_to_strings(obj):
@@ -202,15 +239,40 @@ def list_completed_sessions_tenant(collection_name: str) -> list:
             download_info = stages.get("feedback_download", {})
             
             # 1. Partiamo dallo stato già salvato nel database
-            final_status = s.get("status") 
+            # PRIORITÀ: stages.status ha la precedenza su root status (perché è più aggiornato)
+            root_status = s.get("status")
+            stages_status = stages.get("status")
+            
+            # Usa stages_status se presente, altrimenti root_status
+            final_status = stages_status if stages_status else root_status
+            
+            # Debug: log per verificare lo status trovato
+            print(f"[DEBUG STATUS] Sessione {s.get('_id')}: root_status='{root_status}', stages_status='{stages_status}', final_status='{final_status}'")
+            
+            if final_status and "batch" in final_status.lower():
+                print(f"[DEBUG BATCH] Sessione {s.get('_id')} ha status batch: '{final_status}'")
 
             # 2. Logica di correzione per garantire coerenza
-            # Se il PDF esiste, lo stato DEVE essere "Feedback pronto", indipendentemente da tutto.
+            # PRIORITÀ 1: Se il PDF esiste, lo stato DEVE essere "Feedback pronto", indipendentemente da tutto.
             if stages.get("feedback_pdf_path"):
                 final_status = SESSION_STATUS["FEEDBACK_READY"] # "Feedback pronto"
-            # Se la valutazione c'è, ma lo stato è ancora vecchio, aggiorniamolo.
-            elif stages.get("case_evaluation_report") and (not final_status or final_status in [SESSION_STATUS["CREATED"], SESSION_STATUS["INTERVIEW_COMPLETED"], "initialized"]):
+                print(f"[DEBUG STATUS] Sessione {s.get('_id')}: PDF trovato, status impostato a FEEDBACK_READY")
+            # PRIORITÀ 2: IMPORTANTE - Rispettiamo lo stato FEEDBACK_PENDING se è già impostato
+            # Controlla sia il valore esatto che se contiene "batch" nel testo
+            elif final_status and ("batch" in final_status.lower() or final_status == SESSION_STATUS["FEEDBACK_PENDING"]):
+                # Manteniamo lo stato batch, non lo sovrascriviamo MAI
+                print(f"[DEBUG BATCH] ✅ MANTENUTO status batch per sessione {s.get('_id')}: '{final_status}'")
+                # NON fare nulla, mantieni final_status così com'è
+            # PRIORITÀ 3: Se la valutazione c'è, ma lo stato è ancora vecchio, aggiorniamolo.
+            # MA SOLO se non è già batch e non è già un stato valido!
+            elif stages.get("case_evaluation_report") and final_status and final_status in [SESSION_STATUS["CREATED"], SESSION_STATUS["INTERVIEW_COMPLETED"], "initialized"]:
+                # Solo se lo status è uno di questi vecchi stati, aggiornalo
                 final_status = SESSION_STATUS["EVALUATION_COMPLETED"] # "Pronto per generare feedback"
+                print(f"[DEBUG STATUS] Sessione {s.get('_id')}: Status aggiornato a EVALUATION_COMPLETED")
+            elif stages.get("case_evaluation_report") and not final_status:
+                # Se non c'è status, imposta quello di default
+                final_status = SESSION_STATUS["EVALUATION_COMPLETED"]
+                print(f"[DEBUG STATUS] Sessione {s.get('_id')}: Nessuno status trovato, impostato a EVALUATION_COMPLETED")
 
             results.append({
                 "session_id": s.get("_id"),

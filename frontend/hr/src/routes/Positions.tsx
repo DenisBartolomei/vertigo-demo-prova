@@ -5,6 +5,13 @@ import { Input } from '../components/ui/Input'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://vertigo-ai-backend-tbia7kjh7a-oc.a.run.app'
 
+interface InterviewConfig {
+  reasoning_steps: number
+  max_attempts: number
+  estimated_duration_minutes: number
+  max_questions: number
+}
+
 export function Positions() {
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -18,6 +25,19 @@ export function Positions() {
   const [isPreparing, setIsPreparing] = useState(false)
   const [isCreateFormExpanded, setIsCreateFormExpanded] = useState(false)
   const [expandedCriteria, setExpandedCriteria] = useState<Record<string, Set<number>>>({})
+  
+  // Interview configuration states
+  const [showInterviewConfig, setShowInterviewConfig] = useState(false)
+  const [interviewConfig, setInterviewConfig] = useState<InterviewConfig>({
+    reasoning_steps: 4,
+    max_attempts: 5,
+    estimated_duration_minutes: 35,
+    max_questions: 11
+  })
+  const [configLoading, setConfigLoading] = useState(false)
+  const [configSaving, setConfigSaving] = useState(false)
+  const [configMessage, setConfigMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+  
   const token = localStorage.getItem('hr_jwt')
 
   async function load() {
@@ -255,6 +275,79 @@ export function Positions() {
     setKbDocs(prev => prev.filter((_, i) => i !== idx))
   }
 
+  // Interview configuration functions
+  const loadInterviewConfig = async () => {
+    setConfigLoading(true)
+    try {
+      const response = await fetch(`${API_BASE}/interview-config`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setInterviewConfig(data)
+      }
+    } catch (error) {
+      console.error('Error loading config:', error)
+    } finally {
+      setConfigLoading(false)
+    }
+  }
+
+  const saveInterviewConfig = async () => {
+    setConfigSaving(true)
+    setConfigMessage(null)
+    
+    try {
+      const response = await fetch(`${API_BASE}/interview-config`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          reasoning_steps: interviewConfig.reasoning_steps,
+          max_attempts: interviewConfig.max_attempts
+        })
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setInterviewConfig(data)
+        setConfigMessage({ type: 'success', text: 'Configurazione salvata con successo!' })
+      } else {
+        const error = await response.json()
+        setConfigMessage({ type: 'error', text: error.detail || 'Errore nel salvataggio' })
+      }
+    } catch (error) {
+      setConfigMessage({ type: 'error', text: 'Errore di connessione' })
+    } finally {
+      setConfigSaving(false)
+    }
+  }
+
+  const updateInterviewConfig = (field: keyof InterviewConfig, value: number) => {
+    setInterviewConfig(prev => {
+      const updated = { ...prev, [field]: value }
+      
+      // Ricalcola automaticamente i valori derivati
+      if (field === 'reasoning_steps' || field === 'max_attempts') {
+        updated.estimated_duration_minutes = Math.round((updated.reasoning_steps * updated.max_attempts * 1.5) + 5)
+        updated.max_questions = (updated.reasoning_steps * 2) + 3
+      }
+      
+      return updated
+    })
+  }
+
+  useEffect(() => {
+    if (showInterviewConfig) {
+      loadInterviewConfig()
+    }
+  }, [showInterviewConfig])
+
   return (
     <div className="container" style={{ display: 'grid', gap: '32px', position: 'relative' }}>
       {/* Loading Notification - Non bloccante */}
@@ -335,9 +428,41 @@ export function Positions() {
         </div>
       )}
       
-      <div>
-        <h2>Annunci</h2>
-        <p className="muted">Crea e gestisci le posizioni lavorative per i colloqui dei candidati</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h2>Annunci</h2>
+          <p className="muted">Crea e gestisci le posizioni lavorative per i colloqui dei candidati</p>
+        </div>
+        <button
+          onClick={() => setShowInterviewConfig(true)}
+          style={{
+            background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
+            color: 'white',
+            border: 'none',
+            padding: '12px 24px',
+            borderRadius: '8px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'all 0.2s ease',
+            boxShadow: '0 2px 8px rgba(124, 58, 237, 0.2)',
+            marginTop: '8px'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-2px)'
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(124, 58, 237, 0.3)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)'
+            e.currentTarget.style.boxShadow = '0 2px 8px rgba(124, 58, 237, 0.2)'
+          }}
+        >
+          <Settings size={18} />
+          Configura colloqui
+        </button>
       </div>
       
       {/* Form */}
@@ -968,6 +1093,227 @@ export function Positions() {
           </div>
         )}
       </div>
+
+      {/* Interview Configuration Modal */}
+      {showInterviewConfig && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            padding: '20px'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowInterviewConfig(false)
+            }
+          }}
+        >
+          <div
+            className="card fade-in"
+            style={{
+              maxWidth: '700px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              position: 'relative'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setShowInterviewConfig(false)}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                background: 'transparent',
+                border: 'none',
+                fontSize: '24px',
+                cursor: 'pointer',
+                color: 'var(--text-secondary)',
+                padding: '4px',
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--bg-secondary)'
+                e.currentTarget.style.color = 'var(--text-primary)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent'
+                e.currentTarget.style.color = 'var(--text-secondary)'
+              }}
+            >
+              <X size={20} />
+            </button>
+
+            <div style={{ marginBottom: '24px' }}>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: 'var(--primary-purple)' }}>
+                Configurazione Interviste
+              </h2>
+              <p style={{ margin: '8px 0 0 0', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                Personalizza la durata e la complessità dei colloqui
+              </p>
+            </div>
+
+            {configMessage && (
+              <div style={{
+                marginBottom: '20px',
+                padding: '12px',
+                borderRadius: '8px',
+                backgroundColor: configMessage.type === 'success' ? '#d4edda' : '#f8d7da',
+                color: configMessage.type === 'success' ? '#155724' : '#721c24',
+                border: `1px solid ${configMessage.type === 'success' ? '#c3e6cb' : '#f5c6cb'}`
+              }}>
+                {configMessage.text}
+              </div>
+            )}
+
+            {configLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <Clock size={24} color="#9CA3AF" style={{ marginBottom: '8px' }} />
+                <div style={{ marginTop: '8px' }}>Caricamento configurazione...</div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: '24px' }}>
+                {/* Reasoning Steps */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '16px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '12px' }}>
+                    Numero di Reasoning Steps
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <input
+                      type="range"
+                      min="2"
+                      max="5"
+                      value={interviewConfig.reasoning_steps}
+                      onChange={(e) => updateInterviewConfig('reasoning_steps', parseInt(e.target.value))}
+                      style={{ flex: 1, height: '8px', borderRadius: '4px', background: '#e2e8f0' }}
+                    />
+                    <div style={{ 
+                      fontSize: '24px', 
+                      fontWeight: '700', 
+                      color: 'var(--primary-purple)',
+                      minWidth: '40px',
+                      textAlign: 'center'
+                    }}>
+                      {interviewConfig.reasoning_steps}
+                    </div>
+                  </div>
+                  <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginTop: '8px', lineHeight: '1.4' }}>
+                    I reasoning steps sono i passaggi logici che l'agente AI segue per guidare il candidato attraverso la risoluzione del case study.
+                  </p>
+                </div>
+
+                {/* Max Attempts */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '16px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '12px' }}>
+                    Tentativi Massimi per Step
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <input
+                      type="range"
+                      min="2"
+                      max="4"
+                      value={interviewConfig.max_attempts}
+                      onChange={(e) => updateInterviewConfig('max_attempts', parseInt(e.target.value))}
+                      style={{ flex: 1, height: '8px', borderRadius: '4px', background: '#e2e8f0' }}
+                    />
+                    <div style={{ 
+                      fontSize: '24px', 
+                      fontWeight: '700', 
+                      color: 'var(--primary-purple)',
+                      minWidth: '40px',
+                      textAlign: 'center'
+                    }}>
+                      {interviewConfig.max_attempts}
+                    </div>
+                  </div>
+                  <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginTop: '8px', lineHeight: '1.4' }}>
+                    Numero massimo di tentativi che l'agente intervistatore concede al candidato per completare ogni reasoning step.
+                  </p>
+                </div>
+
+                {/* Stime Calcolate */}
+                <div style={{ 
+                  padding: '20px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--border-light)',
+                  background: 'var(--bg-secondary)'
+                }}>
+                  <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>
+                    <BarChart3 size={18} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Stime Calcolate
+                  </h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div>
+                      <div style={{ fontSize: '12px', marginBottom: '4px', color: 'var(--text-secondary)' }}>Durata Stimata</div>
+                      <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-primary)' }}>{interviewConfig.estimated_duration_minutes} min</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '12px', marginBottom: '4px', color: 'var(--text-secondary)' }}>Domande Massime</div>
+                      <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-primary)' }}>{interviewConfig.max_questions}</div>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: '12px', marginTop: '12px', margin: '12px 0 0 0', color: 'var(--text-secondary)' }}>
+                    * Stima basata su 1.5 minuti per tentativo + 5 minuti per setup iniziale
+                  </p>
+                </div>
+
+                {/* Pulsante Salva */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                  <button
+                    onClick={() => setShowInterviewConfig(false)}
+                    style={{
+                      background: 'var(--bg-secondary)',
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--border-light)',
+                      padding: '12px 24px',
+                      borderRadius: '8px',
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    onClick={saveInterviewConfig}
+                    disabled={configSaving}
+                    style={{
+                      background: configSaving ? '#94a3b8' : 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))',
+                      color: 'white',
+                      border: 'none',
+                      padding: '12px 24px',
+                      borderRadius: '8px',
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      cursor: configSaving ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s ease',
+                      opacity: configSaving ? 0.7 : 1
+                    }}
+                  >
+                    {configSaving ? 'Salvataggio...' : 'Salva Configurazione'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

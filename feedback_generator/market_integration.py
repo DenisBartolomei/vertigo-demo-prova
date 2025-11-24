@@ -130,6 +130,12 @@ def run_market_benchmark_from_text(
                     # --- MODIFICA CHIAVE: Cattura i 3 valori restituiti ---
                     market_df, chart_cat_base64, market_skills_list = visualize_results(final_dossiers)
                     
+                    # Verifica che il grafico sia stato generato
+                    if chart_cat_base64:
+                        print(f"✓ Grafico Sunburst generato correttamente ({len(chart_cat_base64)} caratteri base64)")
+                    else:
+                        print("⚠ ATTENZIONE: Grafico Sunburst non generato (chart_cat_base64 è None)")
+                    
                     # Salva in cache se position_id disponibile per uso futuro
                     if position_id and market_df is not None:
                         offer_embedding = pipeline.offer_embedding
@@ -141,17 +147,23 @@ def run_market_benchmark_from_text(
                                 offer_embedding = offer_embedding.numpy().astype(np.float32)
                             else:
                                 offer_embedding = np.array(offer_embedding, dtype=np.float32)
-                            save_offer_benchmark_to_cache(
-                                position_id,
-                                offer_embedding,  # Già float32
-                                market_df,
-                                chart_cat_base64,
-                                market_skills_list,
-                                tenant_id=tenant_id,
-                                job_language=normalized_language,
-                                translated_for_benchmark=translated_for_benchmark,
-                                job_description_hash=benchmark_job_description_hash,
-                            )
+                            
+                            # Verifica che chart_cat_base64 sia presente prima di salvare
+                            if chart_cat_base64:
+                                save_offer_benchmark_to_cache(
+                                    position_id,
+                                    offer_embedding,  # Già float32
+                                    market_df,
+                                    chart_cat_base64,
+                                    market_skills_list,
+                                    tenant_id=tenant_id,
+                                    job_language=normalized_language,
+                                    translated_for_benchmark=translated_for_benchmark,
+                                    job_description_hash=benchmark_job_description_hash,
+                                )
+                                print(f"✓ Benchmark salvato in cache con grafico Sunburst per position_id: {position_id}")
+                            else:
+                                print(f"⚠ ATTENZIONE: Benchmark NON salvato perché chart_cat_base64 è None per position_id: {position_id}")
     
     # La logica che usa chart_path è stata rimossa, non serve più.
 
