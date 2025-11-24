@@ -53,8 +53,8 @@ spec:
           value: "production"
         resources:
           limits:
-            cpu: "2"
-            memory: "10Gi"
+            cpu: "4"
+            memory: "12Gi"
           requests:
-            cpu: "2"
-            memory: "10Gi"
+            cpu: "4"
+            memory: "12Gi"
