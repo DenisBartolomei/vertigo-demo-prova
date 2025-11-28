@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, Clock, Target, MessageCircle, Mail, Copy, Link2, CheckCircle2, FileText, Plus } from 'lucide-react'
+import { BarChart3, Clock, Target, MessageCircle, Mail, Copy, Link2, CheckCircle2, FileText, Plus, Send, MessageSquare } from 'lucide-react'
 import { BatchStatusMonitor } from '../components/BatchStatusMonitor'
 import { CreateSessionPanel } from '../components/CreateSessionPanel'
 import '../components/batch-components.css'
@@ -45,6 +45,8 @@ export function NuovaSessione() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [positions, setPositions] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [whatsappData, setWhatsappData] = useState<Record<string, { status?: string; phone_number?: string }>>({})
+  const [engaging, setEngaging] = useState<Record<string, boolean>>({})
   const token = localStorage.getItem('hr_jwt')
 
   async function loadSessions() {
@@ -94,6 +96,83 @@ export function NuovaSessione() {
     loadPositions()
   }, [])
 
+  // Load WhatsApp data when sessions change
+  useEffect(() => {
+    if (sessions.length > 0) {
+      loadWhatsappData(sessions)
+    }
+  }, [sessions])
+
+  async function loadWhatsappData(sessions: Session[]) {
+    const whatsappDataMap: Record<string, { status?: string; phone_number?: string }> = {}
+    
+    const promises = sessions.map(async (session) => {
+      try {
+        const res = await fetch(`${API_BASE}/whatsapp/session/${session.session_id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (res.ok) {
+          const data = await res.json()
+          whatsappDataMap[session.session_id] = {
+            status: data.whatsapp_status || 'ready',
+            phone_number: data.phone_number
+          }
+        } else if (res.status === 404) {
+          // Session might not have WhatsApp data yet, set default
+          whatsappDataMap[session.session_id] = {
+            status: 'ready',
+            phone_number: undefined
+          }
+        }
+      } catch (error) {
+        console.error(`Error loading WhatsApp data for ${session.session_id}:`, error)
+      }
+    })
+    
+    await Promise.all(promises)
+    setWhatsappData(whatsappDataMap)
+  }
+
+  async function engageCandidate(sessionId: string, phoneNumber: string) {
+    setEngaging(prev => ({ ...prev, [sessionId]: true }))
+    try {
+      const res = await fetch(`${API_BASE}/whatsapp/engage`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          phone_number: phoneNumber
+        })
+      })
+      
+      if (res.ok) {
+        const data = await res.json()
+        // Aggiorna lo stato locale
+        setWhatsappData(prev => ({
+          ...prev,
+          [sessionId]: {
+            ...prev[sessionId],
+            status: 'sent'
+          }
+        }))
+        alert('Messaggio WhatsApp inviato con successo!')
+        // Ricarica i dati
+        await loadSessions()
+      } else {
+        const errorData = await res.json().catch(() => ({}))
+        alert(`Errore nell'invio: ${errorData.detail || res.statusText}`)
+      }
+    } catch (error) {
+      console.error('Error engaging candidate:', error)
+      alert('Errore nell\'invio del messaggio WhatsApp')
+    } finally {
+      setEngaging(prev => ({ ...prev, [sessionId]: false }))
+    }
+  }
+
   // Panel upload functions
   const handleBatchUpload = async (files: File[], positionId: string) => {
     setBatchUploading(true)
@@ -130,6 +209,7 @@ export function NuovaSessione() {
     positionId: string
     candidateName: string
     candidateEmail: string
+    candidatePhone?: string
     cvFile: File
   }) => {
     try {
@@ -137,6 +217,9 @@ export function NuovaSessione() {
       formData.append('position_id', data.positionId)
       formData.append('candidate_name', data.candidateName)
       formData.append('candidate_email', data.candidateEmail)
+      if (data.candidatePhone) {
+        formData.append('candidate_phone', data.candidatePhone)
+      }
       formData.append('frontend_base_url', CANDIDATE_BASE)
       formData.append('cv_file', data.cvFile)
       
@@ -215,12 +298,15 @@ export function NuovaSessione() {
   }
 
   const getStatusColor = (status?: string) => {
-    switch (status) {
-      case 'initialized': return '#f59e0b'
-      case 'Colloquio da completare': return '#3b82f6'
-      case 'CV analysis failed': return '#ef4444'
-      default: return '#6b7280'
-    }
+    // Nuova nomenclatura stati
+    const statusLower = (status || '').toLowerCase()
+    if (statusLower.includes('cv analizzato')) return '#8B5CF6'  // Viola
+    if (statusLower.includes('ingaggiato')) return '#3b82f6'    // Blu
+    if (statusLower.includes('failed')) return '#ef4444'        // Rosso
+    // Legacy
+    if (status === 'initialized') return '#f59e0b'
+    if (status === 'Colloquio da completare') return '#3b82f6'
+    return '#6b7280'
   }
 
   const getStatusCategory = (session: Session): 'processing' | 'ready' | 'ongoing' => {
@@ -354,45 +440,128 @@ export function NuovaSessione() {
                   </div>
                 </div>
                 
-                {(session.interview_token || session.status === 'Colloquio da completare') && (
-                  <div className="card-actions">
-                    {session.interview_token ? (
-                      <button
-                        className="copy-token-btn"
-                        onClick={() => {
-                          navigator.clipboard.writeText(session.interview_token!)
-                          alert('Token copiato!')
-                        }}
-                      >
-                        <Copy size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Copia Token
-                      </button>
-                    ) : (
-                      <button
-                        className="generate-token-btn"
-                        onClick={() => {
-                          if (confirm('Generare token per questo candidato?')) {
-                            generateTokenForSession(session.session_id)
-                          }
-                        }}
-                      >
-                        <Link2 size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Genera Token
-                      </button>
-                    )}
-                    
-                    {!session.token_sent && (
-                      <button
-                        className="mark-sent-btn"
-                        onClick={() => {
-                          if (confirm('Confermi di aver inviato il token al candidato?')) {
-                            markTokenSent(session.session_id)
-                          }
-                        }}
-                      >
-                        <CheckCircle2 size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Marca Inviato
-                      </button>
-                    )}
-                  </div>
-                )}
+                <div className="card-actions">
+                  {/* WhatsApp Engage Button - Mostra se c'è numero e status è ready */}
+                  {whatsappData[session.session_id]?.phone_number && 
+                   whatsappData[session.session_id]?.status === 'ready' && (
+                    <button
+                      className="engage-whatsapp-btn"
+                      onClick={() => {
+                        if (confirm('Vuoi inviare il messaggio WhatsApp iniziale a questo candidato?')) {
+                          engageCandidate(session.session_id, whatsappData[session.session_id].phone_number!)
+                        }
+                      }}
+                      disabled={engaging[session.session_id]}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        border: 'none',
+                        background: engaging[session.session_id] 
+                          ? '#9CA3AF' 
+                          : 'linear-gradient(135deg, #8B5CF6, #A78BFA)',
+                        color: 'white',
+                        cursor: engaging[session.session_id] ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s ease',
+                        opacity: engaging[session.session_id] ? 0.7 : 1
+                      }}
+                    >
+                      <Send size={16} />
+                      <span>{engaging[session.session_id] ? 'Invio...' : 'Ingaggia WhatsApp'}</span>
+                    </button>
+                  )}
+                  
+                  {/* WhatsApp Status Badge */}
+                  {whatsappData[session.session_id]?.status && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      background: whatsappData[session.session_id].status === 'qualified' ? '#D1FAE5' :
+                                 whatsappData[session.session_id].status === 'disqualified' ? '#FEE2E2' :
+                                 whatsappData[session.session_id].status === 'active' ? '#DBEAFE' :
+                                 whatsappData[session.session_id].status === 'sent' ? '#FEF3C7' :
+                                 whatsappData[session.session_id].status === 'ready' ? '#E0E7FF' :
+                                 whatsappData[session.session_id].status === 'interrupted' ? '#FEE2E2' :
+                                 '#F3F4F6',
+                      color: whatsappData[session.session_id].status === 'qualified' ? '#065F46' :
+                             whatsappData[session.session_id].status === 'disqualified' ? '#991B1B' :
+                             whatsappData[session.session_id].status === 'active' ? '#1E40AF' :
+                             whatsappData[session.session_id].status === 'sent' ? '#92400E' :
+                             whatsappData[session.session_id].status === 'ready' ? '#3730A3' :
+                             whatsappData[session.session_id].status === 'interrupted' ? '#991B1B' :
+                             '#374151',
+                      border: `1px solid ${
+                        whatsappData[session.session_id].status === 'qualified' ? '#10B981' :
+                        whatsappData[session.session_id].status === 'disqualified' ? '#EF4444' :
+                        whatsappData[session.session_id].status === 'active' ? '#3B82F6' :
+                        whatsappData[session.session_id].status === 'sent' ? '#F59E0B' :
+                        whatsappData[session.session_id].status === 'ready' ? '#6366F1' :
+                        whatsappData[session.session_id].status === 'interrupted' ? '#EF4444' :
+                        '#D1D5DB'
+                      }`
+                    }}>
+                      <MessageSquare size={14} />
+                      <span>
+                        {whatsappData[session.session_id].status === 'ready' ? 'Pronto' :
+                         whatsappData[session.session_id].status === 'sent' ? 'Inviato' :
+                         whatsappData[session.session_id].status === 'active' ? 'Attivo' :
+                         whatsappData[session.session_id].status === 'qualified' ? 'Qualificato' :
+                         whatsappData[session.session_id].status === 'disqualified' ? 'Squalificato' :
+                         whatsappData[session.session_id].status === 'interrupted' ? 'Interrotto' :
+                         whatsappData[session.session_id].status}
+                      </span>
+                    </div>
+                  )}
+
+                  {(session.interview_token || session.status === 'Colloquio da completare') && (
+                    <>
+                      {session.interview_token ? (
+                        <button
+                          className="copy-token-btn"
+                          onClick={() => {
+                            navigator.clipboard.writeText(session.interview_token!)
+                            alert('Token copiato!')
+                          }}
+                        >
+                          <Copy size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Copia Token
+                        </button>
+                      ) : (
+                        <button
+                          className="generate-token-btn"
+                          onClick={() => {
+                            if (confirm('Generare token per questo candidato?')) {
+                              generateTokenForSession(session.session_id)
+                            }
+                          }}
+                        >
+                          <Link2 size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Genera Token
+                        </button>
+                      )}
+                      
+                      {!session.token_sent && (
+                        <button
+                          className="mark-sent-btn"
+                          onClick={() => {
+                            if (confirm('Confermi di aver inviato il token al candidato?')) {
+                              markTokenSent(session.session_id)
+                            }
+                          }}
+                        >
+                          <CheckCircle2 size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Marca Inviato
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
                 
                 {session.token_sent && session.token_sent_by && (
                   <div style={{

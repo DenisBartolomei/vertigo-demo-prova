@@ -54,12 +54,23 @@ def run_cv_analysis_pipeline(session_id: str) -> bool:
     # 4. Estrai i dati dal dizionario
     report_text = analysis_result.get("report_text")
     structured_experience = analysis_result.get("structured_experience")
+    candidate_name = analysis_result.get("candidate_name")
 
     # 5. Salva entrambi i risultati
     if report_text and "Errore" not in report_text:
         save_stage_output(session_id, "cv_analysis_report", report_text)
         save_stage_output(session_id, "parsed_experience", structured_experience)
         save_stage_output(session_id, "cv_analysis_status", "Completed")
+        
+        # 5.1 Salva candidate_name direttamente nel documento sessione (non in stages)
+        if candidate_name and db is not None:
+            sessions_collection = db["sessions"]
+            sessions_collection.update_one(
+                {"_id": session_id},
+                {"$set": {"candidate_name": candidate_name}}
+            )
+            print(f"  - Nome candidato salvato: {candidate_name}")
+        
         print(f"  - Analisi CV unificata completata e salvata per la sessione {session_id}.")
         return True
     else:

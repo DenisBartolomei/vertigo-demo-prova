@@ -5,6 +5,17 @@ from pydantic import BaseModel
 from typing import List
 import os
 import uuid
+import warnings
+import sys
+
+# Sopprimi warning tkinter da PyMuPDF (non bloccanti)
+warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*main thread is not in main loop.*")
+warnings.filterwarnings("ignore", message=".*Tcl_AsyncDelete.*")
+
+# Sopprimi anche gli errori "Exception ignored" per tkinter
+import logging
+logging.getLogger().setLevel(logging.ERROR)
+
 import fitz  # PyMuPDF
 from datetime import datetime
 import asyncio
@@ -65,7 +76,7 @@ from services.tenant_data_manager import (
     SESSION_STATUS
 )
 from services.batch_service import BatchService
-from services.email_parser import extract_email_from_text, extract_phone_from_text
+from services.email_parser import extract_email_from_text, extract_phone_from_text, extract_name_from_text
 from services.interview_config_service import (
     get_interview_config,
     save_interview_config,
@@ -120,6 +131,13 @@ class PositionPayload(BaseModel):
     seniority_level: str | None = None
     hr_special_needs: str | None = None
     knowledge_base: list[dict] | None = None
+    # WhatsApp/Recruiting specific fields
+    knockout_requirements: list[str] | None = None
+    ral: str | None = None
+    sede: str | None = None
+    smart_working: str | None = None
+    # Workflow type: "full" (WhatsApp + AI Interview) or "whatsapp_only" (solo pre-screening)
+    workflow_type: str = "full"
 
 
 class MessagePayload(BaseModel):
@@ -493,6 +511,77 @@ def get_position(position_id: str, auth_data=Depends(hr_auth)):
     if not doc:
         raise HTTPException(status_code=404, detail="Position not found")
     return doc
+
+
+@app.post("/positions/suggest-knockout")
+def suggest_knockout_requirements(payload: dict, auth_data=Depends(hr_auth)):
+    """
+    Analizza la job description e suggerisce requisiti knockout che sembrano mandatori
+    """
+    job_description = payload.get("job_description", "")
+    if not job_description:
+        return {"suggestions": []}
+    
+    from interviewer.llm_service import get_structured_llm_response
+    
+    system_prompt = """Sei un assistente HR che analizza annunci di lavoro e identifica requisiti obbligatori (knock-out).
+    
+I requisiti obbligatori sono quelli che:
+- Sono esplicitamente indicati come "obbligatorio", "richiesto", "necessario", "indispensabile"
+- Sono prerequisiti legali o normativi (es. patente, permesso di lavoro)
+- Sono fondamentali per svolgere il lavoro (es. laurea specifica, certificazione obbligatoria)
+
+NON includere:
+- Requisiti desiderabili o preferenziali
+- Soft skills generiche
+- Esperienza "preferibile" o "gradita"
+    
+Rispondi con un JSON contenente una lista di requisiti obbligatori estratti dall'annuncio."""
+    
+    prompt = f"""Analizza questo annuncio di lavoro e identifica i requisiti obbligatori (knock-out):
+
+ANNUNCIO:
+{job_description}
+
+Estrai SOLO i requisiti che sono esplicitamente indicati come obbligatori o che sono prerequisiti legali/fondamentali.
+Formatta ogni requisito in modo chiaro e conciso (es. "Possesso della patente B", "Laurea in Ingegneria Informatica", "Permesso di lavoro italiano valido").
+
+Rispondi con JSON nel formato:
+{{
+    "suggestions": ["requisito 1", "requisito 2", ...]
+}}"""
+    
+    try:
+        tool_schema = {
+            "type": "object",
+            "properties": {
+                "suggestions": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Lista di requisiti obbligatori estratti dall'annuncio"
+                }
+            },
+            "required": ["suggestions"]
+        }
+        
+        response_json = get_structured_llm_response(
+            prompt=prompt,
+            model="gpt-4",
+            system_prompt=system_prompt,
+            tool_name="suggest_knockout",
+            tool_schema=tool_schema,
+            temperature=0.3,
+            use_classification_client=True
+        )
+        
+        if response_json:
+            result = json.loads(response_json)
+            return {"suggestions": result.get("suggestions", [])}
+        
+        return {"suggestions": []}
+    except Exception as e:
+        print(f"Errore suggerimento knockout: {e}")
+        return {"suggestions": []}
 
 
 @app.get("/positions/{position_id}/benchmark")
@@ -978,9 +1067,9 @@ async def run_and_update_feedback_status(session_id: str, collection_name: str):
         result = await run_feedback_pipeline_tenant_async(session_id, collection_name)
         
         # Se il pipeline completa con successo (ritorna None), i dati sono pronti
-        # Marca la sessione come FEEDBACK_PENDING per la generazione batch
-        save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_PENDING"], collection_name)
-        print(f"✅ Dati preparati con successo per sessione {session_id}. Sessione marcata come FEEDBACK_PENDING per batch processing.")
+        # Marca la sessione come FEEDBACK_BATCH_PENDING per la generazione batch
+        save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_BATCH_PENDING"], collection_name)
+        print(f"✅ Dati preparati con successo per sessione {session_id}. Sessione marcata come FEEDBACK_BATCH_PENDING per batch processing.")
     except Exception as e:
         print(f"❌ [ERRORE] Preparazione dati fallita per sessione {session_id}: {e}")
         traceback.print_exc()
@@ -989,7 +1078,7 @@ async def run_and_update_feedback_status(session_id: str, collection_name: str):
 
 # Sessions (HR)
 @app.post("/sessions")
-async def create_session(position_id: str = Form(...), cv_file: UploadFile = File(...), candidate_email: str = Form(None), frontend_base_url: str = Form("") , auth_data=Depends(hr_auth)):
+async def create_session(position_id: str = Form(...), cv_file: UploadFile = File(...), candidate_email: str = Form(None), candidate_phone: str = Form(None), frontend_base_url: str = Form("") , auth_data=Depends(hr_auth)):
     collections = get_tenant_collections_from_auth(auth_data)
     session_id = str(uuid.uuid4())
     created = create_new_session_tenant(session_id, position_id, None, collections["sessions"], candidate_email)
@@ -1013,8 +1102,18 @@ async def create_session(position_id: str = Form(...), cv_file: UploadFile = Fil
 
     save_stage_output_tenant(session_id, "uploaded_cv_text", cv_text, collections["sessions"])
 
-    # Estrai telefono dal CV
-    candidate_phone = extract_phone_from_text(cv_text)
+    # Estrai nome candidato dal CV (best effort - verrà sovrascritto da LLM durante analisi)
+    candidate_name = extract_name_from_text(cv_text)
+    if candidate_name and db is not None:
+        db[collections["sessions"]].update_one(
+            {"_id": session_id},
+            {"$set": {"candidate_name": candidate_name}}
+        )
+        print(f"  - Nome candidato estratto (regex): {candidate_name}")
+
+    # Estrai telefono: usa quello fornito manualmente, altrimenti estrai dal CV
+    if not candidate_phone:
+        candidate_phone = extract_phone_from_text(cv_text)
     
     # Aggiorna sessione con telefono e stato WhatsApp se presente
     if candidate_phone and db is not None:
@@ -1094,14 +1193,15 @@ async def generate_feedback(session_id: str, background_tasks: BackgroundTasks, 
     
     # Check if already in progress (previene duplicati per la stessa sessione)
     current_status = stages.get("status")
-    if current_status == SESSION_STATUS["FEEDBACK_GENERATION_IN_PROGRESS"]:
+    if (current_status == SESSION_STATUS["FEEDBACK_IN_PROGRESS"] or 
+        current_status == SESSION_STATUS["FEEDBACK_GENERATION_IN_PROGRESS"]):
         raise HTTPException(
             status_code=409, 
             detail="Feedback generation is already in progress for this session. Please wait for it to complete."
         )
 
-    # 2. Imposta lo stato su "in corso" per dare un feedback immediato all'UI
-    save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_GENERATION_IN_PROGRESS"], collection_name)
+    # 2. Imposta lo stato su "Feedback in elaborazione" per dare un feedback immediato all'UI
+    save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_IN_PROGRESS"], collection_name)
     
     # 3. Aggiungi il compito pesante al background
     background_tasks.add_task(run_and_update_feedback_status, session_id, collection_name)
@@ -1110,7 +1210,7 @@ async def generate_feedback(session_id: str, background_tasks: BackgroundTasks, 
     return {
         "ok": True, 
         "message": "Feedback generation started. The process will run in the background.",
-        "status": SESSION_STATUS["FEEDBACK_GENERATION_IN_PROGRESS"]
+        "status": SESSION_STATUS["FEEDBACK_IN_PROGRESS"]
     }
 
 
@@ -1267,9 +1367,14 @@ def get_user_info(auth_data=Depends(hr_auth)):
 def get_dashboard_data(
     timeRange: str = "30d",
     positionFilter: str = "all",
+    workflowFilter: str = None,
     auth_data=Depends(hr_auth)
 ):
-    """Get comprehensive dashboard data for HR analytics with real recruitment indicators"""
+    """Get comprehensive dashboard data for HR analytics with real recruitment indicators
+    
+    Args:
+        workflowFilter: "full" per iter completo, "whatsapp_only" per solo screening WhatsApp
+    """
     tenant_id = auth_data.get("tenant_id")
     
     if not tenant_id:
@@ -1284,7 +1389,11 @@ def get_dashboard_data(
     if positionFilter not in ["all"] and not positionFilter:
         positionFilter = "all"
     
-    dashboard_data = get_dashboard_data_tenant(tenant_id, timeRange, positionFilter)
+    # Validate workflow filter
+    if workflowFilter and workflowFilter not in ["full", "whatsapp_only"]:
+        workflowFilter = None
+    
+    dashboard_data = get_dashboard_data_tenant(tenant_id, timeRange, positionFilter, workflowFilter)
     
     if not dashboard_data:
         raise HTTPException(status_code=500, detail="Failed to retrieve dashboard data")
@@ -2099,10 +2208,10 @@ async def bulk_upload_cvs(
             # 2. Estrai email e telefono con regex
             candidate_email = extract_email_from_text(cv_text)
             candidate_phone = extract_phone_from_text(cv_text)
+            candidate_name = extract_name_from_text(cv_text)
             
             # 3. Crea sessione
             session_id = str(uuid.uuid4())
-            candidate_name = file.filename.replace(".pdf", "").replace("_", " ")
             
             create_new_session_tenant(
                 session_id,  # positional
@@ -2131,13 +2240,18 @@ async def bulk_upload_cvs(
             if db is not None:
                 sessions_collection = db[collections["sessions"]]
                 update_data = {
-                    "tenant_id": tenant_id,  # CRITICO: Aggiungi tenant_id
-                    "batch_id": batch_id,
-                    "batch_date": batch_date,
-                    "is_new_batch": True,
+                        "tenant_id": tenant_id,  # CRITICO: Aggiungi tenant_id
+                        "batch_id": batch_id,
+                        "batch_date": batch_date,
+                        "is_new_batch": True,
                     "candidate_surname": "",  # Nuovo campo
                     "whatsapp_status": "ready" if candidate_phone else None
                 }
+                
+                # Aggiungi nome candidato se estratto
+                if candidate_name:
+                    update_data["candidate_name"] = candidate_name
+                    print(f"  - Nome candidato estratto (regex): {candidate_name}")
                 
                 # Aggiungi telefono se trovato
                 if candidate_phone:

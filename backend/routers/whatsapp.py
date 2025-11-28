@@ -21,8 +21,7 @@ from services.tenant_service import get_tenant_collections
 from backend.models.whatsapp import (
     WhatsappConfig,
     WhatsappStatus,
-    ChatMessage,
-    KnockoutRule
+    ChatMessage
 )
 from datetime import datetime
 
@@ -72,12 +71,36 @@ async def update_config(
 @router.get("/config/validate-credentials")
 async def validate_credentials(tenant_id: str = Depends(get_tenant_from_auth)):
     """Valida che le credenziali WhatsApp siano corrette"""
+    import os
+    
+    # Verifica prima se le variabili d'ambiente sono settate
+    api_token = os.getenv("WHATSAPP_API_TOKEN")
+    phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+    
+    if not api_token or not phone_number_id:
+        missing = []
+        if not api_token:
+            missing.append("WHATSAPP_API_TOKEN")
+        if not phone_number_id:
+            missing.append("WHATSAPP_PHONE_NUMBER_ID")
+        return {
+            "valid": False,
+            "error": f"Variabili d'ambiente mancanti: {', '.join(missing)}. Configurale su Cloud Run."
+        }
+    
     try:
         client = WhatsAppClient()
         is_valid = client.validate_credentials()
-        return {"valid": is_valid}
-    except Exception as e:
+        if not is_valid:
+            return {
+                "valid": False,
+                "error": "Credenziali non valide. Verifica che WHATSAPP_API_TOKEN e WHATSAPP_PHONE_NUMBER_ID siano corretti."
+            }
+        return {"valid": True}
+    except ValueError as e:
         return {"valid": False, "error": str(e)}
+    except Exception as e:
+        return {"valid": False, "error": f"Errore validazione: {str(e)}"}
 
 
 # ========== INGAGGIO CANDIDATO ==========
@@ -105,6 +128,50 @@ async def engage_candidate(
     if not session:
         raise HTTPException(status_code=404, detail="Sessione non trovata")
     
+    # Recupera dati per le variabili del template
+    raw_candidate_name = session.get("candidate_name") or ""
+    position_id = session.get("position_id")
+    
+    # Estrai primo nome del candidato (con fallback sicuro)
+    candidate_first_name = "Candidato"
+    if raw_candidate_name and raw_candidate_name.strip():
+        parts = raw_candidate_name.strip().split()
+        if parts and parts[0]:
+            candidate_first_name = parts[0]
+    
+    # Recupera nome posizione
+    position_name = "la posizione"
+    if position_id:
+        from services.tenant_data_manager import get_single_position_data_tenant
+        print(f"🔍 Cercando posizione: position_id='{position_id}', collection='{collections['positions']}'")
+        position_data = get_single_position_data_tenant(position_id, collections["positions"])
+        print(f"🔍 Risultato posizione: {position_data}")
+        if position_data:
+            pos_name = position_data.get("name")
+            if pos_name and pos_name.strip():
+                position_name = pos_name.strip()
+        else:
+            # Prova a cercare anche con campo "id" invece di "_id"
+            from services.data_manager import db
+            alt_position = db[collections["positions"]].find_one({"id": position_id})
+            print(f"🔍 Ricerca alternativa con 'id': {alt_position}")
+            if alt_position:
+                pos_name = alt_position.get("name")
+                if pos_name and pos_name.strip():
+                    position_name = pos_name.strip()
+    
+    # Recupera nome azienda dal tenant
+    from services.tenant_service import get_tenant_by_id
+    tenant_data = get_tenant_by_id(tenant_id)
+    company_name = "l'azienda"
+    if tenant_data:
+        comp_name = tenant_data.get("company_name")
+        if comp_name and comp_name.strip():
+            company_name = comp_name.strip()
+    
+    # Log per debug
+    print(f"📱 Template vars: candidate='{candidate_first_name}', company='{company_name}', position='{position_name}'")
+    
     # Carica configurazione
     config = get_whatsapp_config_or_default(tenant_id)
     
@@ -124,17 +191,16 @@ async def engage_candidate(
         # Invia template message
         client = WhatsAppClient()
         
-        # Estrai nome candidato se disponibile
-        candidate_name = session.get("candidate_name", "Candidato")
+        # Costruisci components con le 3 variabili NOMINATE del template
+        # Template usa: {{nome_candidato}}, {{nome_azienda}}, {{posizione}}
         components = [{
             "type": "body",
             "parameters": [
-                {
-                    "type": "text",
-                    "text": candidate_name.split()[0] if candidate_name else "Candidato"
-                }
+                {"type": "text", "parameter_name": "nome_candidato", "text": candidate_first_name},
+                {"type": "text", "parameter_name": "nome_azienda", "text": company_name},
+                {"type": "text", "parameter_name": "posizione", "text": position_name}
             ]
-        }] if candidate_name else None
+        }]
         
         response = client.send_template_message(
             to=phone,
@@ -179,19 +245,24 @@ async def engage_candidate(
 # ========== WEBHOOK ENDPOINTS ==========
 
 @router.get("/webhook")
-async def webhook_verify(
-    hub_mode: str,
-    hub_verify_token: str,
-    hub_challenge: str
-):
+async def webhook_verify(request: Request):
     """
     Endpoint per la verifica del webhook da parte di Meta
     Meta chiama questo endpoint quando configuri il webhook nella dashboard
     """
+    # Meta usa parametri con il punto: hub.mode, hub.verify_token, hub.challenge
+    hub_mode = request.query_params.get("hub.mode")
+    hub_verify_token = request.query_params.get("hub.verify_token")
+    hub_challenge = request.query_params.get("hub.challenge")
+    
     verify_token = os.getenv("WHATSAPP_VERIFY_TOKEN")
     
+    print(f"Webhook verify request: mode={hub_mode}, token_match={hub_verify_token == verify_token}")
+    
     if hub_mode == "subscribe" and hub_verify_token == verify_token:
-        return int(hub_challenge)
+        # Restituisci la challenge come testo semplice (non JSON)
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(content=hub_challenge)
     else:
         raise HTTPException(status_code=403, detail="Verification failed")
 
@@ -291,11 +362,29 @@ async def handle_incoming_message(message: Dict[str, Any], value: Dict[str, Any]
     
     # Processa messaggio con AI
     try:
-        response_text, new_status, is_qualified = process_whatsapp_message(
+        # Recupera dati dalla sessione
+        stages = session.get("stages", {}) if session else {}
+        interview_token = stages.get("interview_token")
+        position_id = session.get("position_id") if session else None
+        cv_text = stages.get("uploaded_cv_text")  # Testo originale del CV
+        # NOTA: cv_analysis_report rimosso per risparmio token
+        
+        # Carica dati posizione se disponibile
+        position_data = None
+        if position_id:
+            from services.tenant_data_manager import get_single_position_data_tenant
+            position_data = get_single_position_data_tenant(position_id, collections["positions"])
+        
+        response_text, new_status, is_qualified, interruption_reason = process_whatsapp_message(
             config=config,
             user_message=text,
             conversation_history=conversation_history,
-            candidate_name=candidate_name
+            candidate_name=candidate_name,
+            interview_token=interview_token,
+            position_id=position_id,
+            tenant_id=tenant_id,
+            cv_text=cv_text,  # Testo CV per conversazione naturale
+            position_data=position_data
         )
         
         # Invia risposta
@@ -319,14 +408,51 @@ async def handle_incoming_message(message: Dict[str, Any], value: Dict[str, Any]
             bot_message
         )
         
-        # Se qualificato o squalificato, salva il risultato nella sessione
-        if is_qualified is not None:
+        # Se qualificato, squalificato o interrotto, salva il risultato nella sessione
+        if is_qualified is not None or final_status == WhatsappStatus.INTERRUPTED:
+            update_data = {
+                "whatsapp_screening_completed_at": datetime.utcnow()
+            }
+            
+            if final_status == WhatsappStatus.INTERRUPTED:
+                update_data["whatsapp_screening_result"] = "interrupted"
+                update_data["interruption_reason"] = interruption_reason or "unknown"
+                # Allinea whatsapp_status con il risultato
+                update_data["whatsapp_status"] = "interrupted"
+            elif is_qualified is not None:
+                update_data["whatsapp_screening_result"] = "qualified" if is_qualified else "disqualified"
+                
+                # ALLINEA whatsapp_status con il risultato dello screening
+                if is_qualified:
+                    # Se qualificato, aggiorna whatsapp_status a "qualified"
+                    update_data["whatsapp_status"] = "qualified"
+                    # Aggiorna anche lo stato tramite la funzione dedicata per coerenza
+                    update_session_whatsapp_status(
+                        session_id,
+                        tenant_id,
+                        WhatsappStatus.QUALIFIED,
+                        None  # Nessun nuovo messaggio da aggiungere
+                    )
+                else:
+                    # Se disqualified, aggiorna whatsapp_status
+                    update_data["whatsapp_status"] = "disqualified"
+                    update_session_whatsapp_status(
+                        session_id,
+                        tenant_id,
+                        WhatsappStatus.DISQUALIFIED,
+                        None
+                    )
+                
+                # Se qualificato, marca automaticamente il token come inviato (l'agente lo ha mandato autonomamente)
+                if is_qualified:
+                    update_data["downloaded_at"] = datetime.utcnow().isoformat()
+                    update_data["downloaded_by"] = "whatsapp_agent"
+                    update_data["downloaded_by_name"] = "WhatsApp Agent"
+                    print(f"✅ Token marcato come inviato automaticamente per sessione {session_id} (qualificato via WhatsApp)")
+            
             db[collections["sessions"]].update_one(
                 {"_id": session_id},
-                {"$set": {
-                    "whatsapp_screening_result": "qualified" if is_qualified else "disqualified",
-                    "whatsapp_screening_completed_at": datetime.utcnow()
-                }}
+                {"$set": update_data}
             )
         
     except Exception as e:

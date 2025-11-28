@@ -119,3 +119,83 @@ def is_placeholder_email(email: str) -> bool:
     """
     return email.endswith('@batch.local') and email.startswith('pending-')
 
+
+def extract_name_from_text(cv_text: str) -> Optional[str]:
+    """
+    Estrae nome e cognome dal CV usando euristiche.
+    Cerca nella prima riga non vuota (tipicamente contiene il nome).
+    
+    Questa funzione fornisce un'estrazione veloce (best effort) che sarà
+    successivamente sovrascritta dal nome estratto via LLM durante l'analisi CV.
+    
+    Args:
+        cv_text: Testo estratto dal CV
+        
+    Returns:
+        Nome candidato trovato o None se non riconosciuto
+    """
+    if not cv_text or not isinstance(cv_text, str):
+        return None
+    
+    # Pulisci il testo e dividi in linee
+    lines = cv_text.strip().split('\n')
+    
+    # Cerca pattern espliciti tipo "Nome: Mario" o "Name: John"
+    name_patterns = [
+        r'(?:nome|name|nominativo)[\s:]+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)+)',
+        r'(?:cognome|surname|family name)[\s:]+([A-Za-zÀ-ÿ]+)',
+    ]
+    
+    for pattern in name_patterns:
+        match = re.search(pattern, cv_text, re.IGNORECASE)
+        if match:
+            name = match.group(1).strip()
+            if len(name) >= 3 and len(name) < 50:
+                return name.title()
+    
+    # Cerca nelle prime 5 righe una che sembri un nome
+    for line in lines[:5]:
+        line = line.strip()
+        
+        # Skip linee vuote o troppo corte
+        if not line or len(line) < 3:
+            continue
+        
+        # Skip linee che contengono email
+        if '@' in line:
+            continue
+        
+        # Skip linee con molti numeri (telefono, indirizzi)
+        if re.search(r'\d{5,}', line) or re.search(r'\d{2,}[-./]\d{2,}', line):
+            continue
+        
+        # Skip linee che sembrano titoli di sezione (tutte maiuscole, iniziano con simboli, etc.)
+        if line.isupper() and len(line) > 20:
+            continue
+        if line.startswith(('-', '•', '*', '>', '|')):
+            continue
+        
+        # Skip parole chiave comuni di CV
+        skip_keywords = [
+            'curriculum', 'vitae', 'cv', 'resume', 'profile', 'summary', 
+            'profilo', 'sommario', 'esperienza', 'experience', 'education',
+            'formazione', 'skills', 'competenze', 'contatti', 'contacts',
+            'indirizzo', 'address', 'via', 'street'
+        ]
+        line_lower = line.lower()
+        if any(kw in line_lower for kw in skip_keywords):
+            continue
+        
+        # Verifica che la linea contenga principalmente lettere e spazi
+        # Pattern: Nome Cognome (2-4 parole, ciascuna con almeno 2 caratteri)
+        if re.match(r'^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\'\-\.]+(?:\s+[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\'\-\.]+){0,3}$', line):
+            # Conta le parole
+            words = line.split()
+            if 1 <= len(words) <= 4:
+                # Verifica che ogni parola abbia almeno 2 caratteri
+                if all(len(w) >= 2 for w in words):
+                    # Sembra un nome valido
+                    return line.title()
+    
+    return None
+

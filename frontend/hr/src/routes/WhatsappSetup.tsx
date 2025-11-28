@@ -1,13 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Settings, Save, CheckCircle2, AlertCircle, Plus, Trash2, MessageSquare } from 'lucide-react'
+import { Settings, Save, CheckCircle2, AlertCircle } from 'lucide-react'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://vertigo-ai-backend-tbia7kjh7a-oc.a.run.app'
-
-interface KnockoutRule {
-  question: string
-  expected_answer: string
-  rejection_message: string
-}
 
 interface WhatsappConfig {
   tenant_id: string
@@ -15,8 +9,6 @@ interface WhatsappConfig {
   tone: 'formal' | 'friendly' | 'enthusiastic'
   language: string
   template_name: string | null
-  knockout_rules: KnockoutRule[]
-  screening_questions: string[]
   knowledge_base: Record<string, any>
 }
 
@@ -27,8 +19,6 @@ export function WhatsappSetup() {
     tone: 'friendly',
     language: 'it',
     template_name: null,
-    knockout_rules: [],
-    screening_questions: [],
     knowledge_base: {}
   })
   const [loading, setLoading] = useState(true)
@@ -52,7 +42,20 @@ export function WhatsappSetup() {
       
       if (response.ok) {
         const data = await response.json()
-        setConfig(data)
+        
+        // Normalizza il codice lingua: "en" -> "en_US" per retrocompatibilità
+        let normalizedLanguage = data.language || 'it'
+        if (normalizedLanguage === 'en') {
+          normalizedLanguage = 'en_US'
+        }
+        
+        // Merge con valori di default per gestire campi mancanti
+        setConfig(prev => ({
+          ...prev,
+          ...data,
+          language: normalizedLanguage,
+          knowledge_base: data.knowledge_base || {}
+        }))
       }
     } catch (error) {
       console.error('Error loading config:', error)
@@ -105,50 +108,6 @@ export function WhatsappSetup() {
     } finally {
       setSaving(false)
     }
-  }
-
-  const addKnockoutRule = () => {
-    setConfig(prev => ({
-      ...prev,
-      knockout_rules: [...prev.knockout_rules, { question: '', expected_answer: '', rejection_message: '' }]
-    }))
-  }
-
-  const updateKnockoutRule = (index: number, field: keyof KnockoutRule, value: string) => {
-    setConfig(prev => {
-      const updated = [...prev.knockout_rules]
-      updated[index] = { ...updated[index], [field]: value }
-      return { ...prev, knockout_rules: updated }
-    })
-  }
-
-  const removeKnockoutRule = (index: number) => {
-    setConfig(prev => ({
-      ...prev,
-      knockout_rules: prev.knockout_rules.filter((_, i) => i !== index)
-    }))
-  }
-
-  const addScreeningQuestion = () => {
-    setConfig(prev => ({
-      ...prev,
-      screening_questions: [...prev.screening_questions, '']
-    }))
-  }
-
-  const updateScreeningQuestion = (index: number, value: string) => {
-    setConfig(prev => {
-      const updated = [...prev.screening_questions]
-      updated[index] = value
-      return { ...prev, screening_questions: updated }
-    })
-  }
-
-  const removeScreeningQuestion = (index: number) => {
-    setConfig(prev => ({
-      ...prev,
-      screening_questions: prev.screening_questions.filter((_, i) => i !== index)
-    }))
   }
 
   const updateKnowledgeBase = (key: string, value: string) => {
@@ -224,7 +183,7 @@ export function WhatsappSetup() {
         <div style={{ display: 'grid', gap: '20px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '8px' }}>
-              Nome del Bot
+              Nome dell'Agente AI
             </label>
             <input
               type="text"
@@ -264,7 +223,7 @@ export function WhatsappSetup() {
 
           <div>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '8px' }}>
-              Lingua di Default
+              Lingua Template WhatsApp Business
             </label>
             <select
               value={config.language}
@@ -277,9 +236,12 @@ export function WhatsappSetup() {
                 fontSize: '14px'
               }}
             >
-              <option value="it">Italiano</option>
-              <option value="en">Inglese</option>
+              <option value="it">Italiano (it)</option>
+              <option value="en_US">Inglese (en_US)</option>
             </select>
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              Codice lingua per i template WhatsApp Business. Italiano usa "it", Inglese usa "en_US"
+            </p>
           </div>
 
           <div>
@@ -306,298 +268,47 @@ export function WhatsappSetup() {
         </div>
       </div>
 
-      {/* Regole Knock-out */}
-      <div className="card fade-in">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: 'var(--primary-purple)' }}>
-            Criteri Obbligatori (Knock-out)
-          </h2>
-          <button
-            onClick={addKnockoutRule}
-            style={{
-              padding: '8px 16px',
-              background: 'var(--primary-purple)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            <Plus size={16} />
-            Aggiungi Regola
-          </button>
-        </div>
-
-        <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-          Se il candidato non risponde correttamente a queste domande, viene automaticamente squalificato
-        </p>
-
-        {config.knockout_rules.length === 0 ? (
-          <div style={{ 
-            padding: '24px', 
-            textAlign: 'center', 
-            background: 'var(--bg-secondary)', 
-            borderRadius: '8px',
-            color: 'var(--text-secondary)'
-          }}>
-            Nessuna regola knock-out configurata
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gap: '16px' }}>
-            {config.knockout_rules.map((rule, index) => (
-              <div key={index} style={{
-                padding: '16px',
-                background: 'var(--bg-secondary)',
-                borderRadius: '8px',
-                border: '1px solid var(--border-light)'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>
-                    Regola {index + 1}
-                  </span>
-                  <button
-                    onClick={() => removeKnockoutRule(index)}
-                    style={{
-                      padding: '4px 8px',
-                      background: '#FEE2E2',
-                      color: '#991B1B',
-                      border: 'none',
-                      borderRadius: '4px',
-                      fontSize: '12px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-                <div style={{ display: 'grid', gap: '12px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '4px' }}>
-                      Domanda
-                    </label>
-                    <input
-                      type="text"
-                      value={rule.question}
-                      onChange={(e) => updateKnockoutRule(index, 'question', e.target.value)}
-                      placeholder="es. Hai la patente B?"
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        borderRadius: '6px',
-                        border: '1px solid var(--border-light)',
-                        fontSize: '14px'
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '4px' }}>
-                      Risposta Attesa (parola chiave)
-                    </label>
-                    <input
-                      type="text"
-                      value={rule.expected_answer}
-                      onChange={(e) => updateKnockoutRule(index, 'expected_answer', e.target.value)}
-                      placeholder="es. sì, si, yes"
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        borderRadius: '6px',
-                        border: '1px solid var(--border-light)',
-                        fontSize: '14px'
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '4px' }}>
-                      Messaggio di Rifiuto
-                    </label>
-                    <textarea
-                      value={rule.rejection_message}
-                      onChange={(e) => updateKnockoutRule(index, 'rejection_message', e.target.value)}
-                      placeholder="es. Mi dispiace, per questo ruolo è necessaria la patente B."
-                      rows={2}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        borderRadius: '6px',
-                        border: '1px solid var(--border-light)',
-                        fontSize: '14px',
-                        resize: 'vertical'
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Domande Screening */}
-      <div className="card fade-in">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: 'var(--primary-purple)' }}>
-            Domande di Screening
-          </h2>
-          <button
-            onClick={addScreeningQuestion}
-            style={{
-              padding: '8px 16px',
-              background: 'var(--primary-purple)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            <Plus size={16} />
-            Aggiungi Domanda
-          </button>
-        </div>
-
-        <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-          Domande aperte che l'AI porrà al candidato durante la conversazione
-        </p>
-
-        {config.screening_questions.length === 0 ? (
-          <div style={{ 
-            padding: '24px', 
-            textAlign: 'center', 
-            background: 'var(--bg-secondary)', 
-            borderRadius: '8px',
-            color: 'var(--text-secondary)'
-          }}>
-            Nessuna domanda di screening configurata
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gap: '12px' }}>
-            {config.screening_questions.map((question, index) => (
-              <div key={index} style={{
-                display: 'flex',
-                gap: '8px',
-                alignItems: 'flex-start'
-              }}>
-                <input
-                  type="text"
-                  value={question}
-                  onChange={(e) => updateScreeningQuestion(index, e.target.value)}
-                  placeholder="es. Qual è il tuo preavviso attuale?"
-                  style={{
-                    flex: 1,
-                    padding: '10px',
-                    borderRadius: '6px',
-                    border: '1px solid var(--border-light)',
-                    fontSize: '14px'
-                  }}
-                />
-                <button
-                  onClick={() => removeScreeningQuestion(index)}
-                  style={{
-                    padding: '10px',
-                    background: '#FEE2E2',
-                    color: '#991B1B',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
       {/* Knowledge Base */}
       <div className="card fade-in">
         <h2 style={{ margin: '0 0 24px 0', fontSize: '20px', fontWeight: '600', color: 'var(--primary-purple)' }}>
-          Knowledge Base (Info Utili)
+          Knowledge Base Aziendale
         </h2>
 
         <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-          Informazioni che l'AI può usare per rispondere alle domande del candidato sulla posizione
+          Informazioni <strong>generiche dell'azienda</strong> che l'AI può usare per rispondere alle domande dei candidati. 
+          Le informazioni specifiche della posizione (RAL, sede, requisiti knockout, smart working) vengono prese automaticamente 
+          dalla <strong>sezione Annunci → Dettagli Posizione</strong>.
         </p>
 
         <div style={{ display: 'grid', gap: '16px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}>
-              RAL / Stipendio
-            </label>
-            <input
-              type="text"
-              value={config.knowledge_base.ral || ''}
-              onChange={(e) => updateKnowledgeBase('ral', e.target.value)}
-              placeholder="es. 30k-40k"
-              style={{
-                width: '100%',
-                padding: '12px',
-                borderRadius: '8px',
-                border: '1px solid var(--border-light)',
-                fontSize: '14px'
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}>
-              Sede / Location
-            </label>
-            <input
-              type="text"
-              value={config.knowledge_base.location || ''}
-              onChange={(e) => updateKnowledgeBase('location', e.target.value)}
-              placeholder="es. Milano Centro"
-              style={{
-                width: '100%',
-                padding: '12px',
-                borderRadius: '8px',
-                border: '1px solid var(--border-light)',
-                fontSize: '14px'
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}>
-              Smart Working / Remote Policy
-            </label>
-            <input
-              type="text"
-              value={config.knowledge_base.remote_policy || ''}
-              onChange={(e) => updateKnowledgeBase('remote_policy', e.target.value)}
-              placeholder="es. Ibrido 3+2"
-              style={{
-                width: '100%',
-                padding: '12px',
-                borderRadius: '8px',
-                border: '1px solid var(--border-light)',
-                fontSize: '14px'
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}>
-              Benefits
+              Benefits Aziendali
             </label>
             <textarea
               value={config.knowledge_base.benefits || ''}
               onChange={(e) => updateKnowledgeBase('benefits', e.target.value)}
-              placeholder="es. Buoni pasto, assicurazione sanitaria, palestra"
+              placeholder="es. Buoni pasto 8€, assicurazione sanitaria, abbonamento palestra, contributo spese bambini"
+              rows={4}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                border: '1px solid var(--border-light)',
+                fontSize: '14px',
+                resize: 'vertical'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}>
+              Info Azienda / Cultura
+            </label>
+            <textarea
+              value={config.knowledge_base.company_info || ''}
+              onChange={(e) => updateKnowledgeBase('company_info', e.target.value)}
+              placeholder="es. Azienda leader nel settore tech, ambiente giovane e dinamico, progetti internazionali"
               rows={3}
               style={{
                 width: '100%',
@@ -609,6 +320,60 @@ export function WhatsappSetup() {
               }}
             />
           </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}>
+              Processo di Selezione
+            </label>
+            <textarea
+              value={config.knowledge_base.hiring_process || ''}
+              onChange={(e) => updateKnowledgeBase('hiring_process', e.target.value)}
+              placeholder="es. 1) Pre-screening WhatsApp 2) Colloquio scritto 3) Colloquio tecnico 4) Offerta"
+              rows={3}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                border: '1px solid var(--border-light)',
+                fontSize: '14px',
+                resize: 'vertical'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}>
+              Altre Info Utili
+            </label>
+            <textarea
+              value={config.knowledge_base.other || ''}
+              onChange={(e) => updateKnowledgeBase('other', e.target.value)}
+              placeholder="es. Parcheggio gratuito, mensa aziendale, orari flessibili"
+              rows={2}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                border: '1px solid var(--border-light)',
+                fontSize: '14px',
+                resize: 'vertical'
+              }}
+            />
+          </div>
+        </div>
+
+        <div style={{ 
+          marginTop: '20px', 
+          padding: '12px', 
+          background: 'linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%)', 
+          borderRadius: '8px',
+          border: '1px solid #C7D2FE'
+        }}>
+          <p style={{ fontSize: '13px', color: '#4338CA', margin: 0 }}>
+            💡 <strong>Nota:</strong> RAL, sede, smart working e requisiti knockout sono configurati per ogni singola posizione 
+            nella sezione <strong>Annunci → Dettagli Posizione</strong>. L'agente WhatsApp li recupera automaticamente 
+            in base alla posizione per cui il candidato si è candidato.
+          </p>
         </div>
       </div>
 

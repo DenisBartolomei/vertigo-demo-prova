@@ -1,247 +1,397 @@
 [
   {
-    "ID": 28,
+    "ID": 13,
     "scartato": true,
-    "motivazione": "Esperienza branding, non CRM né marketing automation."
+    "motivazione": "Esperienza non in ambito software o tech, profilo troppo commerciale."
+  },
+  {
+    "ID": 19,
+    "scartato": true,
+    "motivazione": "Esperienza branding, manca background tecnico e gestione prodotto software."
+  },
+  {
+    "ID": 1,
+    "scartato": true,
+    "motivazione": "Branding e licensing, nessuna esperienza in prodotto software o tech."
+  },
+  {
+    "ID": 4,
+    "scartato": true,
+    "motivazione": "Solo marketing/branding, nessuna esperienza prodotto software o tech."
   },
   {
     "ID": 30,
     "scartato": true,
-    "motivazione": "Esperienza brand, non CRM o automazione marketing."
+    "motivazione": "Junior, esperienza solo marketing, non in ambito tech o prodotto software."
   },
   {
-    "ID": 31,
+    "ID": 28,
     "scartato": true,
-    "motivazione": "Esperienza digital marketing, non CRM specialistico."
-  },
-  {
-    "ID": 33,
-    "scartato": true,
-    "motivazione": "Promozione digitale, non esperienza CRM o automation."
-  },
-  {
-    "ID": 34,
-    "scartato": true,
-    "motivazione": "Digital marketing, nessuna esperienza CRM o automation."
-  },
-  {
-    "ID": 36,
-    "scartato": true,
-    "motivazione": "Digital marketing, non CRM specialistico."
-  },
-  {
-    "ID": 37,
-    "scartato": true,
-    "motivazione": "Digital marketing, non CRM specialistico."
-  },
-  {
-    "ID": 38,
-    "scartato": true,
-    "motivazione": "Digital marketing, non CRM specialistico."
-  },
-  {
-    "ID": 40,
-    "scartato": true,
-    "motivazione": "Digital marketing, non CRM specialistico."
-  },
-  {
-    "ID": 41,
-    "scartato": true,
-    "motivazione": "Esperienza trade marketing, non CRM."
-  },
-  {
-    "ID": 42,
-    "scartato": true,
-    "motivazione": "Esperienza trade marketing, non CRM."
-  },
-  {
-    "ID": 43,
-    "scartato": true,
-    "motivazione": "E-commerce e digital marketing, non CRM."
-  },
-  {
-    "ID": 44,
-    "scartato": true,
-    "motivazione": "Digital marketing, non CRM specialistico."
-  },
-  {
-    "ID": 47,
-    "scartato": true,
-    "motivazione": "Digital marketing, non CRM specialistico."
-  },
-  {
-    "ID": 48,
-    "scartato": true,
-    "motivazione": "Digital marketing, non CRM specialistico."
-  },
-  {
-    "ID": 51,
-    "scartato": true,
-    "motivazione": "Digital marketing, non CRM specialistico."
+    "motivazione": "Brand manager automotive, nessuna esperienza prodotto software o tech."
   },
   {
     "ID": 55,
     "scartato": true,
-    "motivazione": "Responsabile marketing, non CRM specialistico."
+    "motivazione": "Profilo marketing, manca esperienza prodotto software e background tecnico."
   },
   {
-    "ID": 57,
+    "ID": 8,
     "scartato": true,
-    "motivazione": "Digital marketing, non CRM specialistico."
+    "motivazione": "Esperienza retail branding, non in prodotto software o tech."
   },
   {
-    "ID": 60,
+    "ID": 16,
     "scartato": true,
-    "motivazione": "Digital marketing, non CRM specialistico."
+    "motivazione": "Solo branding/marketing, nessuna esperienza prodotto software o tech."
+  },
+  {
+    "ID": 38,
+    "scartato": true,
+    "motivazione": "Digital marketing, non gestione prodotto software o tech."
+  },
+  {
+    "ID": 5,
+    "scartato": true,
+    "motivazione": "Solo branding/marketing, nessuna esperienza prodotto software o tech."
+  },
+  {
+    "ID": 12,
+    "scartato": true,
+    "motivazione": "Brand manager automotive, manca esperienza prodotto software o tech."
+  },
+  {
+    "ID": 14,
+    "scartato": true,
+    "motivazione": "Solo branding/marketing, nessuna esperienza prodotto software o tech."
+  },
+  {
+    "ID": 24,
+    "scartato": true,
+    "motivazione": "Junior, solo digital marketing, non prodotto software o tech."
+  },
+  {
+    "ID": 9,
+    "scartato": true,
+    "motivazione": "Solo branding/marketing, nessuna esperienza prodotto software o tech."
+  },
+  {
+    "ID": 53,
+    "scartato": false,
+    "motivazione": "Esperienza project management tech, gestione progetti IT internazionali."
+  },
+  {
+    "ID": 10,
+    "scartato": true,
+    "motivazione": "Solo branding/marketing, nessuna esperienza prodotto software o tech."
+  },
+  {
+    "ID": 22,
+    "scartato": true,
+    "motivazione": "Brand manager moda, manca esperienza prodotto software o tech."
+  },
+  {
+    "ID": 23,
+    "scartato": true,
+    "motivazione": "Brand manager moda, manca esperienza prodotto software o tech."
+  },
+  {
+    "ID": 20,
+    "scartato": true,
+    "motivazione": "Marketing manager, non gestione prodotto software o tech."
+  },
+  {
+    "ID": 109,
+    "scartato": false,
+    "motivazione": "Senior IT project manager, esperienza gestione progetti tech complessi."
+  },
+  {
+    "ID": 132,
+    "scartato": false,
+    "motivazione": "Esperienza project management digitale, gestione team e sviluppo soluzioni tech."
+  },
+  {
+    "ID": 112,
+    "scartato": false,
+    "motivazione": "Esperienza project management IT, gestione piattaforme e team tecnici."
+  },
+  {
+    "ID": 114,
+    "scartato": false,
+    "motivazione": "Senior IT analyst, esperienza sviluppo software e coordinamento team."
+  },
+  {
+    "ID": 123,
+    "scartato": false,
+    "motivazione": "Project manager IT, esperienza in sviluppo e gestione prodotto tech."
+  },
+  {
+    "ID": 127,
+    "scartato": false,
+    "motivazione": "Project manager IT, esperienza in sviluppo e gestione prodotto tech."
+  },
+  {
+    "ID": 120,
+    "scartato": false,
+    "motivazione": "Project manager IT, esperienza in sviluppo e gestione prodotto tech."
+  },
+  {
+    "ID": 129,
+    "scartato": false,
+    "motivazione": "Project manager IT, esperienza in sviluppo e gestione prodotto tech."
+  },
+  {
+    "ID": 71,
+    "scartato": true,
+    "motivazione": "Consulente sostenibilità, nessuna esperienza prodotto software o tech."
+  },
+  {
+    "ID": 62,
+    "scartato": true,
+    "motivazione": "Consulente sostenibilità, nessuna esperienza prodotto software o tech."
+  },
+  {
+    "ID": 121,
+    "scartato": false,
+    "motivazione": "Team leader e analista tecnico, esperienza ciclo vita software."
+  },
+  {
+    "ID": 33,
+    "scartato": true,
+    "motivazione": "Profilo digital marketing, non gestione prodotto software o tech."
+  },
+  {
+    "ID": 117,
+    "scartato": false,
+    "motivazione": "Product owner e IT project manager, esperienza gestione prodotto digitale."
+  },
+  {
+    "ID": 119,
+    "scartato": false,
+    "motivazione": "Digital project manager, esperienza gestione progetti tech."
+  },
+  {
+    "ID": 118,
+    "scartato": false,
+    "motivazione": "Digital project manager, esperienza gestione progetti tech."
+  },
+  {
+    "ID": 131,
+    "scartato": true,
+    "motivazione": "Assistant project manager, ruolo troppo junior per la posizione."
+  },
+  {
+    "ID": 66,
+    "scartato": true,
+    "motivazione": "Consulente sostenibilità, nessuna esperienza prodotto software o tech."
+  },
+  {
+    "ID": 67,
+    "scartato": true,
+    "motivazione": "Consulente sostenibilità, nessuna esperienza prodotto software o tech."
+  },
+  {
+    "ID": 91,
+    "scartato": true,
+    "motivazione": "Consulente sostenibilità, nessuna esperienza prodotto software o tech."
+  },
+  {
+    "ID": 110,
+    "scartato": false,
+    "motivazione": "IT project manager, esperienza gestione progetti digitali complessi."
+  },
+  {
+    "ID": 86,
+    "scartato": false,
+    "motivazione": "Project manager strategico, esperienza gestione progetti tech e innovazione."
+  },
+  {
+    "ID": 126,
+    "scartato": false,
+    "motivazione": "Technical project manager, esperienza gestione progetti tech e CRM."
+  },
+  {
+    "ID": 149,
+    "scartato": true,
+    "motivazione": "Solo branding/marketing, nessuna esperienza prodotto software o tech."
+  },
+  {
+    "ID": 154,
+    "scartato": false,
+    "motivazione": "Product manager junior, esperienza gestione prodotto, anche se in moda."
+  },
+  {
+    "ID": 25,
+    "scartato": false,
+    "motivazione": "Fondatore startup tech, esperienza sviluppo prodotto e gestione team."
+  },
+  {
+    "ID": 122,
+    "scartato": false,
+    "motivazione": "Senior IT project manager, esperienza gestione progetti digitali complessi."
+  },
+  {
+    "ID": 158,
+    "scartato": true,
+    "motivazione": "Esperienza junior e settore giocattoli, non tech/software."
+  },
+  {
+    "ID": 145,
+    "scartato": false,
+    "motivazione": "Esperienza in product management tech/media, profilo coerente."
+  },
+  {
+    "ID": 146,
+    "scartato": false,
+    "motivazione": "Esperienza in product management, gestione ciclo di vita prodotto."
+  },
+  {
+    "ID": 141,
+    "scartato": false,
+    "motivazione": "Esperienza in product management B2C, digitale, e-commerce."
+  },
+  {
+    "ID": 138,
+    "scartato": true,
+    "motivazione": "Ruolo project manager IT, non product manager tech."
+  },
+  {
+    "ID": 165,
+    "scartato": false,
+    "motivazione": "Senior product manager in IT/telecomunicazioni, profilo idoneo."
+  },
+  {
+    "ID": 167,
+    "scartato": true,
+    "motivazione": "Esperienza solo settore moda, non tech/software."
+  },
+  {
+    "ID": 173,
+    "scartato": true,
+    "motivazione": "Analista strategico, non product manager tech."
+  },
+  {
+    "ID": 163,
+    "scartato": false,
+    "motivazione": "Product manager tech/digitale, esperienza coerente."
+  },
+  {
+    "ID": 168,
+    "scartato": false,
+    "motivazione": "Product manager tech/digitale, esperienza coerente."
+  },
+  {
+    "ID": 152,
+    "scartato": false,
+    "motivazione": "Product manager tech/digitale, esperienza coerente."
+  },
+  {
+    "ID": 170,
+    "scartato": true,
+    "motivazione": "Analista strategico moda, non product manager tech."
+  },
+  {
+    "ID": 137,
+    "scartato": true,
+    "motivazione": "Digital project manager, non product manager."
+  },
+  {
+    "ID": 161,
+    "scartato": false,
+    "motivazione": "Product manager tech/digitale, esperienza coerente."
+  },
+  {
+    "ID": 179,
+    "scartato": false,
+    "motivazione": "Esperienza in gestione prodotti tech consumer."
+  },
+  {
+    "ID": 142,
+    "scartato": true,
+    "motivazione": "Senior business manager, non product manager tech."
+  },
+  {
+    "ID": 144,
+    "scartato": false,
+    "motivazione": "Product manager tech/digitale, esperienza coerente."
+  },
+  {
+    "ID": 160,
+    "scartato": false,
+    "motivazione": "Product manager tech/digitale, esperienza coerente."
   },
   {
     "ID": 175,
     "scartato": true,
-    "motivazione": "Analisi strategica, non esperienza CRM."
+    "motivazione": "Analista strategico, non product manager tech."
   },
   {
-    "ID": 194,
+    "ID": 134,
     "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
+    "motivazione": "Project manager accademico, non product manager tech."
   },
   {
-    "ID": 197,
+    "ID": 136,
     "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
+    "motivazione": "IT analyst/programmer, non product manager."
   },
   {
-    "ID": 198,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 199,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 200,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 201,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 203,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 204,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 205,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 206,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 207,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 208,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 211,
-    "scartato": true,
-    "motivazione": "Product/trade marketing, non CRM specialistico."
-  },
-  {
-    "ID": 212,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 213,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 215,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 216,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 217,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 218,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 219,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 220,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 222,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 223,
-    "scartato": true,
-    "motivazione": "Trade marketing, nessuna esperienza CRM."
-  },
-  {
-    "ID": 224,
+    "ID": 156,
     "scartato": false,
-    "motivazione": "Esperienza diretta in CRM, campagne, analisi dati e segmentazione."
+    "motivazione": "Product manager tech/digitale, esperienza coerente."
   },
   {
-    "ID": 228,
+    "ID": 166,
     "scartato": false,
-    "motivazione": "Esperienza avanzata in CRM, campagne, analisi e gestione team."
+    "motivazione": "Product manager in ambito IoT, esperienza coerente."
   },
   {
-    "ID": 230,
+    "ID": 151,
     "scartato": false,
-    "motivazione": "Esperienza in CRM, campagne multicanale e coordinamento team."
+    "motivazione": "Product manager settore finanziario, esperienza tech."
   },
   {
-    "ID": 231,
+    "ID": 155,
     "scartato": false,
-    "motivazione": "Esperienza specialistica in CRM e marketing automation."
+    "motivazione": "Product manager B2C digitale, esperienza coerente."
   },
   {
-    "ID": 232,
+    "ID": 139,
     "scartato": false,
-    "motivazione": "Esperienza specialistica in CRM e marketing automation."
+    "motivazione": "Product manager tech/digitale, esperienza coerente."
+  },
+  {
+    "ID": 162,
+    "scartato": false,
+    "motivazione": "Product manager tech/digitale, esperienza coerente."
+  },
+  {
+    "ID": 147,
+    "scartato": false,
+    "motivazione": "Product manager tech/digitale, esperienza coerente."
+  },
+  {
+    "ID": 164,
+    "scartato": false,
+    "motivazione": "Product manager tech/digitale, esperienza coerente."
+  },
+  {
+    "ID": 159,
+    "scartato": false,
+    "motivazione": "Product manager tech/digitale, esperienza coerente."
+  },
+  {
+    "ID": 225,
+    "scartato": true,
+    "motivazione": "Esperienza Project Manager IT, non specifica Product Manager, mancano riferimenti a ciclo di vita prodotto."
+  },
+  {
+    "ID": 226,
+    "scartato": true,
+    "motivazione": "Ruolo tecnico e architetturale, non emerge esperienza diretta come Product Manager."
   },
   {
     "ID": 233,
     "scartato": true,
-    "motivazione": "Sales excellence, non esperienza CRM specialistico."
+    "motivazione": "Esperienza in ambito vendite, non in gestione prodotto tech o ciclo di vita software."
   }
 ]

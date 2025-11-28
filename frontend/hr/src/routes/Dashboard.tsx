@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
-import { CheckCircle2, Clock, RefreshCw, Target, FileText, Star, TrendingUp, TrendingDown, Minus, BarChart3 } from 'lucide-react'
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
+import { CheckCircle2, Clock, RefreshCw, Target, FileText, Star, TrendingUp, TrendingDown, Minus, BarChart3, Users, MessageCircle, AlertTriangle, ArrowRight, Briefcase } from 'lucide-react'
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
 import { Skeleton } from '../components/ui/Skeleton'
-import { Badge } from '../components/ui/Badge'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8001'
 
@@ -22,6 +21,32 @@ interface DashboardData {
     avg_overall_score: number
     total_evaluated: number
   }
+  funnel: {
+    cv_analyzed: number
+    engaged: number
+    interrupted: number
+    qualified: number
+    interviewed: number
+    feedback_ready: number
+    feedback_downloaded: number
+    total: number
+    completed: number
+  }
+  whatsapp: {
+    total_engaged: number
+    qualified: number
+    interrupted: number
+    qualification_rate: number
+    interruption_reasons: Array<{ reason: string; count: number }>
+  }
+  by_position: Array<{
+    position_id: string
+    position_name: string
+    candidates: number
+    qualified: number
+    completed: number
+    avg_score: number
+  }>
   positions: Array<{
     id: string
     name: string
@@ -34,10 +59,11 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null)
   const [selectedTimeRange, setSelectedTimeRange] = useState<'7d' | '30d' | '90d' | '1y'>('30d')
   const [selectedPosition, setSelectedPosition] = useState<string>("all")
+  const [workflowFilter, setWorkflowFilter] = useState<'full' | 'whatsapp_only'>('full')
 
   useEffect(() => {
     loadDashboardData()
-  }, [selectedTimeRange, selectedPosition])
+  }, [selectedTimeRange, selectedPosition, workflowFilter])
 
   async function loadDashboardData() {
     try {
@@ -48,7 +74,7 @@ export function Dashboard() {
         return
       }
 
-      const response = await fetch(`${API_BASE}/dashboard/data?timeRange=${selectedTimeRange}&positionFilter=${selectedPosition}`, {
+      const response = await fetch(`${API_BASE}/dashboard/data?timeRange=${selectedTimeRange}&positionFilter=${selectedPosition}&workflowFilter=${workflowFilter}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -73,8 +99,6 @@ export function Dashboard() {
     }
   }
 
-
-
   if (loading) {
     return (
       <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
@@ -83,31 +107,26 @@ export function Dashboard() {
         </div>
         <div style={{ 
           display: 'grid', 
-          gridTemplateColumns: 'repeat(3, 1fr)', 
-          gap: '24px',
+          gridTemplateColumns: 'repeat(4, 1fr)', 
+          gap: '20px',
           marginBottom: '32px'
         }}>
-          {[1, 2, 3, 4, 5, 6].map(i => (
+          {[1, 2, 3, 4].map(i => (
             <div key={i} style={{
               background: 'white',
-              borderRadius: '20px',
+              borderRadius: '16px',
               border: '1px solid #E5E7EB',
-              padding: '24px'
+              padding: '20px',
+              height: '120px'
             }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                marginBottom: '16px'
-              }}>
-                <Skeleton circle width={48} height={48} />
-                <div style={{ flex: 1 }}>
-                  <Skeleton width="60%" height="16px" />
-                  <Skeleton width="80%" height="24px" style={{ marginTop: '8px' }} />
-                </div>
-              </div>
+              <Skeleton width="60%" height="16px" />
+              <Skeleton width="40%" height="32px" style={{ marginTop: '12px' }} />
             </div>
           ))}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+          <Skeleton height="300px" />
+          <Skeleton height="300px" />
         </div>
       </div>
     )
@@ -150,121 +169,228 @@ export function Dashboard() {
   return (
     <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
       
-      {/* Header */}
-      <div style={{ marginBottom: '24px' }}>
-        <h2>Dashboard HR</h2>
-      </div>
-      
+      {/* Header con Filtri */}
       <div style={{ 
         display: 'flex', 
-        justifyContent: 'flex-end', 
+        justifyContent: 'space-between', 
         alignItems: 'center',
-        marginBottom: '32px',
-        gap: '16px'
+        marginBottom: '20px'
       }}>
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <label style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500' }}>
-              Periodo:
-            </label>
-            <select
-              value={selectedTimeRange}
-              onChange={(e) => setSelectedTimeRange(e.target.value as any)}
-              style={{
-                padding: '8px 12px',
-                border: '2px solid var(--border-light)',
-                borderRadius: '8px',
-                background: 'white',
-                fontSize: '14px',
-                minWidth: '140px'
-              }}
-            >
-              <option value="7d">Ultimi 7 giorni</option>
-              <option value="30d">Ultimi 30 giorni</option>
-              <option value="90d">Ultimi 90 giorni</option>
-              <option value="1y">Ultimo anno</option>
-            </select>
-          </div>
+        <h2 style={{ margin: 0 }}>Dashboard HR</h2>
+        
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <select
+            value={selectedTimeRange}
+            onChange={(e) => setSelectedTimeRange(e.target.value as any)}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid var(--border-light)',
+              borderRadius: '8px',
+              background: 'white',
+              fontSize: '13px'
+            }}
+          >
+            <option value="7d">Ultimi 7 giorni</option>
+            <option value="30d">Ultimi 30 giorni</option>
+            <option value="90d">Ultimi 90 giorni</option>
+            <option value="1y">Ultimo anno</option>
+          </select>
           
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <label style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500' }}>
-              Posizione:
-            </label>
-            <select
-              value={selectedPosition}
-              onChange={(e) => setSelectedPosition(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                border: '2px solid var(--border-light)',
-                borderRadius: '8px',
-                background: 'white',
-                fontSize: '14px',
-                minWidth: '160px'
-              }}
-            >
-              <option value="all">Tutte le posizioni</option>
-              {data.positions.map(position => (
-                <option key={position.id} value={position.id}>{position.name}</option>
-              ))}
-            </select>
-          </div>
-
+          <select
+            value={selectedPosition}
+            onChange={(e) => setSelectedPosition(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid var(--border-light)',
+              borderRadius: '8px',
+              background: 'white',
+              fontSize: '13px',
+              minWidth: '150px'
+            }}
+          >
+            <option value="all">Tutte le posizioni</option>
+            {data.positions.map(position => (
+              <option key={position.id} value={position.id}>{position.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      
+      {/* Switch Tipo Workflow */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        marginBottom: '24px'
+      }}>
+        <div style={{
+          display: 'inline-flex',
+          background: '#f3f4f6',
+          borderRadius: '12px',
+          padding: '4px',
+          gap: '4px'
+        }}>
+          <button
+            onClick={() => setWorkflowFilter('full')}
+            style={{
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '10px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '600',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: workflowFilter === 'full' 
+                ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' 
+                : 'transparent',
+              color: workflowFilter === 'full' ? 'white' : '#6b7280',
+              boxShadow: workflowFilter === 'full' ? '0 2px 8px rgba(99, 102, 241, 0.3)' : 'none'
+            }}
+          >
+            <span style={{ fontSize: '16px' }}>🔄</span>
+            Iter Completo
+            <span style={{ 
+              fontSize: '11px', 
+              opacity: 0.8,
+              fontWeight: '400'
+            }}>
+              (WhatsApp + Colloquio AI)
+            </span>
+          </button>
+          
+          <button
+            onClick={() => setWorkflowFilter('whatsapp_only')}
+            style={{
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '10px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '600',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: workflowFilter === 'whatsapp_only' 
+                ? 'linear-gradient(135deg, #22c55e, #16a34a)' 
+                : 'transparent',
+              color: workflowFilter === 'whatsapp_only' ? 'white' : '#6b7280',
+              boxShadow: workflowFilter === 'whatsapp_only' ? '0 2px 8px rgba(34, 197, 94, 0.3)' : 'none'
+            }}
+          >
+            <span style={{ fontSize: '16px' }}>📱</span>
+            Solo WhatsApp
+            <span style={{ 
+              fontSize: '11px', 
+              opacity: 0.8,
+              fontWeight: '400'
+            }}>
+              (Pre-screening)
+            </span>
+          </button>
         </div>
       </div>
 
-      {/* Indicatori Principali */}
+      {/* KPI Principali - Prima riga: Funnel Overview */}
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(3, 1fr)', 
-        gap: '24px',
-        marginBottom: '32px'
+        gridTemplateColumns: 'repeat(4, 1fr)', 
+        gap: '16px',
+        marginBottom: '16px'
       }}>
-        <MetricCard
-          title="Colloqui Completati"
-          value={data.metrics.completed_interviews}
-          icon={<CheckCircle2 />}
-          color="#10b981"
-          tooltip="Candidati che hanno terminato l'intervista con successo e ricevuto valutazione completa"
-        />
-        <MetricCard
-          title="Candidati in Attesa di Token"
-          value={data.metrics.waiting_token}
-          icon={<Clock />}
-          color="#f59e0b"
-          tooltip="CV analizzati con token generato ma non ancora inviato al candidato"
-        />
-        <MetricCard
-          title="Colloquio in Corso"
-          value={data.metrics.in_progress}
-          icon={<RefreshCw />}
-          color="#3b82f6"
-          tooltip="Candidati che hanno ricevuto il token ma non hanno ancora completato l'intervista"
-        />
-        <MetricCard
-          title="Scoring Medio Colloqui"
-          value={data.metrics.avg_interview_score.toFixed(2)}
-          icon={<Target />}
-          color="#3b82f6"
-          tooltip="Punteggio medio ottenuto dai candidati durante le interviste, su una scala da 0 a 4"
-        />
-        <MetricCard
-          title="Scoring Medio CV"
-          value={data.metrics.avg_cv_score.toFixed(2)}
-          icon={<FileText />}
-          color="#8b5cf6"
-          tooltip="Punteggio medio ottenuto dai candidati nell'analisi dei CV, su una scala da 0 a 4"
-        />
-        <MetricCard
-          title="Scoring Complessivo"
-          value={data.metrics.avg_overall_score.toFixed(2)}
-          icon={<Star />}
+        <KPICard
+          title="Candidature Totali"
+          value={data.funnel?.total || 0}
+          icon={<Users size={22} />}
           color="#6366f1"
-          tooltip="Punteggio medio complessivo che combina la valutazione del CV e della performance in intervista"
+          subtitle="Sessioni create"
+        />
+        <KPICard
+          title="Qualificati"
+          value={data.funnel?.qualified || 0}
+          icon={<CheckCircle2 size={22} />}
+          color="#22c55e"
+          subtitle={`${data.whatsapp?.qualification_rate || 0}% tasso qualificazione`}
+        />
+        <KPICard
+          title="Colloquiati"
+          value={data.funnel?.interviewed || 0}
+          icon={<Target size={22} />}
+          color="#3b82f6"
+          subtitle="Colloqui AI completati"
+        />
+        <KPICard
+          title="Feedback Pronti"
+          value={(data.funnel?.feedback_ready || 0) + (data.funnel?.feedback_downloaded || 0)}
+          icon={<FileText size={22} />}
+          color="#f59e0b"
+          subtitle={`${data.funnel?.feedback_downloaded || 0} già scaricati`}
+        />
+      </div>
+      
+      {/* KPI Secondarie - Seconda riga: Metriche Performance */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(4, 1fr)', 
+        gap: '16px',
+        marginBottom: '28px'
+      }}>
+        <KPICard
+          title="Interrotti"
+          value={data.funnel?.interrupted || 0}
+          icon={<AlertTriangle size={22} />}
+          color="#ef4444"
+          subtitle="Candidature non proseguite"
+        />
+        <KPICard
+          title="In Attesa"
+          value={(data.funnel?.cv_analyzed || 0) + (data.funnel?.engaged || 0)}
+          icon={<Clock size={22} />}
+          color="#8b5cf6"
+          subtitle="CV + Ingaggiati"
+        />
+        <KPICard
+          title="Scoring Medio"
+          value={data.metrics.avg_overall_score?.toFixed(2) || '0.00'}
+          icon={<Star size={22} />}
+          color="#f59e0b"
+          subtitle="su scala 0-4"
+        />
+        <KPICard
+          title="Recovery Rate"
+          value={`${data.metrics.recovery_rate?.toFixed(0) || 0}%`}
+          icon={<TrendingUp size={22} />}
+          color="#10b981"
+          subtitle={`${data.metrics.recovery_count || 0} candidati migliorati`}
         />
       </div>
 
-      {/* Grafico a Torta Performance */}
-      <div style={{ marginTop: '32px' }}>
+      {/* Sezione Grafici - 2 colonne */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: '1fr 1fr', 
+        gap: '24px',
+        marginBottom: '28px'
+      }}>
+        {/* Funnel di Conversione */}
+        <FunnelChart funnel={data.funnel} />
+        
+        {/* Performance per Posizione */}
+        <PositionChart positions={data.by_position} />
+      </div>
+
+      {/* Sezione Dettaglio - 2 colonne */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: '1fr 1fr', 
+        gap: '24px'
+      }}>
+        {/* WhatsApp Insights */}
+        <WhatsAppInsightsCard whatsapp={data.whatsapp} />
+        
+        {/* Performance Pie Chart (compatto) */}
         <PerformancePieChart
           recoveryCount={data.metrics.recovery_count}
           underperformingCount={data.metrics.underperforming_count}
@@ -276,124 +402,482 @@ export function Dashboard() {
   )
 }
 
-// Component for metric cards with tooltip
-function MetricCard({ title, value, icon, color, tooltip }: {
+// KPI Card compatta
+function KPICard({ title, value, icon, color, subtitle }: {
   title: string
   value: number | string
   icon: React.ReactNode
   color: string
-  tooltip: string
+  subtitle: string
 }) {
-  const [showTooltip, setShowTooltip] = useState(false)
-
   return (
-    <div className="hover-lift" style={{
+    <div style={{
       background: 'white',
-      borderRadius: '20px',
-      padding: '24px',
-      boxShadow: 'var(--shadow-md)',
+      borderRadius: '16px',
+      padding: '20px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
       border: '1px solid var(--border-light)',
       position: 'relative',
-      overflow: 'hidden',
-      transition: 'all var(--transition-normal)'
+      overflow: 'hidden'
     }}>
-      {/* Decorative background */}
       <div style={{
         position: 'absolute',
-        top: '-20px',
-        right: '-20px',
-        width: '140px',
-        height: '140px',
-        background: `radial-gradient(circle, ${color}15, transparent)`,
-        borderRadius: '50%',
-        pointerEvents: 'none'
+        top: '-15px',
+        right: '-15px',
+        width: '80px',
+        height: '80px',
+        background: `radial-gradient(circle, ${color}12, transparent)`,
+        borderRadius: '50%'
       }} />
       
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-              <h3 style={{ 
-                fontSize: '14px', 
-                fontWeight: '600', 
-                color: 'var(--text-secondary)',
-                margin: 0,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px'
-              }}>
-                {title}
-              </h3>
-              <div 
-                onMouseEnter={() => setShowTooltip(true)}
-                onMouseLeave={() => setShowTooltip(false)}
-                style={{ position: 'relative', display: 'inline-block', cursor: 'help' }}
-              >
-                <span style={{ 
-                  fontSize: '12px', 
-                  color: 'var(--text-muted)',
-                  width: '16px',
-                  height: '16px',
-                  borderRadius: '50%',
-                  border: '1.5px solid currentColor',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: '600'
-                }}>
-                  ?
-                </span>
-                {showTooltip && (
-                  <div className="slide-down" style={{
-                    position: 'fixed',
-                    background: 'rgba(0,0,0,0.95)',
-                    color: 'white',
-                    padding: '12px 16px',
-                    borderRadius: '10px',
-                    fontSize: '13px',
-                    lineHeight: '1.5',
-                    maxWidth: '300px',
-                    zIndex: 10000,
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                    whiteSpace: 'normal',
-                    pointerEvents: 'none',
-                    marginTop: '4px',
-                    marginLeft: '8px'
-                  }}>
-                    {tooltip}
-                  </div>
-                )}
-              </div>
-            </div>
-            <div style={{ 
-              fontSize: '36px', 
-              fontWeight: '700', 
-              color: 'var(--text-primary)',
-              lineHeight: 1,
-              fontFamily: "'Manrope', 'Inter', sans-serif"
-            }}>
-              {value}
-            </div>
-          </div>
+      <div style={{ position: 'relative' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
           <div style={{
-            width: '56px',
-            height: '56px',
-            borderRadius: '16px',
-            background: `linear-gradient(135deg, ${color}20, ${color}10)`,
+            width: '36px',
+            height: '36px',
+            borderRadius: '10px',
+            background: `${color}15`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: color,
-            flexShrink: 0
+            color: color
           }}>
             {icon}
           </div>
+          <span style={{ 
+            fontSize: '12px', 
+            fontWeight: '600', 
+            color: 'var(--text-secondary)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.3px'
+          }}>
+            {title}
+          </span>
+        </div>
+        
+        <div style={{ 
+          fontSize: '32px', 
+          fontWeight: '700', 
+          color: 'var(--text-primary)',
+          lineHeight: 1,
+          marginBottom: '4px'
+        }}>
+          {value}
+        </div>
+        
+        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+          {subtitle}
         </div>
       </div>
     </div>
   )
 }
 
-// Performance Pie Chart Component with Recharts
+// Funnel di Conversione - Nuova Nomenclatura Stati
+function FunnelChart({ funnel }: { funnel: DashboardData['funnel'] }) {
+  if (!funnel) return null
+  
+  // Funnel principale (flusso positivo)
+  const mainStages = [
+    { name: '📄 CV Analizzato', value: funnel.cv_analyzed, color: '#6366f1', icon: '📄' },
+    { name: '📱 Ingaggiato', value: funnel.engaged, color: '#8b5cf6', icon: '📱' },
+    { name: '✓ Qualificato', value: funnel.qualified, color: '#22c55e', icon: '✓' },
+    { name: '🎯 Colloquiato', value: funnel.interviewed, color: '#3b82f6', icon: '🎯' },
+    { name: '📋 Feedback Pronto', value: funnel.feedback_ready, color: '#f59e0b', icon: '📋' },
+    { name: '✅ Feedback Scaricato', value: funnel.feedback_downloaded, color: '#10b981', icon: '✅' }
+  ]
+  
+  // Totale sessioni per calcolo percentuali
+  const totalSessions = funnel.total || Math.max(
+    funnel.cv_analyzed + funnel.engaged + funnel.interrupted + funnel.qualified,
+    1
+  )
+
+  return (
+    <div style={{
+      background: 'white',
+      borderRadius: '16px',
+      padding: '24px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+      border: '1px solid var(--border-light)'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '10px',
+            background: 'linear-gradient(135deg, #6366f120, #22c55e20)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#6366f1'
+          }}>
+            <TrendingUp size={20} />
+          </div>
+          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Funnel Candidature</h3>
+        </div>
+        
+        {/* Badge Interrotti */}
+        {funnel.interrupted > 0 && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '6px 12px',
+            background: '#fef2f2',
+            borderRadius: '8px',
+            border: '1px solid #fecaca'
+          }}>
+            <span style={{ fontSize: '14px' }}>✗</span>
+            <span style={{ fontSize: '12px', fontWeight: '600', color: '#dc2626' }}>
+              {funnel.interrupted} Interrotti
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Funnel Visivo */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {mainStages.map((stage, index) => {
+          const percentage = totalSessions > 0 ? (stage.value / totalSessions) * 100 : 0
+          const prevValue = index > 0 ? mainStages[index - 1].value : totalSessions
+          const conversionRate = prevValue > 0 && index > 0
+            ? ((stage.value / prevValue) * 100).toFixed(0)
+            : null
+          
+          return (
+            <div key={stage.name} style={{ position: 'relative' }}>
+              {/* Connettore verticale */}
+              {index > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  left: '16px',
+                  top: '-8px',
+                  width: '2px',
+                  height: '8px',
+                  background: '#e5e7eb'
+                }} />
+              )}
+              
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '12px',
+                padding: '10px 12px',
+                background: stage.value > 0 ? `${stage.color}08` : '#f9fafb',
+                borderRadius: '10px',
+                border: `1px solid ${stage.value > 0 ? `${stage.color}30` : '#e5e7eb'}`,
+                transition: 'all 0.2s ease'
+              }}>
+                {/* Icona circolare */}
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: stage.value > 0 ? stage.color : '#e5e7eb',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  flexShrink: 0
+                }}>
+                  {index + 1}
+                </div>
+                
+                {/* Nome e barra */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    marginBottom: '4px'
+                  }}>
+                    <span style={{ 
+                      fontSize: '13px', 
+                      fontWeight: '500', 
+                      color: stage.value > 0 ? 'var(--text-primary)' : '#9ca3af'
+                    }}>
+                      {stage.name}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {conversionRate && stage.value > 0 && (
+                        <span style={{
+                          fontSize: '10px',
+                          color: Number(conversionRate) >= 50 ? '#22c55e' : '#f59e0b',
+                          background: Number(conversionRate) >= 50 ? '#f0fdf4' : '#fffbeb',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          fontWeight: '600'
+                        }}>
+                          {conversionRate}%
+                        </span>
+                      )}
+                      <span style={{ 
+                        fontSize: '16px', 
+                        fontWeight: '700', 
+                        color: stage.value > 0 ? stage.color : '#d1d5db',
+                        minWidth: '28px',
+                        textAlign: 'right'
+                      }}>
+                        {stage.value}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Progress bar */}
+                  <div style={{ 
+                    height: '6px', 
+                    background: '#e5e7eb', 
+                    borderRadius: '3px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${Math.min(percentage, 100)}%`,
+                      background: stage.value > 0 
+                        ? `linear-gradient(90deg, ${stage.color}, ${stage.color}aa)` 
+                        : 'transparent',
+                      borderRadius: '3px',
+                      transition: 'width 0.5s ease'
+                    }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      
+      {/* Summary footer */}
+      <div style={{
+        marginTop: '16px',
+        paddingTop: '16px',
+        borderTop: '1px solid #e5e7eb',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+          Totale candidature: <strong>{totalSessions}</strong>
+        </span>
+        {funnel.completed > 0 && (
+          <span style={{ 
+            fontSize: '12px', 
+            color: '#22c55e',
+            fontWeight: '600'
+          }}>
+            Conversion rate: {((funnel.feedback_downloaded / totalSessions) * 100).toFixed(1)}%
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Performance per Posizione
+function PositionChart({ positions }: { positions: DashboardData['by_position'] }) {
+  if (!positions || positions.length === 0) {
+    return (
+      <div style={{
+        background: 'white',
+        borderRadius: '16px',
+        padding: '24px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+        border: '1px solid var(--border-light)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '280px'
+      }}>
+        <Briefcase size={48} style={{ color: '#d1d5db', marginBottom: '12px' }} />
+        <p style={{ color: 'var(--text-secondary)', margin: 0 }}>Nessuna posizione con dati</p>
+      </div>
+    )
+  }
+
+  const chartData = positions.slice(0, 5).map(p => ({
+    name: p.position_name.length > 15 ? p.position_name.substring(0, 15) + '...' : p.position_name,
+    Candidati: p.candidates,
+    Qualificati: p.qualified,
+    Completati: p.completed
+  }))
+
+  return (
+    <div style={{
+      background: 'white',
+      borderRadius: '16px',
+      padding: '24px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+      border: '1px solid var(--border-light)'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+        <div style={{
+          width: '36px',
+          height: '36px',
+          borderRadius: '10px',
+          background: 'linear-gradient(135deg, #3b82f620, #6366f120)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#3b82f6'
+        }}>
+          <Briefcase size={20} />
+        </div>
+        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Performance per Posizione</h3>
+      </div>
+
+      <div style={{ height: '220px' }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis type="number" tick={{ fontSize: 11 }} />
+            <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
+            <Tooltip 
+              contentStyle={{ 
+                background: 'rgba(0,0,0,0.9)', 
+                border: 'none', 
+                borderRadius: '8px',
+                fontSize: '12px'
+              }}
+            />
+            <Legend wrapperStyle={{ fontSize: '11px' }} />
+            <Bar dataKey="Candidati" fill="#6366f1" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="Qualificati" fill="#22c55e" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="Completati" fill="#10b981" radius={[0, 4, 4, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
+
+// WhatsApp Insights Card
+function WhatsAppInsightsCard({ whatsapp }: { whatsapp: DashboardData['whatsapp'] }) {
+  if (!whatsapp) return null
+  
+  const total = whatsapp.qualified + whatsapp.interrupted
+  const qualifiedPercent = total > 0 ? (whatsapp.qualified / total * 100) : 0
+  const interruptedPercent = total > 0 ? (whatsapp.interrupted / total * 100) : 0
+
+  return (
+    <div style={{
+      background: 'white',
+      borderRadius: '16px',
+      padding: '24px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+      border: '1px solid var(--border-light)'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+        <div style={{
+          width: '36px',
+          height: '36px',
+          borderRadius: '10px',
+          background: 'linear-gradient(135deg, #22c55e20, #16a34a20)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#22c55e'
+        }}>
+          <MessageCircle size={20} />
+        </div>
+        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Pre-screening WhatsApp</h3>
+      </div>
+
+      {/* Barra Qualificati vs Interrotti */}
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <span style={{ fontSize: '13px', color: '#22c55e', fontWeight: '600' }}>
+            Qualificati: {whatsapp.qualified}
+          </span>
+          <span style={{ fontSize: '13px', color: '#ef4444', fontWeight: '600' }}>
+            Interrotti: {whatsapp.interrupted}
+          </span>
+        </div>
+        <div style={{ 
+          height: '12px', 
+          background: '#f3f4f6', 
+          borderRadius: '6px',
+          overflow: 'hidden',
+          display: 'flex'
+        }}>
+          <div style={{
+            width: `${qualifiedPercent}%`,
+            background: 'linear-gradient(90deg, #22c55e, #16a34a)',
+            transition: 'width 0.5s ease'
+          }} />
+          <div style={{
+            width: `${interruptedPercent}%`,
+            background: 'linear-gradient(90deg, #ef4444, #dc2626)',
+            transition: 'width 0.5s ease'
+          }} />
+        </div>
+      </div>
+
+      {/* Motivi Interruzione */}
+      {whatsapp.interruption_reasons && whatsapp.interruption_reasons.length > 0 && (
+        <div>
+          <div style={{ 
+            fontSize: '12px', 
+            fontWeight: '600', 
+            color: 'var(--text-secondary)',
+            marginBottom: '10px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.3px'
+          }}>
+            Principali Motivi Interruzione
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {whatsapp.interruption_reasons.slice(0, 3).map((reason, idx) => (
+              <div key={idx} style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px',
+                padding: '8px 12px',
+                background: '#fef2f2',
+                borderRadius: '8px',
+                borderLeft: '3px solid #ef4444'
+              }}>
+                <AlertTriangle size={14} style={{ color: '#ef4444', flexShrink: 0 }} />
+                <span style={{ fontSize: '12px', color: 'var(--text-primary)', flex: 1 }}>
+                  {reason.reason || 'Motivo non specificato'}
+                </span>
+                <span style={{ 
+                  fontSize: '12px', 
+                  fontWeight: '700', 
+                  color: '#ef4444',
+                  background: 'white',
+                  padding: '2px 8px',
+                  borderRadius: '4px'
+                }}>
+                  {reason.count}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(!whatsapp.interruption_reasons || whatsapp.interruption_reasons.length === 0) && (
+        <div style={{ 
+          padding: '16px', 
+          background: '#f0fdf4', 
+          borderRadius: '8px',
+          textAlign: 'center',
+          color: '#16a34a',
+          fontSize: '13px'
+        }}>
+          Nessuna interruzione registrata nel periodo selezionato
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Performance Pie Chart (compatto)
 function PerformancePieChart({ 
   recoveryCount, 
   underperformingCount, 
@@ -406,189 +890,111 @@ function PerformancePieChart({
   const neutralCount = totalEvaluated - recoveryCount - underperformingCount
   
   const data = [
-    { name: 'Recupero', value: recoveryCount, color: '#10b981', icon: <TrendingUp size={16} /> },
-    { name: 'Neutri', value: neutralCount, color: '#94a3b8', icon: <Minus size={16} /> },
-    { name: 'Underperforming', value: underperformingCount, color: '#ef4444', icon: <TrendingDown size={16} /> }
+    { name: 'Recupero', value: recoveryCount, color: '#10b981' },
+    { name: 'Neutri', value: neutralCount, color: '#94a3b8' },
+    { name: 'Underperforming', value: underperformingCount, color: '#ef4444' }
   ].filter(item => item.value > 0)
 
   const COLORS = data.map(item => item.color)
 
   return (
-    <div className="hover-lift" style={{
+    <div style={{
       background: 'white',
-      borderRadius: '20px',
-      padding: '32px',
-      boxShadow: 'var(--shadow-md)',
-      border: '1px solid var(--border-light)',
-      gridColumn: 'span 2',
-      minWidth: '280px'
+      borderRadius: '16px',
+      padding: '24px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+      border: '1px solid var(--border-light)'
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
         <div style={{
-          width: '48px',
-          height: '48px',
-          borderRadius: '14px',
-          background: 'linear-gradient(135deg, #7C3AED20, #EC489910)',
+          width: '36px',
+          height: '36px',
+          borderRadius: '10px',
+          background: 'linear-gradient(135deg, #7C3AED20, #EC489920)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           color: '#7C3AED'
         }}>
-          <BarChart3 size={24} />
+          <BarChart3 size={20} />
         </div>
-        <h3 style={{ 
-          fontSize: '18px', 
-          fontWeight: '700', 
-          color: 'var(--text-primary)',
-          margin: 0
-        }}>
-          Distribuzione Performance Candidati
-        </h3>
+        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Performance CV vs Colloquio</h3>
       </div>
 
       {totalEvaluated === 0 ? (
         <div style={{
           textAlign: 'center',
-          padding: '60px 20px',
+          padding: '40px 20px',
           color: 'var(--text-secondary)',
-          fontSize: '15px'
+          fontSize: '13px'
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.3 }}>📊</div>
-          <p style={{ margin: 0 }}>Nessun dato disponibile per visualizzare il grafico</p>
+          <BarChart3 size={40} style={{ color: '#d1d5db', marginBottom: '8px' }} />
+          <p style={{ margin: 0 }}>Nessun dato disponibile</p>
         </div>
       ) : (
-        <div>
-          <div style={{ 
-            display: 'flex', 
-            gap: '48px', 
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexWrap: 'wrap',
-            marginBottom: '24px'
-          }}>
-            {/* Recharts Pie Chart */}
-            <div style={{ width: '260px', height: '260px' }}>
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie
-                    data={data}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    outerRadius={100}
-                    innerRadius={60}
-                    fill="#8884d8"
-                    dataKey="value"
-                    animationBegin={0}
-                    animationDuration={800}
-                  >
-                    {data.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{
-                      background: 'rgba(0,0,0,0.9)',
-                      border: 'none',
-                      borderRadius: '8px',
-                      color: 'white',
-                      padding: '8px 12px',
-                      fontSize: '13px'
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Legend */}
-            <div style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              gap: '16px' 
-            }}>
-              {data.map((item, index) => (
-                <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '10px',
-                    background: `${item.color}20`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: item.color,
-                    flexShrink: 0
-                  }}>
-                    {item.icon}
-                  </div>
-                  <div>
-                    <div style={{ 
-                      fontSize: '15px', 
-                      fontWeight: '600', 
-                      color: 'var(--text-primary)',
-                      marginBottom: '2px'
-                    }}>
-                      {item.name}
-                    </div>
-                    <div style={{ 
-                      fontSize: '13px', 
-                      color: 'var(--text-secondary)' 
-                    }}>
-                      {item.value} candidati ({((item.value / totalEvaluated) * 100).toFixed(1)}%)
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+          {/* Pie Chart */}
+          <div style={{ width: '140px', height: '140px', flexShrink: 0 }}>
+            <ResponsiveContainer>
+              <PieChart>
+                <Pie
+                  data={data}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={60}
+                  innerRadius={40}
+                  dataKey="value"
+                  animationDuration={600}
+                >
+                  {data.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index]} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  contentStyle={{
+                    background: 'rgba(0,0,0,0.9)',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '11px'
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
 
-          {/* Info Box */}
-          <div style={{ 
-            marginTop: '24px', 
-            paddingTop: '24px', 
-            borderTop: '1px solid var(--border-light)',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '16px'
-          }}>
-            <div style={{
-              padding: '12px',
-              background: '#10b98110',
-              borderRadius: '10px',
-              borderLeft: '3px solid #10b981'
+          {/* Legend */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
+            {data.map((item, index) => (
+              <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{
+                  width: '10px',
+                  height: '10px',
+                  borderRadius: '3px',
+                  background: item.color,
+                  flexShrink: 0
+                }} />
+                <span style={{ fontSize: '12px', color: 'var(--text-primary)', flex: 1 }}>
+                  {item.name}
+                </span>
+                <span style={{ 
+                  fontSize: '13px', 
+                  fontWeight: '700', 
+                  color: item.color 
+                }}>
+                  {item.value}
+                </span>
+              </div>
+            ))}
+            
+            <div style={{ 
+              marginTop: '8px', 
+              paddingTop: '8px', 
+              borderTop: '1px solid var(--border-light)',
+              fontSize: '11px',
+              color: 'var(--text-muted)'
             }}>
-              <div style={{ fontSize: '12px', fontWeight: '600', color: '#10b981', marginBottom: '4px' }}>
-                RECUPERO
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                Miglioramento ≥0.5 punti rispetto al CV
-              </div>
-            </div>
-            <div style={{
-              padding: '12px',
-              background: '#ef444410',
-              borderRadius: '10px',
-              borderLeft: '3px solid #ef4444'
-            }}>
-              <div style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444', marginBottom: '4px' }}>
-                UNDERPERFORMING
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                Peggioramento ≥0.5 punti rispetto al CV
-              </div>
-            </div>
-            <div style={{
-              padding: '12px',
-              background: '#94a3b810',
-              borderRadius: '10px',
-              borderLeft: '3px solid #94a3b8'
-            }}>
-              <div style={{ fontSize: '12px', fontWeight: '600', color: '#94a3b8', marginBottom: '4px' }}>
-                NEUTRI
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                Performance allineata tra CV e colloquio
-              </div>
+              <div>Recupero: +0.5 punti dal CV</div>
+              <div>Underperf: -0.5 punti dal CV</div>
             </div>
           </div>
         </div>

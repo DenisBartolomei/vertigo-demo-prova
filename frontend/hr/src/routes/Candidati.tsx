@@ -17,6 +17,7 @@ type Row = {
   downloaded_by_name?: string;
   whatsapp_status?: string;
   phone_number?: string;
+  interruption_reason?: string;
 }
 
 function renderStars(rating: number) {
@@ -376,7 +377,7 @@ export function Candidati() {
   const [conversationData, setConversationData] = useState<Record<string, any[]>>({})
   const [selectedPosition, setSelectedPosition] = useState<string>('')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'none'>('none')
-  const [feedbackFilter, setFeedbackFilter] = useState<'all' | 'in_elaborazione' | 'da_scaricare' | 'scaricati'>('all')
+  const [feedbackFilter, setFeedbackFilter] = useState<'all' | 'interrupted' | 'qualified' | 'interviewed' | 'feedback_in_progress' | 'feedback_ready' | 'feedback_downloaded'>('all')
   const [overallMeans, setOverallMeans] = useState<Record<string, number>>({})
   const [reportExpanded, setReportExpanded] = useState<Record<string, boolean>>({})
   const [securityReports, setSecurityReports] = useState<Record<string, any>>({})
@@ -656,9 +657,9 @@ export function Candidati() {
       const originalRows = [...rows];
       const originalStatus = rows.find(row => row.session_id === id)?.status;
 
-      // Aggiornamento ottimistico dell'UI
+      // Aggiornamento ottimistico dell'UI - usa il nuovo stato standardizzato
       setRows(prevRows => prevRows.map(row => 
-          row.session_id === id ? { ...row, status: 'Generazione feedback in corso...' } : row
+          row.session_id === id ? { ...row, status: 'Feedback in elaborazione' } : row
       ));
 
       try {
@@ -669,10 +670,9 @@ export function Candidati() {
 
           if (res.ok) {
               const data = await res.json();
-              // L'UI è già in "corso...", il backend si occuperà di aggiornare lo stato finale.
-              // Possiamo aggiornare l'UI con lo stato restituito per coerenza.
+              // Aggiorna l'UI con lo stato restituito dal backend (dovrebbe essere "Feedback in elaborazione")
               setRows(prevRows => prevRows.map(row => 
-                  row.session_id === id ? { ...row, status: data.status || 'Generazione feedback in corso...' } : row
+                  row.session_id === id ? { ...row, status: data.status || 'Feedback in elaborazione' } : row
               ));
               // Potresti voler avviare un polling o attendere un WebSocket per l'aggiornamento finale,
               // ma per ora lasciare che l'utente aggiorni manualmente la pagina è accettabile.
@@ -724,7 +724,12 @@ export function Candidati() {
     }
     
     // In elaborazione: se status indica generazione in corso o batch
-    if (row.status === 'Generazione feedback in corso...' || row.status?.includes('batch')) {
+    const statusLower = (row.status || '').toLowerCase()
+    if (row.status === 'Feedback in elaborazione' ||
+        row.status === 'Generazione feedback in corso...' || 
+        row.status?.includes('batch') ||
+        statusLower.includes('feedback in elaborazione') ||
+        statusLower.includes('elaborazione')) {
       return 'in_elaborazione'
     }
     
@@ -742,11 +747,43 @@ export function Candidati() {
       // Filter by position
       const positionMatch = !selectedPosition || row.position_name === selectedPosition || row.position_id === selectedPosition
       
-      // Filter by feedback status
-      const feedbackStatus = getFeedbackStatus(row)
-      const feedbackMatch = feedbackFilter === 'all' || feedbackStatus === feedbackFilter
+      // Se nessun filtro, mostra tutto
+      if (feedbackFilter === 'all') {
+        return positionMatch
+      }
       
-      return positionMatch && feedbackMatch
+      // Normalizza lo status per il confronto
+      const status = (row.status || '').toLowerCase()
+      
+      // Filtro per stati standardizzati
+      if (feedbackFilter === 'interrupted') {
+        return positionMatch && status.includes('interrotto')
+      }
+      
+      if (feedbackFilter === 'qualified') {
+        return positionMatch && status.includes('qualificato')
+      }
+      
+      if (feedbackFilter === 'interviewed') {
+        return positionMatch && status.includes('colloquiato') && !status.includes('feedback in elaborazione') && !status.includes('elaborazione')
+      }
+      
+      if (feedbackFilter === 'feedback_in_progress') {
+        return positionMatch && (status.includes('feedback in elaborazione') || 
+                                 status.includes('elaborazione') || 
+                                 status.includes('batch') ||
+                                 row.status === 'Generazione feedback in corso...')
+      }
+      
+      if (feedbackFilter === 'feedback_ready') {
+        return positionMatch && status.includes('feedback pronto')
+      }
+      
+      if (feedbackFilter === 'feedback_downloaded') {
+        return positionMatch && status.includes('feedback scaricato')
+      }
+      
+      return positionMatch
     })
     .sort((a, b) => {
       if (sortOrder === 'none') return 0
@@ -819,11 +856,11 @@ export function Candidati() {
               color: 'var(--text-secondary)',
               marginBottom: '4px'
             }}>
-              Stato Feedback Report
+              Stato Workflow
             </label>
             <select 
               value={feedbackFilter} 
-              onChange={e => setFeedbackFilter(e.target.value as 'all' | 'in_elaborazione' | 'da_scaricare' | 'scaricati')}
+              onChange={e => setFeedbackFilter(e.target.value as any)}
               style={{
                 width: '100%',
                 padding: '8px 12px',
@@ -834,9 +871,20 @@ export function Candidati() {
               }}
             >
               <option value="all">Tutti gli stati</option>
-              <option value="in_elaborazione">In elaborazione</option>
-              <option value="da_scaricare">Da scaricare</option>
-              <option value="scaricati">Scaricati</option>
+              <optgroup label="⚠️ Interrotti">
+                <option value="interrupted">✗ Interrotti</option>
+              </optgroup>
+              <optgroup label="✅ Qualificati">
+                <option value="qualified">✓ Qualificati (in attesa colloquio)</option>
+              </optgroup>
+              <optgroup label="🎓 Colloquiati">
+                <option value="interviewed">📝 Colloquiati (feedback da generare)</option>
+              </optgroup>
+              <optgroup label="📄 Feedback">
+                <option value="feedback_in_progress">⏳ Feedback in elaborazione</option>
+                <option value="feedback_ready">📥 Feedback pronto</option>
+                <option value="feedback_downloaded">✓ Feedback scaricato</option>
+              </optgroup>
             </select>
           </div>
           
@@ -937,6 +985,7 @@ export function Candidati() {
             // Debug: verifica lo status ricevuto per ogni candidato
             console.log(`[RENDER] Candidato: ${r.candidate_name}, Status: '${r.status}', includes batch: ${r.status?.includes('batch') || false}`)
             const currentKind = reportKind[r.session_id] || 'cv'
+            const isInterrupted = (r.status || '').toLowerCase().includes('interrotto') || r.interruption_reason
             return (
               <div key={r.session_id} className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1015,78 +1064,93 @@ export function Candidati() {
                         <span>{r.candidate_email}</span>
                       </div>
                     )}
-                    {r.status && (
-                      <div style={{ 
-                        display: 'inline-block',
-                        padding: '2px 8px',
-                        borderRadius: '12px',
-                        fontSize: '12px',
-                        fontWeight: '500',
-                        marginTop: '4px',
-                        background: r.status === 'Feedback pronto' ? '#D1FAE5' : 
-                                    r.status === 'Pronto per generare feedback' ? '#FEF3C7' :
-                                    (r.status?.includes('batch') || r.status === 'Feedback in coda batch (può richiedere fino a 24h)') ? '#FEF3C7' :
-                                    r.status === 'Colloquio completato' ? '#DBEAFE' :
-                                    r.status === 'Errore generazione feedback' ? '#FEE2E2' : '#F3F4F6',
-                        color: r.status === 'Feedback pronto' ? '#065F46' :
-                               r.status === 'Pronto per generare feedback' ? '#92400E' :
-                               (r.status?.includes('batch') || r.status === 'Feedback in coda batch (può richiedere fino a 24h)') ? '#92400E' :
-                               r.status === 'Colloquio completato' ? '#1E40AF' :
-                               r.status === 'Errore generazione feedback' ? '#991B1B' : '#374151'
-                      }}>
-                        {r.status}
-                      </div>
-                    )}
-                    {/* WhatsApp Status Badge */}
-                    {whatsappData[r.session_id]?.status && (
-                      <div style={{
-                        display: 'inline-block',
-                        marginLeft: '8px',
-                        marginTop: '4px'
-                      }}>
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '2px 8px',
+                    {/* Workflow Status Badge - mostra lo stato principale del candidato */}
+                    {(() => {
+                      const sessionStatus = (r.status || '').toLowerCase()
+                      
+                      // Determina lo stato del workflow con NUOVA NOMENCLATURA
+                      let workflowStatus = ''
+                      let bgColor = '#F3F4F6'
+                      let textColor = '#374151'
+                      
+                      // FEEDBACK SCARICATO
+                      if (sessionStatus.includes('feedback scaricato')) {
+                        workflowStatus = '✓ Feedback scaricato'
+                        bgColor = '#E0E7FF'
+                        textColor = '#4338CA'
+                      }
+                      // FEEDBACK PRONTO
+                      else if (sessionStatus.includes('feedback pronto')) {
+                        workflowStatus = '📄 Feedback pronto'
+                        bgColor = '#D1FAE5'
+                        textColor = '#065F46'
+                      }
+                      // FEEDBACK IN ELABORAZIONE
+                      else if (sessionStatus.includes('feedback in elaborazione') || 
+                               sessionStatus.includes('elaborazione') ||
+                               r.status === 'Generazione feedback in corso...' ||
+                               sessionStatus.includes('batch')) {
+                        workflowStatus = '⏳ Feedback in elaborazione'
+                        bgColor = '#FEF3C7'
+                        textColor = '#F59E0B'
+                      }
+                      // COLLOQUIATO (feedback da generare)
+                      else if (sessionStatus.includes('colloquiato')) {
+                        workflowStatus = '📝 Colloquiato'
+                        bgColor = '#DBEAFE'
+                        textColor = '#1E40AF'
+                      }
+                      // INTERROTTO
+                      else if (sessionStatus.includes('interrotto')) {
+                        workflowStatus = '✗ Interrotto'
+                        bgColor = '#FEE2E2'
+                        textColor = '#991B1B'
+                      }
+                      // QUALIFICATO
+                      else if (sessionStatus.includes('qualificato')) {
+                        workflowStatus = '✓ Qualificato'
+                        bgColor = '#D1FAE5'
+                        textColor = '#065F46'
+                      }
+                      // ALTRO STATO (fallback)
+                      else if (r.status) {
+                        workflowStatus = r.status
+                      }
+                      
+                      return workflowStatus ? (
+                        <div style={{ 
+                          display: 'inline-block',
+                          padding: '4px 10px',
                           borderRadius: '12px',
                           fontSize: '12px',
-                          fontWeight: '500',
-                          background: whatsappData[r.session_id].status === 'qualified' ? '#D1FAE5' :
-                                     whatsappData[r.session_id].status === 'disqualified' ? '#FEE2E2' :
-                                     whatsappData[r.session_id].status === 'active' ? '#DBEAFE' :
-                                     whatsappData[r.session_id].status === 'sent' ? '#FEF3C7' :
-                                     whatsappData[r.session_id].status === 'ready' ? '#E0E7FF' :
-                                     '#F3F4F6',
-                          color: whatsappData[r.session_id].status === 'qualified' ? '#065F46' :
-                                 whatsappData[r.session_id].status === 'disqualified' ? '#991B1B' :
-                                 whatsappData[r.session_id].status === 'active' ? '#1E40AF' :
-                                 whatsappData[r.session_id].status === 'sent' ? '#92400E' :
-                                 whatsappData[r.session_id].status === 'ready' ? '#3730A3' :
-                                 '#374151',
-                          border: `1px solid ${
-                            whatsappData[r.session_id].status === 'qualified' ? '#10B981' :
-                            whatsappData[r.session_id].status === 'disqualified' ? '#EF4444' :
-                            whatsappData[r.session_id].status === 'active' ? '#3B82F6' :
-                            whatsappData[r.session_id].status === 'sent' ? '#F59E0B' :
-                            whatsappData[r.session_id].status === 'ready' ? '#6366F1' :
-                            '#D1D5DB'
-                          }`
+                          fontWeight: '600',
+                          marginTop: '4px',
+                          background: bgColor,
+                          color: textColor
                         }}>
-                          <MessageSquare size={14} />
-                          <span>
-                            {whatsappData[r.session_id].status === 'ready' ? 'Pronto' :
-                             whatsappData[r.session_id].status === 'sent' ? 'Inviato' :
-                             whatsappData[r.session_id].status === 'active' ? 'Attivo' :
-                             whatsappData[r.session_id].status === 'qualified' ? 'Qualificato' :
-                             whatsappData[r.session_id].status === 'disqualified' ? 'Squalificato' :
-                             whatsappData[r.session_id].status}
-                          </span>
+                          {workflowStatus}
                         </div>
+                      ) : null
+                    })()}
+                    {/* Motivo interruzione (inline sotto il badge principale) */}
+                    {isInterrupted && r.interruption_reason && (
+                      <div style={{
+                        marginLeft: '8px',
+                        marginTop: '4px',
+                        fontSize: '11px',
+                        color: '#991B1B',
+                        fontStyle: 'italic'
+                      }}>
+                        Motivo: {r.interruption_reason === 'mancanza_requisiti' ? 'Mancanza requisiti obbligatori' :
+                                 r.interruption_reason === 'ritiro_candidato' ? 'Ritiro del candidato' :
+                                 r.interruption_reason}
                       </div>
                     )}
-                    {/* WhatsApp Engage Button */}
-                    {whatsappData[r.session_id]?.status === 'ready' && whatsappData[r.session_id]?.phone_number && (
+                    {/* WhatsApp Engage Button - Non mostrare per stati avanzati (Colloquiato, Feedback, etc.) */}
+                    {whatsappData[r.session_id]?.status === 'ready' && whatsappData[r.session_id]?.phone_number && 
+                     !((r.status || '').toLowerCase().includes('colloquiato') || 
+                       (r.status || '').toLowerCase().includes('feedback') ||
+                       (r.status || '').toLowerCase().includes('qualificato')) && (
                       <div style={{
                         display: 'inline-block',
                         marginLeft: '8px',
@@ -1116,119 +1180,161 @@ export function Candidati() {
                         </button>
                       </div>
                     )}
-                    {/* Security Report Button */}
-                    <div style={{
-                      display: 'inline-block',
-                      marginLeft: '8px',
-                      marginTop: '4px'
-                    }}>
-                      <button
-                        onClick={() => {
-                          const securityReport = securityReports[r.session_id]
-                          if (!securityReport) {
-                            loadSecurityReport(r.session_id)
-                          }
-                          setShowSecurityReport(r.session_id)
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '4px 8px',
-                          borderRadius: '12px',
-                          fontSize: '12px',
-                          fontWeight: '500',
-                          border: '1px solid #6c757d',
-                          background: '#f8f9fa',
-                          color: '#6c757d',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease'
-                        }}
-                        onMouseOver={(e) => {
-                          e.currentTarget.style.transform = 'scale(1.05)'
-                        }}
-                        onMouseOut={(e) => {
-                          e.currentTarget.style.transform = 'scale(1)'
-                        }}
-                      >
-                        <Lock size={14} />
-                        <span>Report Sicurezza</span>
-                        {securityReports[r.session_id]?.security_summary?.total_events > 0 && (
-                          <span style={{
-                            backgroundColor: '#6c757d',
-                            color: 'white',
-                            borderRadius: '50%',
-                            width: '16px',
-                            height: '16px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '10px',
-                            fontWeight: '600'
-                          }}>
-                            {securityReports[r.session_id].security_summary.total_events}
-                          </span>
-                        )}
-                      </button>
-                    </div>
+                    {/* Security Report Button - Solo se colloquio completato */}
+                    {(() => {
+                      // Mostra Report Sicurezza solo se il colloquio AI è stato completato
+                      const hasCompletedInterview = r.status && (
+                        r.status.includes('Colloquio completato') ||
+                        r.status.includes('Feedback') ||
+                        r.status.includes('batch') ||
+                        r.status.includes('Pronto per generare')
+                      )
+                      
+                      if (!hasCompletedInterview) return null
+                      
+                      return (
+                        <div style={{
+                          display: 'inline-block',
+                          marginLeft: '8px',
+                          marginTop: '4px'
+                        }}>
+                          <button
+                            onClick={() => {
+                              const securityReport = securityReports[r.session_id]
+                              if (!securityReport) {
+                                loadSecurityReport(r.session_id)
+                              }
+                              setShowSecurityReport(r.session_id)
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '4px 8px',
+                              borderRadius: '12px',
+                              fontSize: '12px',
+                              fontWeight: '500',
+                              border: '1px solid #6c757d',
+                              background: '#f8f9fa',
+                              color: '#6c757d',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseOver={(e) => {
+                              e.currentTarget.style.transform = 'scale(1.05)'
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)'
+                            }}
+                          >
+                            <Lock size={14} />
+                            <span>Report Sicurezza</span>
+                            {securityReports[r.session_id]?.security_summary?.total_events > 0 && (
+                              <span style={{
+                                backgroundColor: '#6c757d',
+                                color: 'white',
+                                borderRadius: '50%',
+                                width: '16px',
+                                height: '16px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '10px',
+                                fontWeight: '600'
+                              }}>
+                                {securityReports[r.session_id].security_summary.total_events}
+                              </span>
+                            )}
+                          </button>
+                        </div>
+                      )
+                    })()}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <select 
-                      value={currentKind} 
-                      onChange={e => fetchReport(r.session_id, e.target.value as 'cv' | 'case' | 'conversation')}
-                      style={{
-                        width: '240px',
-                        padding: '6px 8px',
-                        fontSize: '12px',
-                        fontWeight: '500',
-                        border: '1px solid rgba(139, 92, 246, 0.3)',
-                        borderRadius: '6px',
-                        background: 'white',
-                        color: 'var(--text-primary)',
-                        cursor: 'pointer',
-                        outline: 'none'
-                      }}
-                    >
-                      <option value="cv">CV ANALYSIS REPORT</option>
-                      <option value="case">CASE EVALUATION REPORT</option>
-                      <option value="conversation">CONVERSATION</option>
-                    </select>
-                    <button 
-                      onClick={() => toggle(r.session_id)}
-                      style={{
-                        width: '70px',
-                        height: '60px',
-                        padding: '8px 6px',
-                        fontSize: '11px',
-                        fontWeight: '600',
-                        border: '1px solid rgba(139, 92, 246, 0.3)',
-                        borderRadius: '6px',
-                        background: 'var(--primary-purple)',
-                        color: 'white',
-                        cursor: 'pointer',
-                        lineHeight: '1.3',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        textAlign: 'center',
-                        whiteSpace: 'normal',
-                        wordBreak: 'break-word'
-                      }}
-                    >
-                      {isExpanded ? 'Hide skills' : 'Show skills'}
-                    </button>
+                    {/* Select e Show skills - Solo se colloquio completato */}
+                    {(() => {
+                      const hasCompletedInterview = r.status && (
+                        r.status.includes('Colloquio completato') ||
+                        r.status.includes('Feedback') ||
+                        r.status.includes('batch') ||
+                        r.status.includes('Pronto per generare')
+                      )
+                      
+                      if (!hasCompletedInterview) return null
+                      
+                      return (
+                        <>
+                          <select 
+                            value={currentKind} 
+                            onChange={e => fetchReport(r.session_id, e.target.value as 'cv' | 'case' | 'conversation')}
+                            style={{
+                              width: '240px',
+                              padding: '6px 8px',
+                              fontSize: '12px',
+                              fontWeight: '500',
+                              border: '1px solid rgba(139, 92, 246, 0.3)',
+                              borderRadius: '6px',
+                              background: 'white',
+                              color: 'var(--text-primary)',
+                              cursor: 'pointer',
+                              outline: 'none'
+                            }}
+                          >
+                            <option value="cv">CV ANALYSIS REPORT</option>
+                            <option value="case">CASE EVALUATION REPORT</option>
+                            <option value="conversation">CONVERSATION</option>
+                          </select>
+                          <button 
+                            onClick={() => toggle(r.session_id)}
+                            style={{
+                              width: '70px',
+                              height: '60px',
+                              padding: '8px 6px',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              border: '1px solid rgba(139, 92, 246, 0.3)',
+                              borderRadius: '6px',
+                              background: 'var(--primary-purple)',
+                              color: 'white',
+                              cursor: 'pointer',
+                              lineHeight: '1.3',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              textAlign: 'center',
+                              whiteSpace: 'normal',
+                              wordBreak: 'break-word'
+                            }}
+                          >
+                            {isExpanded ? 'Hide skills' : 'Show skills'}
+                          </button>
+                        </>
+                      )
+                    })()}
                     
                                 
                     {/* --- GESTIONE STATI FEEDBACK --- */}
                     
-                    {/* PRIORITÀ 1: Stato batch - mostra placeholder informativo e disabilita generazione */}
-                    {(r.status?.includes('batch') || r.status === 'Feedback in coda batch (può richiedere fino a 24h)') && (
+                    {/* Candidatura Interrotta o In attesa colloquio - Non mostrare pulsanti feedback */}
+                    {!isInterrupted && (() => {
+                      const statusLower = (r.status || '').toLowerCase()
+                      const hasCompletedInterview = statusLower.includes('colloquiato') ||
+                        statusLower.includes('feedback pronto') ||
+                        statusLower.includes('feedback scaricato')
+                      
+                      // Se non ha completato il colloquio, non mostrare nulla
+                      if (!hasCompletedInterview) return null
+                      
+                      return (
+                        <>
+                    {/* PRIORITÀ 1: Feedback già scaricato - mostra info download */}
+                    {statusLower.includes('feedback scaricato') && r.downloaded_at && (
                         <div style={{ 
                           width: '120px',
                           minHeight: '60px',
                           padding: '8px 6px', 
-                          background: '#FEF3C7', 
-                          border: '2px solid #F59E0B', 
+                          background: '#E0E7FF', 
+                          border: '2px solid #4338CA', 
                           borderRadius: 'var(--radius-md)', 
                           display: 'flex', 
                           flexDirection: 'column',
@@ -1237,28 +1343,28 @@ export function Candidati() {
                           gap: '4px',
                           textAlign: 'center'
                         }}>
-                            <Clock size={16} color="#92400E" />
+                            <CheckCircle2 size={16} color="#4338CA" />
                             <span style={{ 
                               fontSize: '10px', 
                               fontWeight: '600',
-                              color: '#92400E',
+                              color: '#4338CA',
                               lineHeight: '1.2'
                             }}>
-                              In coda batch
+                              Scaricato
                             </span>
                             <span style={{ 
                               fontSize: '9px', 
-                              color: '#92400E',
+                              color: '#4338CA',
                               opacity: 0.8,
                               lineHeight: '1.1'
                             }}>
-                              Può richiedere fino a 24h
+                              {new Date(r.downloaded_at).toLocaleDateString('it-IT')}
                             </span>
                         </div>
                     )}
                     
-                    {/* PRIORITÀ 2: Stato pronto per download - mostra bottone download */}
-                    {(r.status === 'Feedback pronto' || r.status === 'Feedback ready') && (
+                    {/* PRIORITÀ 2: Feedback pronto - mostra bottone download */}
+                    {statusLower.includes('feedback pronto') && (
                         <button 
                             onClick={() => downloadFeedback(r.session_id)}
                             style={{ 
@@ -1286,41 +1392,45 @@ export function Candidati() {
                         </button>
                     )}
                     
-                    {/* PRIORITÀ 3: Stato in elaborazione */}
-                    {r.status === 'Generazione feedback in corso...' && (
-                        <button 
-                            disabled 
-                            style={{ 
-                              width: '85px',
-                              height: '60px',
-                              padding: '8px 6px', 
-                              background: '#A5B4FC', 
-                              color: 'white', 
-                              border: 'none', 
-                              borderRadius: 'var(--radius-md)', 
-                              fontSize: '11px', 
+                    {/* PRIORITÀ 2.5: Feedback in elaborazione - mostra badge (non cliccabile) */}
+                    {(r.status === 'Feedback in elaborazione' ||
+                      r.status === 'Generazione feedback in corso...' || 
+                      r.status?.includes('batch') || 
+                      r.status?.toLowerCase().includes('elaborazione') ||
+                      statusLower.includes('feedback in elaborazione')) && (
+                        <div style={{ 
+                          width: '120px',
+                          minHeight: '60px',
+                          padding: '8px 6px', 
+                          background: '#FEF3C7', 
+                          border: '2px solid #F59E0B', 
+                          borderRadius: 'var(--radius-md)', 
+                          display: 'flex', 
+                          flexDirection: 'column',
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          gap: '4px',
+                          textAlign: 'center'
+                        }}>
+                            <Clock size={16} color="#F59E0B" />
+                            <span style={{ 
+                              fontSize: '10px', 
                               fontWeight: '600',
-                              cursor: 'not-allowed', 
-                              display: 'flex', 
-                              flexDirection: 'column',
-                              alignItems: 'center', 
-                              justifyContent: 'center',
-                              gap: '3px',
-                              lineHeight: '1.3',
-                              textAlign: 'center'
-                            }}
-                        >
-                            <Clock size={14} />
-                            <span>In elaborazione</span>
-                        </button>
+                              color: '#F59E0B',
+                              lineHeight: '1.2'
+                            }}>
+                              Elaborazione report in corso
+                            </span>
+                        </div>
                     )}
                     
-                    {/* PRIORITÀ 4: Stato pronto per generare - SOLO se NON è in batch e NON è già pronto */}
-                    {!r.status?.includes('batch') && 
-                     r.status !== 'Feedback pronto' && 
-                     r.status !== 'Feedback ready' &&
-                     r.status !== 'Generazione feedback in corso...' &&
-                     (r.status === 'Evaluation pending' || r.status === 'Feedback pending' || r.status === 'Pronto per generare feedback' || r.status === 'Evaluation completed') && (
+                    {/* PRIORITÀ 3: Colloquiato - in attesa generazione feedback (solo se NON in elaborazione) */}
+                    {statusLower.includes('colloquiato') && 
+                     r.status !== 'Feedback in elaborazione' &&
+                     r.status !== 'Generazione feedback in corso...' && 
+                     !r.status?.includes('batch') && 
+                     !r.status?.toLowerCase().includes('elaborazione') &&
+                     !statusLower.includes('feedback in elaborazione') && (
                         <button 
                             onClick={() => handleGenerateFeedback(r.session_id)}
                             style={{ 
@@ -1347,6 +1457,9 @@ export function Candidati() {
                             <span>Genera Feedback</span>
                         </button>
                     )}
+                        </>
+                      )
+                    })()}
                 
                     {/* Stato: Errore */}
                     {r.status === 'Errore generazione feedback' && (
@@ -1396,7 +1509,10 @@ export function Candidati() {
                         gap: '2px'
                       }}>
                         <Download size={12} />
-                        <span>Scaricato da</span>
+                        {r.downloaded_by === 'whatsapp_agent' && (
+                          <span style={{ fontWeight: '700', color: 'var(--primary-purple)' }}>Token colloquio</span>
+                        )}
+                        <span>Inviato da</span>
                         <span style={{ fontWeight: '700' }}>{r.downloaded_by_name || r.downloaded_by}</span>
                         <span style={{ fontSize: '8px' }}>il {new Date(r.downloaded_at).toLocaleDateString('it-IT')}</span>
                       </div>

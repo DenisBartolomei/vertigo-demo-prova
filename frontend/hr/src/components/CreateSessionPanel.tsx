@@ -10,6 +10,7 @@ interface CreateSessionPanelProps {
     positionId: string
     candidateName: string
     candidateEmail: string
+    candidatePhone?: string
     cvFile: File
   }) => Promise<void>
   batchUploading: boolean
@@ -33,6 +34,7 @@ export function CreateSessionPanel({
   const [singlePositionId, setSinglePositionId] = useState('')
   const [candidateName, setCandidateName] = useState('')
   const [candidateEmail, setCandidateEmail] = useState('')
+  const [candidatePhone, setCandidatePhone] = useState('')
   const [cvFile, setCvFile] = useState<File | null>(null)
   const [singleUploading, setSingleUploading] = useState(false)
 
@@ -60,11 +62,13 @@ export function CreateSessionPanel({
         positionId: singlePositionId,
         candidateName,
         candidateEmail,
+        candidatePhone: candidatePhone || undefined,
         cvFile
       })
       setSinglePositionId('')
       setCandidateName('')
       setCandidateEmail('')
+      setCandidatePhone('')
       setCvFile(null)
     } finally {
       setSingleUploading(false)
@@ -186,6 +190,19 @@ export function CreateSessionPanel({
                   value={candidateEmail} 
                   onChange={e => setCandidateEmail(e.target.value)} 
                 />
+              </div>
+              
+              <div className="form-group">
+                <label>Numero di Telefono (opzionale)</label>
+                <input 
+                  type="tel"
+                  placeholder="+39 123 456 7890" 
+                  value={candidatePhone} 
+                  onChange={e => setCandidatePhone(e.target.value)} 
+                />
+                <small style={{ color: '#666', fontSize: '12px' }}>
+                  Se non inserito, verrà estratto automaticamente dal CV
+                </small>
               </div>
               
               <div className="form-group">

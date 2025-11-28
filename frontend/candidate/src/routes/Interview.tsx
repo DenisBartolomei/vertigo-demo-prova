@@ -362,7 +362,7 @@ export function Interview() {
       // Se il colloquio non è ancora iniziato, mostra il warning fullscreen
       // Se il colloquio è già iniziato, continua normalmente
       if (!isStarted) {
-        setShowFullscreenWarning(true)
+      setShowFullscreenWarning(true)
       }
       // Se il colloquio è già iniziato, il popup si chiude e l'utente può continuare
     }

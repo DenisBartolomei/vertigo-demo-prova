@@ -4,22 +4,22 @@
     "normalized_experiences": [
       {
         "original_title": "Senior Strategy Consultant",
-        "duration_months": 12,
+        "duration_months": 19,
         "esco_matches": [
           {
-            "esco_title": "responsabile della pianificazione strategica",
-            "similarity": "0.8535"
+            "esco_title": "operatore di prestampa/operatrice di prestampa",
+            "similarity": "0.8133"
           },
           {
-            "esco_title": "responsabile strategico/responsabile strategica",
-            "similarity": "0.7831"
+            "esco_title": "tecnico di ingegneria clinica",
+            "similarity": "0.7536"
           },
           {
-            "esco_title": "analista di business",
-            "similarity": "0.7521"
+            "esco_title": "consulente in trasferimento di imprese",
+            "similarity": "0.7452"
           }
         ],
-        "enriched_text": "Il Senior Strategy Consultant coordina team multidisciplinari e gestisce direttamente la relazione con clienti su progetti di pianificazione strategica, fusioni e acquisizioni (conduzione di due diligence tecnologica) e Project Management Office IT. Svolge analisi di mercato e normative, benchmarking competitivo e contribuisce alla definizione di strategie aziendali. Redige e presenta deliverable a stakeholder di alto livello, supportando il top management nei processi decisionali. Il ruolo richiede competenze avanzate in consulenza strategica, gestione di progetti complessi, analisi di dati e capacità di comunicazione efficace con interlocutori senior.",
+        "enriched_text": "Il Senior Strategy Consultant coordina team di lavoro e gestisce direttamente le relazioni con i clienti nell’ambito di progetti di pianificazione strategica, modellizzazione dei costi, business case, fusioni e acquisizioni (conduzione di due diligence tecnologiche) e Project Management Office IT per il settore dei servizi finanziari. Svolge analisi di mercato e normative, benchmarking competitivo e contribuisce alla definizione delle linee guida strategiche, presentando deliverable a interlocutori senior e supportando il top management nei processi decisionali.",
         "embedding_from_cache": false
       },
       {
@@ -27,39 +27,19 @@
         "duration_months": 19,
         "esco_matches": [
           {
-            "esco_title": "consulente informatico",
-            "similarity": "0.8278"
+            "esco_title": "responsabile produzione maglieria",
+            "similarity": "0.8144"
           },
           {
-            "esco_title": "analista business dei sistemi TIC",
-            "similarity": "0.8004"
+            "esco_title": "assemblatore elettronico/assemblatrice elettronica",
+            "similarity": "0.7965"
           },
           {
-            "esco_title": "responsabile business intelligence",
-            "similarity": "0.7824"
+            "esco_title": "responsabile della logistica intermodale",
+            "similarity": "0.7854"
           }
         ],
-        "enriched_text": "Il ruolo di IT Strategy Consultant prevede la fondazione e la gestione di un osservatorio interno sull’Intelligenza Artificiale e Generative AI, con analisi dei trend tecnologici e valutazione degli impatti strategici per i clienti. Include la partecipazione a progetti di fusioni e acquisizioni tecnologiche (Tech M&A), la revisione di modelli operativi IT (IT Target Operating Model) e la gestione di progetti complessi per clienti enterprise nei settori bancario, asset management e servizi, con attenzione all’innovazione digitale e all’ottimizzazione dei processi aziendali.",
-        "embedding_from_cache": false
-      },
-      {
-        "original_title": "Founder",
-        "duration_months": 9,
-        "esco_matches": [
-          {
-            "esco_title": "responsabile della gestione della community online",
-            "similarity": "0.7076"
-          },
-          {
-            "esco_title": "direttore dei sistemi informatici/direttrice dei sistemi informatici",
-            "similarity": "0.7041"
-          },
-          {
-            "esco_title": "amministratore di sistemi TIC/amministratrice di sistemi TIC",
-            "similarity": "0.6993"
-          }
-        ],
-        "enriched_text": "Responsabile della creazione, sviluppo e gestione di una piattaforma digitale dedicata al networking professionale e all’implementazione di programmi di segnalazione dei dipendenti (Employee Referral Programs). Ha coordinato tutte le fasi del progetto, dalla definizione della strategia di business alla supervisione delle attività operative, occupandosi anche della crescita della base utenti, del marketing digitale, della gestione delle relazioni con stakeholder e partner, e dell’analisi delle metriche di utilizzo, raggiungendo 200 utenti registrati e una media di 1500 utenti mensili.",
+        "enriched_text": "Consulente di strategia IT con esperienza nella fondazione di un osservatorio su GenAI, focalizzato sull’analisi delle tendenze emergenti e sull’impatto strategico per i clienti. Ha collaborato con la direzione IT Strategy & Transformation di una primaria banca italiana per la ristrutturazione del modello di delivery IT e la creazione di un centro di eccellenza per l’internalizzazione di processi IT precedentemente esternalizzati. Ha partecipato a progetti di Tech M&A, revisione di IT Target Operating Model e gestione di progetti complessi per clienti enterprise.",
         "embedding_from_cache": false
       }
     ]

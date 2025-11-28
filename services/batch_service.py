@@ -589,27 +589,37 @@ class BatchService:
                     response_body = result["response"]["body"]
                     analysis_text = response_body["choices"][0]["message"]["content"]
                     
-                    # Parsa la risposta per estrarre report_text e structured_experience
+                    # Parsa la risposta per estrarre report_text, structured_experience e candidate_name
                     try:
                         from analyzer.cv_analyzer import parse_mixed_llm_response
                         parsed_data = parse_mixed_llm_response(analysis_text)
                         report_text = parsed_data.get("report_text", analysis_text)
                         structured_experience = parsed_data.get("structured_experience", [])
+                        candidate_name = parsed_data.get("candidate_name")
                     except Exception as e:
                         print(f"[WARN] Errore durante il parsing della risposta per sessione {session_id}: {e}")
                         # Fallback: salva il testo grezzo
                         report_text = analysis_text
                         structured_experience = []
+                        candidate_name = None
+                    
+                    # Prepara i campi da aggiornare
+                    update_fields = {
+                        "stages.cv_analysis_report": report_text,
+                        "stages.parsed_experience": structured_experience,
+                        "stages.cv_analysis_status": "Completed",
+                        "stages.cv_analysis_completed_at": datetime.utcnow().isoformat()
+                    }
+                    
+                    # Aggiungi candidate_name se estratto (salvato nel root del documento, non in stages)
+                    if candidate_name:
+                        update_fields["candidate_name"] = candidate_name
+                        print(f"  - Nome candidato estratto per sessione {session_id}: {candidate_name}")
                     
                     # Salva in sessione (tenant-specific)
                     sessions_collection.update_one(
                         {"_id": session_id},
-                        {"$set": {
-                            "stages.cv_analysis_report": report_text,
-                            "stages.parsed_experience": structured_experience,
-                            "stages.cv_analysis_status": "Completed",
-                            "stages.cv_analysis_completed_at": datetime.utcnow().isoformat()
-                        }}
+                        {"$set": update_fields}
                     )
                     success_count += 1
                 else:

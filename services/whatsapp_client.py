@@ -13,7 +13,7 @@ class WhatsAppClient:
     def __init__(self):
         self.api_token = os.getenv("WHATSAPP_API_TOKEN")
         self.phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
-        self.api_version = os.getenv("WHATSAPP_API_VERSION", "v19.0")
+        self.api_version = os.getenv("WHATSAPP_API_VERSION", "v18.0")
         self.base_url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}"
         
         if not self.api_token or not self.phone_number_id:
@@ -146,9 +146,19 @@ class WhatsAppClient:
             headers = {
                 "Authorization": f"Bearer {self.api_token}"
             }
-            response = requests.get(url, headers=headers)
-            return response.status_code == 200
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                return True
+            else:
+                # Log dell'errore per debug
+                error_detail = response.text if response.text else f"Status {response.status_code}"
+                print(f"Errore validazione credenziali: Status {response.status_code}, Detail: {error_detail}")
+                return False
+        except requests.exceptions.RequestException as e:
+            print(f"Errore validazione credenziali (network): {e}")
+            return False
         except Exception as e:
-            print(f"Errore validazione credenziali: {e}")
+            print(f"Errore validazione credenziali (generico): {e}")
             return False
 

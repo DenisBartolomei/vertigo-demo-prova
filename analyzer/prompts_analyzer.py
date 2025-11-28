@@ -58,17 +58,19 @@ Valuta allineamenti e disallineamenti tra le attività e/o responsabilità scrit
     o	Responsabilità principali e attività operative di pertinenza della posizione vs Responsabilità e attività presenti nel CV.
     o	Contesto organizzativo: affinità del team di appartenenza e ruolo del team in azienda con le attività, i ruoli e i team riportati nel CV (se desumibile).
 
-3. Il tuo compito adesso è estrarre le esperienze lavorative dal testo fornito e restituirle in un formato JSON strutturato.
+3. Il tuo compito adesso è estrarre informazioni strutturate dal CV e restituirle in un formato JSON strutturato.
 Segui queste regole in modo RIGOROSO:
+    o  **NOME CANDIDATO**: Estrai il nome completo del candidato (nome e cognome) dalla sezione dati personali o dall'intestazione del CV. È tipicamente la prima informazione presente nel documento.
     o  **FORMATO DATE**: Le date `start_date` e `end_date` DEVONO essere nel formato numerico **YYYY-MM-DD**.
         - Se il giorno non è specificato nel CV, usa sempre '01'.
         - Esempio: "Settembre 2022" deve diventare "2022-09-01". "Dal 2020" deve diventare "2020-01-01".
     o  **DATA FINE**: Se l'esperienza è ancora in corso (es. "Presente", "Oggi", "in corso"), il valore di `end_date` deve essere la stringa esatta "present".
-    o  **CONTENUTO**: Estrai SOLO le esperienze lavorative. IGNORA completamente istruzione, certificazioni, volontariato, hobby e qualsiasi dato personale (nome, telefono, email, indirizzo).
+    o  **CONTENUTO ESPERIENZE**: Estrai SOLO le esperienze lavorative. IGNORA completamente istruzione, certificazioni, volontariato, hobby.
     o  **OUTPUT**: Restituisci ESCLUSIVAMENTE l'oggetto JSON, senza alcun testo o spiegazione prima o dopo.
 
     Ecco la struttura JSON che DEVI seguire:
     {{
+      "candidate_name": "Nome Cognome completo del candidato",
       "current_position": "Titolo della posizione lavorativa più recente",
       "experience": [
         {{
@@ -138,17 +140,19 @@ Evaluate alignments and misalignments between the activities and/or responsibili
     o	Main responsibilities and operational activities pertaining to the position vs Responsibilities and activities present in the CV.
     o	Organizational context: affinity of the team membership and role of the team in the company with the activities, roles and teams reported in the CV (if inferable).
 
-3. Your task now is to extract work experiences from the provided text and return them in a structured JSON format.
+3. Your task now is to extract structured information from the CV and return it in a structured JSON format.
 Follow these rules STRICTLY:
+    o  **CANDIDATE NAME**: Extract the candidate's full name (first and last name) from the personal data section or the CV header. It is typically the first information present in the document.
     o  **DATE FORMAT**: The dates `start_date` and `end_date` MUST be in the numeric format **YYYY-MM-DD**.
         - If the day is not specified in the CV, always use '01'.
         - Example: "September 2022" must become "2022-09-01". "From 2020" must become "2020-01-01".
     o  **END DATE**: If the experience is still ongoing (e.g. "Present", "Current", "ongoing"), the value of `end_date` must be the exact string "present".
-    o  **CONTENT**: Extract ONLY work experiences. COMPLETELY IGNORE education, certifications, volunteering, hobbies and any personal data (name, phone, email, address).
+    o  **EXPERIENCE CONTENT**: Extract ONLY work experiences. COMPLETELY IGNORE education, certifications, volunteering, hobbies.
     o  **OUTPUT**: Return EXCLUSIVELY the JSON object, without any text or explanation before or after.
 
     Here is the JSON structure you MUST follow:
     {{
+      "candidate_name": "Full Name of the candidate",
       "current_position": "Title of the most recent work position",
       "experience": [
         {{

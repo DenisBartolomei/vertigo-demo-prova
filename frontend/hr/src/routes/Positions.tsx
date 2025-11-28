@@ -15,16 +15,33 @@ interface InterviewConfig {
 export function Positions() {
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
-  const [form, setForm] = useState({ position_id: '', position_name: '', job_description: '', seniority_level: 'Mid-Level', hr_special_needs: '' })
+  const [form, setForm] = useState({ 
+    position_id: '', 
+    position_name: '', 
+    job_description: '', 
+    seniority_level: 'Mid-Level', 
+    hr_special_needs: '',
+    knockout_requirements: [] as string[],
+    ral: '',
+    sede: '',
+    smart_working: '',
+    workflow_type: 'full' as 'full' | 'whatsapp_only'
+  })
   const [kbDocs, setKbDocs] = useState<{ title: string; content: string }[]>([])
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<Record<string, 'text' | 'cases' | 'evaluation' | null>>({})
+  const [activeTab, setActiveTab] = useState<Record<string, 'text' | 'cases' | 'evaluation' | 'details' | null>>({})
   const [details, setDetails] = useState<Record<string, any>>({})
   const [editedCriteria, setEditedCriteria] = useState<Record<string, any>>({})
   const [savingCriteria, setSavingCriteria] = useState(false)
   const [isPreparing, setIsPreparing] = useState(false)
   const [isCreateFormExpanded, setIsCreateFormExpanded] = useState(false)
   const [expandedCriteria, setExpandedCriteria] = useState<Record<string, Set<number>>>({})
+  
+  // Form step wizard (1 = info base, 2 = configurazione avanzata)
+  const [formStep, setFormStep] = useState<1 | 2>(1)
+  const [suggestedKnockouts, setSuggestedKnockouts] = useState<string[]>([])
+  const [selectedKnockouts, setSelectedKnockouts] = useState<Set<string>>(new Set())
+  const [loadingKnockouts, setLoadingKnockouts] = useState(false)
   
   // Interview configuration states
   const [showInterviewConfig, setShowInterviewConfig] = useState(false)
@@ -52,17 +69,76 @@ export function Positions() {
 
   useEffect(() => { load() }, [])
 
+  // Passa allo Step 2 e suggerisci knockout
+  async function goToStep2() {
+    if (!form.position_name || !form.job_description) {
+      alert('Compila almeno il Titolo Posizione e la Descrizione del Lavoro')
+      return
+    }
+    
+    setFormStep(2)
+    setLoadingKnockouts(true)
+    setSuggestedKnockouts([])
+    setSelectedKnockouts(new Set())
+    
+    try {
+      const resp = await fetch(`${API_BASE}/positions/suggest-knockout`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify({ job_description: form.job_description })
+      })
+      
+      if (resp.ok) {
+        const data = await resp.json()
+        const suggestions = data.suggestions || []
+        setSuggestedKnockouts(suggestions)
+        // Seleziona tutti i suggerimenti di default
+        setSelectedKnockouts(new Set(suggestions))
+      }
+    } catch (error) {
+      console.error('Errore nel suggerimento knockout:', error)
+    } finally {
+      setLoadingKnockouts(false)
+    }
+  }
+
+  // Torna allo Step 1
+  function goToStep1() {
+    setFormStep(1)
+  }
+
+  // Toggle selezione knockout suggerito
+  function toggleKnockoutSelection(knockout: string) {
+    const newSelected = new Set(selectedKnockouts)
+    if (newSelected.has(knockout)) {
+      newSelected.delete(knockout)
+    } else {
+      newSelected.add(knockout)
+    }
+    setSelectedKnockouts(newSelected)
+  }
+
   async function upsertPosition() {
     setIsPreparing(true)
     
     try {
-      console.log('Creating position with form:', form)
+      // Combina knockout selezionati + knockout manuali
+      const allKnockouts = [
+        ...Array.from(selectedKnockouts),
+        ...form.knockout_requirements.filter(k => k.trim() !== '')
+      ]
+      const finalForm = { ...form, knockout_requirements: allKnockouts }
+      
+      console.log('Creating position with form:', finalForm)
       
       // First save the position
       const resp = await fetch(`${API_BASE}/positions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...form, knowledge_base: kbDocs })
+        body: JSON.stringify({ ...finalForm, knowledge_base: kbDocs })
       })
       
       if (resp.ok) {
@@ -95,8 +171,23 @@ export function Positions() {
         alert(`Errore nel salvataggio: ${error.detail || 'Errore sconosciuto'}`)
       }
       
-      setForm({ position_id: '', position_name: '', job_description: '', seniority_level: 'Mid-Level', hr_special_needs: '' })
+      setForm({ 
+        position_id: '', 
+        position_name: '', 
+        job_description: '', 
+        seniority_level: 'Mid-Level', 
+        hr_special_needs: '',
+        knockout_requirements: [],
+        ral: '',
+        sede: '',
+        smart_working: '',
+        workflow_type: 'full' as 'full' | 'whatsapp_only'
+      })
       setKbDocs([])
+      setFormStep(1)
+      setSuggestedKnockouts([])
+      setSelectedKnockouts(new Set())
+      setIsCreateFormExpanded(false)
       await load()
     } finally {
       setIsPreparing(false)
@@ -155,7 +246,7 @@ export function Positions() {
     }
   }
 
-  function handleTabClick(positionId: string, tab: 'text' | 'cases' | 'evaluation') {
+  function handleTabClick(positionId: string, tab: 'text' | 'cases' | 'evaluation' | 'details') {
     setActiveTab(prev => ({
       ...prev,
       [positionId]: prev[positionId] === tab ? null : tab
@@ -429,9 +520,9 @@ export function Positions() {
       )}
       
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2>Annunci</h2>
-          <p className="muted">Crea e gestisci le posizioni lavorative per i colloqui dei candidati</p>
+      <div>
+        <h2>Annunci</h2>
+        <p className="muted">Crea e gestisci le posizioni lavorative per i colloqui dei candidati</p>
         </div>
         <button
           onClick={() => setShowInterviewConfig(true)}
@@ -505,6 +596,75 @@ export function Positions() {
         
         {isCreateFormExpanded && (
           <div style={{ display: 'grid', gap: '20px' }}>
+            
+            {/* Step Indicator */}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              gap: '16px',
+              padding: '16px',
+              background: 'var(--bg-secondary)',
+              borderRadius: 'var(--radius-md)'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px',
+                padding: '8px 16px',
+                background: formStep === 1 ? 'var(--primary-purple)' : 'transparent',
+                color: formStep === 1 ? 'white' : 'var(--text-secondary)',
+                borderRadius: '20px',
+                fontWeight: '500',
+                fontSize: '14px',
+                transition: 'all 0.2s ease'
+              }}>
+                <span style={{ 
+                  width: '24px', 
+                  height: '24px', 
+                  borderRadius: '50%', 
+                  background: formStep === 1 ? 'white' : 'var(--border-light)',
+                  color: formStep === 1 ? 'var(--primary-purple)' : 'var(--text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: '600',
+                  fontSize: '12px'
+                }}>1</span>
+                Info Base
+              </div>
+              <div style={{ width: '40px', height: '2px', background: formStep === 2 ? 'var(--primary-purple)' : 'var(--border-light)' }} />
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px',
+                padding: '8px 16px',
+                background: formStep === 2 ? 'var(--primary-purple)' : 'transparent',
+                color: formStep === 2 ? 'white' : 'var(--text-secondary)',
+                borderRadius: '20px',
+                fontWeight: '500',
+                fontSize: '14px',
+                transition: 'all 0.2s ease'
+              }}>
+                <span style={{ 
+                  width: '24px', 
+                  height: '24px', 
+                  borderRadius: '50%', 
+                  background: formStep === 2 ? 'white' : 'var(--border-light)',
+                  color: formStep === 2 ? 'var(--primary-purple)' : 'var(--text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: '600',
+                  fontSize: '12px'
+                }}>2</span>
+                Configurazione
+              </div>
+            </div>
+
+            {/* ========== STEP 1: Info Base ========== */}
+            {formStep === 1 && (
+              <>
           <div>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: 'var(--text-primary)' }}>
               ID Posizione
@@ -514,7 +674,7 @@ export function Positions() {
           
           <div>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: 'var(--text-primary)' }}>
-              Titolo Posizione
+                    Titolo Posizione *
             </label>
             <input placeholder="es. Senior Software Engineer" value={form.position_name} onChange={e => setForm({ ...form, position_name: e.target.value })} />
           </div>
@@ -533,16 +693,16 @@ export function Positions() {
           
           <div>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: 'var(--text-primary)' }}>
-              Descrizione del Lavoro
+                    Descrizione del Lavoro *
             </label>
             <textarea placeholder="Descrivi il ruolo, le responsabilità e i requisiti..." value={form.job_description} onChange={e => setForm({ ...form, job_description: e.target.value })} rows={6}></textarea>
           </div>
           
           <div>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: 'var(--text-primary)' }}>
-              Esigenze Speciali HR (Opzionale)
+                    Esigenze Speciali (Opzionale)
             </label>
-            <textarea placeholder="Eventuali requisiti specifici o preferenze da parte dell'HR..." value={form.hr_special_needs} onChange={e => setForm({ ...form, hr_special_needs: e.target.value })} rows={3}></textarea>
+                  <textarea placeholder="Eventuali requisiti specifici o preferenze..." value={form.hr_special_needs} onChange={e => setForm({ ...form, hr_special_needs: e.target.value })} rows={3}></textarea>
           </div>
           
           {/* Knowledge Base */}
@@ -560,7 +720,7 @@ export function Positions() {
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <span style={{ fontSize: '14px', fontWeight: '500', color: 'var(--text-secondary)' }}>
-                      Document {idx + 1}
+                            Documento {idx + 1}
                     </span>
                     <button 
                       type="button" 
@@ -604,12 +764,304 @@ export function Positions() {
           </div>
           
           <button 
-            onClick={upsertPosition}
+                  onClick={goToStep2}
             disabled={!form.position_name || !form.job_description}
-            style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }}
-          >
-            <Save size={18} style={{ marginRight: '8px' }} /> Salva Posizione & Avvia Preparazione Dati
+                  style={{ 
+                    width: '100%', 
+                    justifyContent: 'center', 
+                    marginTop: '8px',
+                    background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))'
+                  }}
+                >
+                  Prosegui → Configurazione Avanzata
           </button>
+              </>
+            )}
+
+            {/* ========== STEP 2: Configurazione Avanzata ========== */}
+            {formStep === 2 && (
+              <>
+                {/* Requisiti Knockout Suggeriti */}
+                <div style={{ 
+                  background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(59, 130, 246, 0.08))',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '20px',
+                  border: '1px solid rgba(139, 92, 246, 0.2)'
+                }}>
+                  <label style={{ display: 'block', marginBottom: '12px', fontWeight: '600', color: 'var(--text-primary)', fontSize: '15px' }}>
+                    🎯 Requisiti Obbligatori (Knock-out)
+                  </label>
+                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                    L'AI ha analizzato la descrizione e suggerisce questi requisiti obbligatori. Seleziona quelli applicabili.
+                  </p>
+                  
+                  {loadingKnockouts ? (
+                    <div style={{ 
+                      padding: '24px', 
+                      textAlign: 'center', 
+                      color: 'var(--text-secondary)',
+                      background: 'white',
+                      borderRadius: '8px'
+                    }}>
+                      <div style={{ marginBottom: '8px' }}>⏳ Analisi in corso...</div>
+                      <div style={{ fontSize: '12px' }}>L'AI sta estraendo i requisiti obbligatori dalla descrizione</div>
+          </div>
+                  ) : suggestedKnockouts.length > 0 ? (
+                    <div style={{ display: 'grid', gap: '8px', marginBottom: '16px' }}>
+                      {suggestedKnockouts.map((knockout, idx) => (
+                        <label 
+                          key={idx} 
+                          style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '12px',
+                            padding: '12px 16px',
+                            background: selectedKnockouts.has(knockout) 
+                              ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.08))' 
+                              : 'white',
+                            borderRadius: '8px',
+                            border: selectedKnockouts.has(knockout) 
+                              ? '2px solid var(--primary-purple)' 
+                              : '1px solid var(--border-light)',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <input 
+                            type="checkbox"
+                            checked={selectedKnockouts.has(knockout)}
+                            onChange={() => toggleKnockoutSelection(knockout)}
+                            style={{ 
+                              width: '18px', 
+                              height: '18px',
+                              accentColor: 'var(--primary-purple)'
+                            }}
+                          />
+                          <span style={{ 
+                            fontSize: '14px', 
+                            color: 'var(--text-primary)',
+                            flex: 1
+                          }}>
+                            {knockout}
+                          </span>
+                          {selectedKnockouts.has(knockout) && (
+                            <span style={{ color: 'var(--primary-purple)', fontSize: '16px' }}>✓</span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ 
+                      padding: '16px', 
+                      textAlign: 'center', 
+                      color: 'var(--text-secondary)',
+                      background: 'white',
+                      borderRadius: '8px',
+                      marginBottom: '16px'
+                    }}>
+                      Nessun requisito obbligatorio rilevato automaticamente dalla descrizione.
+                    </div>
+                  )}
+
+                  {/* Requisiti manuali aggiuntivi */}
+                  <div style={{ borderTop: '1px solid rgba(139, 92, 246, 0.2)', paddingTop: '16px', marginTop: '8px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: 'var(--text-primary)', fontSize: '13px' }}>
+                      Aggiungi altri requisiti manualmente:
+                    </label>
+                    <div style={{ display: 'grid', gap: '8px', marginBottom: '12px' }}>
+                      {form.knockout_requirements.map((req, idx) => (
+                        <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <input
+                            type="text"
+                            value={req}
+                            onChange={e => {
+                              const updated = [...form.knockout_requirements]
+                              updated[idx] = e.target.value
+                              setForm({ ...form, knockout_requirements: updated })
+                            }}
+                            placeholder="es. Possesso della patente B"
+                            style={{ flex: 1 }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm({ ...form, knockout_requirements: form.knockout_requirements.filter((_, i) => i !== idx) })
+                            }}
+                            style={{
+                              padding: '8px 12px',
+                              background: '#FEE2E2',
+                              color: '#991B1B',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontSize: '14px'
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, knockout_requirements: [...form.knockout_requirements, ''] })}
+                      style={{
+                        padding: '8px 16px',
+                        background: 'white',
+                        color: 'var(--primary-purple)',
+                        border: '1px solid var(--primary-purple)',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: '500'
+                      }}
+                    >
+                      + Aggiungi Requisito
+                    </button>
+                  </div>
+                </div>
+
+                {/* RAL, Sede, Smart Working */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: 'var(--text-primary)' }}>
+                      💰 RAL / Stipendio
+                    </label>
+                    <input 
+                      placeholder="es. 30k-40k" 
+                      value={form.ral} 
+                      onChange={e => setForm({ ...form, ral: e.target.value })} 
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: 'var(--text-primary)' }}>
+                      📍 Sede / Location
+                    </label>
+                    <input 
+                      placeholder="es. Milano, Roma" 
+                      value={form.sede} 
+                      onChange={e => setForm({ ...form, sede: e.target.value })} 
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: 'var(--text-primary)' }}>
+                      🏠 Smart Working
+                    </label>
+                    <input 
+                      placeholder="es. 3gg/settimana" 
+                      value={form.smart_working} 
+                      onChange={e => setForm({ ...form, smart_working: e.target.value })} 
+                    />
+                  </div>
+                </div>
+
+                {/* Workflow Type Selector */}
+                <div>
+                  <label style={{ display: 'block', marginBottom: '10px', fontWeight: '500', color: 'var(--text-primary)' }}>
+                    🔄 Tipo di Workflow
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    {/* Flusso Completo */}
+                    <label style={{ 
+                      display: 'flex', 
+                      flexDirection: 'column',
+                      padding: '16px',
+                      background: form.workflow_type === 'full' 
+                        ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(139, 92, 246, 0.05))' 
+                        : 'var(--bg-secondary)',
+                      borderRadius: '10px',
+                      border: form.workflow_type === 'full' 
+                        ? '2px solid var(--primary-purple)' 
+                        : '1px solid var(--border-light)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                        <input 
+                          type="radio" 
+                          name="workflow_type"
+                          value="full"
+                          checked={form.workflow_type === 'full'}
+                          onChange={() => setForm({ ...form, workflow_type: 'full' })}
+                          style={{ accentColor: 'var(--primary-purple)', width: '16px', height: '16px' }}
+                        />
+                        <span style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '14px' }}>
+                          Flusso Completo
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4', paddingLeft: '26px' }}>
+                        WhatsApp → Colloquio AI → Feedback
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#8B5CF6', marginTop: '6px', paddingLeft: '26px', fontStyle: 'italic' }}>
+                        Per ruoli con valutazione approfondita
+                      </div>
+                    </label>
+                    
+                    {/* Solo WhatsApp */}
+                    <label style={{ 
+                      display: 'flex', 
+                      flexDirection: 'column',
+                      padding: '16px',
+                      background: form.workflow_type === 'whatsapp_only' 
+                        ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(34, 197, 94, 0.05))' 
+                        : 'var(--bg-secondary)',
+                      borderRadius: '10px',
+                      border: form.workflow_type === 'whatsapp_only' 
+                        ? '2px solid #22C55E' 
+                        : '1px solid var(--border-light)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                        <input 
+                          type="radio" 
+                          name="workflow_type"
+                          value="whatsapp_only"
+                          checked={form.workflow_type === 'whatsapp_only'}
+                          onChange={() => setForm({ ...form, workflow_type: 'whatsapp_only' })}
+                          style={{ accentColor: '#22C55E', width: '16px', height: '16px' }}
+                        />
+                        <span style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '14px' }}>
+                          Solo WhatsApp
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4', paddingLeft: '26px' }}>
+                        WhatsApp → Qualificato (HR contatta)
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#16A34A', marginTop: '6px', paddingLeft: '26px', fontStyle: 'italic' }}>
+                        Per ruoli operativi con requisiti base
+                      </div>
+                    </label>
+                  </div>
+                </div>
+                
+                {/* Navigation Buttons */}
+                <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                  <button 
+                    onClick={goToStep1}
+                    className="secondary"
+                    style={{ flex: 1, justifyContent: 'center' }}
+                  >
+                    ← Torna Indietro
+                  </button>
+                  <button 
+                    onClick={upsertPosition}
+                    disabled={!form.position_name || !form.job_description || isPreparing}
+                    style={{ 
+                      flex: 2, 
+                      justifyContent: 'center',
+                      background: 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))'
+                    }}
+                  >
+                    {isPreparing ? (
+                      <>⏳ Salvataggio in corso...</>
+                    ) : (
+                      <><Save size={18} style={{ marginRight: '8px' }} /> Salva Posizione & Avvia Preparazione</>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -751,6 +1203,23 @@ export function Positions() {
                             }}
                           >
                             <BarChart3 size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Griglia valutativa
+                          </button>
+                          <button
+                            onClick={() => handleTabClick(p._id, 'details')}
+                            style={{
+                              padding: '12px 24px',
+                              background: activeTab[p._id] === 'details' ? 'linear-gradient(135deg, var(--primary-purple), var(--accent-purple))' : 'transparent',
+                              color: activeTab[p._id] === 'details' ? 'white' : 'var(--text-primary)',
+                              border: 'none',
+                              borderBottom: activeTab[p._id] === 'details' ? '3px solid var(--primary-purple)' : '3px solid transparent',
+                              borderRadius: '8px 8px 0 0',
+                              fontSize: '14px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            <Settings size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Dettagli Posizione
                           </button>
                         </div>
 
@@ -1032,6 +1501,146 @@ export function Positions() {
                                     <div style={{ marginTop: '8px' }}>Nessun criterio di valutazione disponibile. Esegui la preparazione dati per generarli.</div>
                                   </div>
                                 )}
+                              </div>
+                            )}
+
+                            {/* Dettagli Posizione Tab */}
+                            {activeTab[p._id] === 'details' && (
+                              <div style={{ display: 'grid', gap: '24px' }}>
+                                {/* Requisiti Knockout */}
+                                <div>
+                                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px', color: 'var(--text-primary)' }}>
+                                    Requisiti Obbligatori (Knock-out)
+                                  </h3>
+                                  {info.knockout_requirements && info.knockout_requirements.length > 0 ? (
+                                    <div style={{ display: 'grid', gap: '8px' }}>
+                                      {info.knockout_requirements.map((req: string, idx: number) => (
+                                        <div key={idx} style={{
+                                          padding: '12px',
+                                          background: 'rgba(255, 255, 255, 0.7)',
+                                          borderRadius: '8px',
+                                          border: '1px solid var(--border-light)',
+                                          fontSize: '14px'
+                                        }}>
+                                          {req}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div style={{ 
+                                      padding: '16px', 
+                                      textAlign: 'center', 
+                                      background: 'rgba(255, 255, 255, 0.5)',
+                                      borderRadius: '8px',
+                                      color: 'var(--text-secondary)'
+                                    }}>
+                                      Nessun requisito knockout configurato
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* RAL, Sede, Smart Working */}
+                                <div style={{ display: 'grid', gap: '16px' }}>
+                                  {info.ral && (
+                                    <div>
+                                      <div style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                                        RAL / STIPENDIO
+                                      </div>
+                                      <div style={{ 
+                                        padding: '12px',
+                                        background: 'rgba(255, 255, 255, 0.7)',
+                                        borderRadius: '8px',
+                                        fontSize: '14px',
+                                        fontWeight: '500'
+                                      }}>
+                                        {info.ral}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {info.sede && (
+                                    <div>
+                                      <div style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                                        SEDE / LOCATION
+                                      </div>
+                                      <div style={{ 
+                                        padding: '12px',
+                                        background: 'rgba(255, 255, 255, 0.7)',
+                                        borderRadius: '8px',
+                                        fontSize: '14px',
+                                        fontWeight: '500'
+                                      }}>
+                                        {info.sede}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {info.smart_working && (
+                                    <div>
+                                      <div style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                                        SMART WORKING POLICY
+                                      </div>
+                                      <div style={{ 
+                                        padding: '12px',
+                                        background: 'rgba(255, 255, 255, 0.7)',
+                                        borderRadius: '8px',
+                                        fontSize: '14px',
+                                        fontWeight: '500'
+                                      }}>
+                                        {info.smart_working}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {!info.ral && !info.sede && !info.smart_working && (
+                                    <div style={{ 
+                                      padding: '16px', 
+                                      textAlign: 'center', 
+                                      background: 'rgba(255, 255, 255, 0.5)',
+                                      borderRadius: '8px',
+                                      color: 'var(--text-secondary)'
+                                    }}>
+                                      Nessuna informazione aggiuntiva configurata
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Workflow Type */}
+                                <div>
+                                  <div style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                                    TIPO DI WORKFLOW
+                                  </div>
+                                  <div style={{ 
+                                    padding: '14px',
+                                    background: info.workflow_type === 'whatsapp_only' 
+                                      ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.08))'
+                                      : 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(59, 130, 246, 0.08))',
+                                    borderRadius: '10px',
+                                    border: info.workflow_type === 'whatsapp_only'
+                                      ? '1px solid rgba(34, 197, 94, 0.3)'
+                                      : '1px solid rgba(139, 92, 246, 0.3)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px'
+                                  }}>
+                                    <span style={{ fontSize: '20px' }}>
+                                      {info.workflow_type === 'whatsapp_only' ? '📱' : '🔄'}
+                                    </span>
+                                    <div>
+                                      <div style={{ 
+                                        fontWeight: '600',
+                                        color: info.workflow_type === 'whatsapp_only' ? '#16A34A' : 'var(--primary-purple)',
+                                        marginBottom: '2px'
+                                      }}>
+                                        {info.workflow_type === 'whatsapp_only' 
+                                          ? 'Solo Pre-screening WhatsApp' 
+                                          : 'Flusso Completo'}
+                                      </div>
+                                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                        {info.workflow_type === 'whatsapp_only' 
+                                          ? 'Pre-screening → Qualificato (contattato da HR)' 
+                                          : 'Pre-screening → Colloquio AI → Feedback'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
                             )}
                           </div>

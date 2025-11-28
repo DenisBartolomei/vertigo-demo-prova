@@ -89,8 +89,9 @@ def get_structured_llm_response(
     system_prompt: str, 
     tool_name: str, 
     tool_schema: dict,
-    temperature: Optional[float] = None,  # <-- Parametro opzionale
-    max_tokens: Optional[int] = None      # <-- Nuovo parametro opzionale
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
+    use_classification_client: bool = False     
 ) -> Optional[str]:
     """
     Invia un prompt forzando un output strutturato tramite la definizione di un tool.

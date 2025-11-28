@@ -10,9 +10,11 @@ ANALYZER_MODEL = AZURE_DEPLOYMENT_NAME
 def parse_mixed_llm_response(response_text: str) -> dict:
     """
     Parser robusto per estrarre il report testuale e la parte JSON da una stringa mista.
+    Estrae: report_text, structured_experience, candidate_name
     """
     report_text = ""
     structured_experience = []
+    candidate_name = None
 
     # Cerchiamo il blocco JSON. L'espressione regolare cerca una '{' che apre un JSON
     # e lo cattura fino alla sua corrispondente '}' di chiusura.
@@ -27,12 +29,22 @@ def parse_mixed_llm_response(response_text: str) -> dict:
         try:
             # Proviamo a parsare il blocco JSON trovato
             parsed_json = json.loads(json_str)
-            if isinstance(parsed_json, dict) and "experience" in parsed_json:
-                structured_experience = parsed_json["experience"]
-                print("Parser: Blocco JSON estratto e parsato con successo.")
+            if isinstance(parsed_json, dict):
+                # Estrai candidate_name se presente
+                candidate_name = parsed_json.get("candidate_name")
+                if candidate_name:
+                    print(f"Parser: Nome candidato estratto: {candidate_name}")
+                
+                # Estrai experience se presente
+                if "experience" in parsed_json:
+                    structured_experience = parsed_json["experience"]
+                    print("Parser: Blocco JSON estratto e parsato con successo.")
+                else:
+                    print("Parser: JSON trovato ma non contiene la chiave 'experience'.")
+                    # Aggiungiamo il JSON "malformato" al report per non perdere l'informazione
+                    report_text += f"\n\n--- BLOCCO JSON NON VALIDO RICEVUTO ---\n{json_str}"
             else:
-                print("Parser: JSON trovato ma non contiene la chiave 'experience'.")
-                # Aggiungiamo il JSON "malformato" al report per non perdere l'informazione
+                print("Parser: JSON trovato ma non è un dizionario.")
                 report_text += f"\n\n--- BLOCCO JSON NON VALIDO RICEVUTO ---\n{json_str}"
 
         except json.JSONDecodeError:
@@ -50,7 +62,8 @@ def parse_mixed_llm_response(response_text: str) -> dict:
 
     return {
         "report_text": report_text,
-        "structured_experience": structured_experience
+        "structured_experience": structured_experience,
+        "candidate_name": candidate_name
     }
 
 

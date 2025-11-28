@@ -7,8 +7,7 @@ from backend.models.whatsapp import (
     WhatsappConfig,
     PhoneTenantMap,
     WhatsappStatus,
-    ChatMessage,
-    KnockoutRule
+    ChatMessage
 )
 from services.data_manager import db
 
@@ -23,6 +22,7 @@ def get_whatsapp_config(tenant_id: str) -> Optional[WhatsappConfig]:
     
     if config_data:
         config_data.pop("_id", None)  # Rimuovi ObjectId
+        
         # Converti datetime strings se necessario
         if isinstance(config_data.get("created_at"), str):
             config_data["created_at"] = datetime.fromisoformat(config_data["created_at"].replace("Z", "+00:00"))
@@ -63,8 +63,6 @@ def create_default_whatsapp_config(tenant_id: str) -> WhatsappConfig:
         bot_name="Recruiter AI",
         tone="friendly",
         language="it",
-        knockout_rules=[],
-        screening_questions=[],
         knowledge_base={}
     )
 
@@ -167,10 +165,14 @@ def get_session_whatsapp_data(session_id: str, tenant_id: str) -> Optional[Dict[
     session = sessions_collection.find_one({"_id": session_id})
     
     if session:
+        # Phone number può essere in candidate_contact.phone_number o direttamente in phone_number
+        phone = session.get("candidate_contact", {}).get("phone_number") or session.get("phone_number")
         return {
             "whatsapp_status": session.get("whatsapp_status", "ready"),
             "whatsapp_chat_log": session.get("whatsapp_chat_log", []),
-            "phone_number": session.get("candidate_contact", {}).get("phone_number")
+            "phone_number": phone,
+            "interruption_reason": session.get("interruption_reason"),
+            "whatsapp_screening_result": session.get("whatsapp_screening_result")
         }
     
     return None

@@ -8,8 +8,10 @@ from datetime import datetime
 
 class SmartCaseStudyChatbot:
     # --- CONFIGURAZIONE DEI MODELLI ---
-    INTERVIEWER_MODEL = AZURE_DEPLOYMENT_NAME
-    CLASSIFICATION_MODEL = AZURE_CLASSIFICATION_DEPLOYMENT_NAME 
+    # TEST: Usa il classification deployment per tutto il colloquio
+    INTERVIEWER_MODEL = AZURE_CLASSIFICATION_DEPLOYMENT_NAME  # Era: AZURE_DEPLOYMENT_NAME
+    CLASSIFICATION_MODEL = AZURE_CLASSIFICATION_DEPLOYMENT_NAME
+    USE_CLASSIFICATION_CLIENT = True  # Flag per usare il client di classificazione
 
     def __init__(self, steps: dict, case_title: str, case_text: str, case_id: str, max_attempts: int = 5, max_questions: int = 10, language: str = "it"):
         self.steps = steps
@@ -54,6 +56,7 @@ class SmartCaseStudyChatbot:
             prompt=prompt, 
             model=self.INTERVIEWER_MODEL, 
             system_prompt=prompts.SYSTEM_PROMPT[self.language],
+            use_classification_client=self.USE_CLASSIFICATION_CLIENT,
             temperature=0.7
         )
         self.conversation_history.append({"role": "assistant", "content": initial_message})
@@ -90,7 +93,8 @@ class SmartCaseStudyChatbot:
         answer = get_llm_response(
             prompt=answer_prompt,
             model=self.INTERVIEWER_MODEL,
-            system_prompt=prompts.SYSTEM_PROMPT[self.language]
+            system_prompt=prompts.SYSTEM_PROMPT[self.language],
+            use_classification_client=self.USE_CLASSIFICATION_CLIENT
         )
         remaining_msg = f"\n\n*(Hai ancora {remaining_q} domande a disposizione.)*" if self.language == "it" else f"\n\n*(You still have {remaining_q} questions available.)*"
         answer += remaining_msg
@@ -152,6 +156,7 @@ class SmartCaseStudyChatbot:
             prompt=prompt, 
             model=self.INTERVIEWER_MODEL,
             system_prompt=prompts.SYSTEM_PROMPT[self.language],
+            use_classification_client=self.USE_CLASSIFICATION_CLIENT,
             temperature=0.2, 
             max_tokens=10
         )
@@ -175,6 +180,7 @@ class SmartCaseStudyChatbot:
             next_id_str = get_llm_response(
                 prompt=prompt, model=self.INTERVIEWER_MODEL,
                 system_prompt=logical_assistant_prompts.get(self.language, logical_assistant_prompts["it"]),
+                use_classification_client=self.USE_CLASSIFICATION_CLIENT,
                 temperature=0.1, max_tokens=5
             )
             next_id = int(''.join(filter(str.isdigit, next_id_str)))
@@ -201,7 +207,7 @@ class SmartCaseStudyChatbot:
         )
         self.current_step_id = next_step_id
         self.attempts_on_current_step = 0
-        return get_llm_response(prompt=prompt, model=self.INTERVIEWER_MODEL, system_prompt=prompts.SYSTEM_PROMPT[self.language])
+        return get_llm_response(prompt=prompt, model=self.INTERVIEWER_MODEL, system_prompt=prompts.SYSTEM_PROMPT[self.language], use_classification_client=self.USE_CLASSIFICATION_CLIENT)
 
     def _conclude_step_and_transition(self):
         next_step_id = self._select_next_step()
@@ -231,7 +237,7 @@ class SmartCaseStudyChatbot:
         )
         self.current_step_id = next_step_id
         self.attempts_on_current_step = 0
-        return get_llm_response(prompt=prompt, model=self.INTERVIEWER_MODEL, system_prompt=prompts.SYSTEM_PROMPT[self.language])
+        return get_llm_response(prompt=prompt, model=self.INTERVIEWER_MODEL, system_prompt=prompts.SYSTEM_PROMPT[self.language], use_classification_client=self.USE_CLASSIFICATION_CLIENT)
 
     def _provide_guidance(self):
         current_step_info = self.steps[self.current_step_id]
@@ -250,4 +256,4 @@ class SmartCaseStudyChatbot:
             history_text,
             self.language
         )
-        return get_llm_response(prompt=prompt, model=self.INTERVIEWER_MODEL, system_prompt=prompts.SYSTEM_PROMPT[self.language], temperature=0.7)
+        return get_llm_response(prompt=prompt, model=self.INTERVIEWER_MODEL, system_prompt=prompts.SYSTEM_PROMPT[self.language], use_classification_client=self.USE_CLASSIFICATION_CLIENT, temperature=0.7)
