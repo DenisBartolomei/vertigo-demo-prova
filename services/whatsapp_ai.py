@@ -302,7 +302,27 @@ Genera ORA la tua risposta (solo il testo del messaggio, nient'altro):"""
             max_tokens=250,
                 use_classification_client=True
         )
-        return response.strip()
+        cleaned_response = response.strip()
+        
+        # Rimuovi saluti ripetuti se non siamo nella fase greeting
+        # Controlla se ci sono già messaggi bot nella conversazione (escludendo il template)
+        bot_messages = [msg for msg in conversation_history if msg.get("sender") == "bot"]
+        if phase != "greeting" and len(bot_messages) > 0:
+            # Rimuovi saluti comuni all'inizio del messaggio
+            import re
+            # Pattern per saluti comuni (Ciao, Ciao [Nome], Salve, ecc.)
+            greeting_patterns = [
+                r'^ciao\s+[^!]*[!.]?\s*',
+                r'^ciao[!.]?\s*',
+                r'^salve[!.]?\s*',
+                r'^buongiorno[!.]?\s*',
+                r'^buonasera[!.]?\s*',
+            ]
+            for pattern in greeting_patterns:
+                cleaned_response = re.sub(pattern, '', cleaned_response, flags=re.IGNORECASE)
+            cleaned_response = cleaned_response.strip()
+        
+        return cleaned_response
     except Exception as e:
         print(f"Errore generazione risposta AI: {e}")
         return "Mi scuso, c'è stato un problema tecnico. Puoi riprovare tra poco? 🙏"
@@ -387,7 +407,8 @@ def process_whatsapp_message(
     position_id: Optional[str] = None,
     tenant_id: Optional[str] = None,
     cv_text: Optional[str] = None,
-    position_data: Optional[Dict[str, Any]] = None
+    position_data: Optional[Dict[str, Any]] = None,
+    session_data: Optional[Dict[str, Any]] = None
 ) -> Tuple[str, Optional[WhatsappStatus], Optional[bool], Optional[str]]:
     """
     Processa un messaggio WhatsApp e genera una risposta CONVERSAZIONALE usando l'AI.
@@ -400,12 +421,31 @@ def process_whatsapp_message(
     """
     import os
     
-    # 0. Analizza l'intento del messaggio per ottimizzare il contesto
+    # 0. Controlla se c'è un ritiro in corso nella sessione (PRIORITÀ ALTA)
+    # Se c'è un ritiro in corso, gestisci solo quello e NON verificare requisiti
+    withdrawal_in_progress = False
+    if session_data:
+        withdrawal_in_progress = session_data.get("_withdrawal_in_progress", False)
+    
+    if withdrawal_in_progress:
+        print(f"🔄 Ritiro in corso rilevato nella sessione - gestisco solo la motivazione")
+        # Il candidato sta fornendo la motivazione del ritiro
+        withdrawal_reason = user_message.strip()[:200]  # Max 200 caratteri
+        print(f"📝 Motivazione ritiro ricevuta: {withdrawal_reason}")
+        
+        response = generate_conversational_response(
+            config, conversation_history, candidate_name,
+            phase="rejection",
+            specific_instruction=get_withdrawal_received_motivation_prompt(withdrawal_reason)
+        )
+        # Salva la motivazione esatta del candidato nel formato corretto
+        return (response, WhatsappStatus.INTERRUPTED, False, f"ritiro: {withdrawal_reason}")
+    
+    # 1. Analizza l'intento del messaggio per ottimizzare il contesto
     intent = analyze_message_intent(user_message, config.language, conversation_history)
     print(f"🎯 Intento rilevato: {intent}")
     
-    # Controlla se c'è un ritiro pendente nella sessione (salvato al primo step)
-    # Questo è più robusto del pattern matching sui messaggi del bot
+    # Controlla se c'è un ritiro pendente nella posizione (legacy, per retrocompatibilità)
     withdrawal_pending = False
     if position_data:
         withdrawal_pending = position_data.get("_withdrawal_pending", False)
@@ -426,14 +466,16 @@ def process_whatsapp_message(
         return (response, WhatsappStatus.INTERRUPTED, False, f"ritiro: {withdrawal_reason}")
     
     # Se il candidato vuole ritirarsi, CHIUDI DIRETTAMENTE con richiesta motivazione integrata
-    # Usiamo un approccio più semplice: chiudiamo subito ma chiediamo il motivo nel messaggio
+    # IMPORTANTE: Questo è un ritiro VOLONTARIO, non per mancanza requisiti
     if intent == "withdrawal":
+        print(f"🔄 Ritiro volontario rilevato - chiedo motivazione e marco flag nella sessione")
         response = generate_conversational_response(
             config, conversation_history, candidate_name,
             phase="rejection",
             specific_instruction=get_withdrawal_ask_motivation_prompt(candidate_name)
         )
-        # Chiudiamo SUBITO con stato INTERRUPTED - motivazione generica
+        # Chiudiamo SUBITO con stato INTERRUPTED - motivazione generica temporanea
+        # Il flag _withdrawal_in_progress verrà salvato nel router per indicare che stiamo aspettando la motivazione
         return (response, WhatsappStatus.INTERRUPTED, False, "ritiro_candidato")
     
     # Estrai dati posizione
@@ -522,8 +564,9 @@ def process_whatsapp_message(
     # ========================================
     # Se il candidato fa una domanda informativa (RAL, sede, benefits, ecc.)
     # rispondiamo E allo stesso tempo riprendiamo il flusso knockout
+    # IMPORTANTE: Se c'è un ritiro in corso, NON gestire domande come knockout
     
-    if intent == "question" and state["phase"] != "greeting":
+    if intent == "question" and state["phase"] != "greeting" and not withdrawal_in_progress:
         print(f"💬 Gestione DOMANDA INFORMATIVA + RIPRESA KNOCKOUT")
         # Per rispondere E riprendere knockout, serve un contesto ibrido
         # che abbia sia info posizione che knockout requirements
@@ -573,7 +616,8 @@ def process_whatsapp_message(
                 return (response, WhatsappStatus.QUALIFIED, True, None)
     
     # 2. FASE KNOCKOUT: Verifica requisiti obbligatori in modo conversazionale
-    if state["phase"] == "knockout" and knockout_requirements:
+    # IMPORTANTE: Se c'è un ritiro in corso, NON verificare i requisiti
+    if state["phase"] == "knockout" and knockout_requirements and not withdrawal_in_progress:
         print(f"🔍 KNOCKOUT - usa knockout_context (con CV)")
         
         # Prima verifica se il candidato fallisce un requisito usando AI
@@ -585,13 +629,17 @@ def process_whatsapp_message(
         )
         
         if result and not result[0]:  # Fallita verifica requisiti
+            # IMPORTANTE: Questo è mancanza requisiti, NON ritiro volontario
+            # Assicuriamoci che non ci sia confusione con ritiro volontario
             # Genera messaggio di rifiuto personalizzato
             rejection_response = generate_conversational_response(
                 **knockout_context, 
                 phase="rejection",
                 specific_instruction=get_rejection_with_reason_prompt(result[1])
             )
-            return (rejection_response, WhatsappStatus.INTERRUPTED, False, "mancanza_requisiti")
+            # Formato: "mancanza_requisiti: [requisito mancante]" per distinguerlo da "ritiro: [motivazione]"
+            missing_req = result[1] or "requisito fondamentale"
+            return (rejection_response, WhatsappStatus.INTERRUPTED, False, f"mancanza_requisiti: {missing_req}")
         
         # Se result è None, potremmo aver bisogno di più info - continua la conversazione
         if result is None:

@@ -13,7 +13,85 @@ warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*main threa
 warnings.filterwarnings("ignore", message=".*Tcl_AsyncDelete.*")
 
 # Sopprimi anche gli errori "Exception ignored" per tkinter
+# Questi errori vengono stampati su stderr durante il garbage collection di PyMuPDF
+# ma non sono bloccanti e possono essere ignorati
 import logging
+import sys
+import io
+
+class TkinterErrorFilter:
+    """Filtra errori tkinter non bloccanti da stderr causati da PyMuPDF"""
+    def __init__(self, original_stderr):
+        self.original_stderr = original_stderr
+        self.buffer = ""  # Buffer per messaggi multi-linea
+        self.in_tkinter_traceback = False  # Flag per tracciare se siamo in un traceback tkinter
+    
+    def write(self, message):
+        # Accumula messaggi per gestire traceback multi-linea
+        self.buffer += message
+        
+        # Controlla se inizia un traceback tkinter
+        if 'Exception ignored in:' in message or 'Traceback (most recent call last):' in message:
+            self.in_tkinter_traceback = True
+        
+        # Controlla se siamo in un traceback tkinter
+        if self.in_tkinter_traceback:
+            # Filtra errori tkinter comuni (non bloccanti)
+            if any(keyword in self.buffer for keyword in [
+                'RuntimeError: main thread is not in main loop',
+                'Tcl_AsyncDelete',
+                'tkinter',
+                '__del__',
+                'self.tk.call',
+                'info", "exists"',
+                'File "C:\\Python'
+            ]):
+                # Se il messaggio è completo (termina con newline), resetta
+                if message.endswith('\n'):
+                    self.buffer = ""
+                    self.in_tkinter_traceback = False
+                return
+        
+        # Se non siamo in un traceback tkinter, controlla se il messaggio contiene keyword tkinter
+        if any(keyword in message for keyword in [
+            'RuntimeError: main thread is not in main loop',
+            'Tcl_AsyncDelete',
+            'Exception ignored in:',
+            'function Image.__del__',
+            'function Variable.__del__',
+            'tkinter',
+            '__del__'
+        ]):
+            # Ignora questi errori (sono non bloccanti e causati da PyMuPDF)
+            if message.endswith('\n'):
+                self.buffer = ""
+                self.in_tkinter_traceback = False
+            return
+        
+        # Scrivi tutto il resto su stderr originale
+        self.original_stderr.write(message)
+        if message.endswith('\n'):
+            self.buffer = ""
+            self.in_tkinter_traceback = False
+    
+    def flush(self):
+        self.original_stderr.flush()
+
+# Applica il filtro a stderr per sopprimere errori tkinter
+sys.stderr = TkinterErrorFilter(sys.stderr)
+
+# Configurazione logging centralizzata
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+# Logger principale per l'applicazione
+logger = logging.getLogger(__name__)
+
+# Sopprimi warning tkinter solo per logger specifici
 logging.getLogger().setLevel(logging.ERROR)
 
 import fitz  # PyMuPDF
@@ -580,7 +658,7 @@ Rispondi con JSON nel formato:
         
         return {"suggestions": []}
     except Exception as e:
-        print(f"Errore suggerimento knockout: {e}")
+        logger.error(f"Errore suggerimento knockout: {e}")
         return {"suggestions": []}
 
 
@@ -725,12 +803,12 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
                 return str(obj)
             return super().default(obj)
     
-    print(f"--- [PIPELINE] Avvio Generazione Feedback per sessione: {session_id} (tenant-aware) ---")
+    logger.info(f"[PIPELINE] Avvio Generazione Feedback per sessione: {session_id} (tenant-aware)")
     
     # Get session data using tenant-aware function
     session_data = get_session_data_tenant(session_id, collection_name)
     if not session_data:
-        print(f"Errore: Dati di sessione non trovati per l'ID: {session_id}")
+        logger.error(f"Dati di sessione non trovati per l'ID: {session_id}")
         return None
     
     candidate_name = session_data.get("candidate_name", "Candidato")
@@ -750,11 +828,11 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
     case_eval_report = stages_data.get("case_evaluation_report")
     
     if not original_cv_report or not case_eval_report:
-        print("Errore: Report di analisi CV o valutazione del caso mancanti.")
+        logger.error("Report di analisi CV o valutazione del caso mancanti.")
         return None
 
     # STEP 1: Identificazione Gap (usa i due report separati)
-    print("\n[STEP 1/5] Identificazione gap...")
+    logger.debug("[STEP 1/5] Identificazione gap...")
     # Recupera language dalla posizione
     position_data = get_single_position_data_tenant(target_role, collection_name.replace("_sessions", "_positions_data"))
     language = (position_data or {}).get("language", "it")
@@ -767,7 +845,7 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
     save_stage_output_tenant(session_id, "gap_analysis", gap_analysis.model_dump(), collection_name)
 
     # STEP 3: Recupero Corsi OTTIMIZZATO (batch search senza LLM refinement)
-    print("\n[STEP 3/5] Recupero corsi (ottimizzato - batch search)...")
+    logger.debug("[STEP 3/5] Recupero corsi (ottimizzato - batch search)...")
     from feedback_generator.course_retriever.rag_service import get_rag_service
     rag_service = get_rag_service()
     
@@ -800,7 +878,7 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
     save_stage_output_tenant(session_id, "enriched_gaps", enriched_gaps_content_str, collection_name)
 
     # STEP 4: Market Benchmark (optional)
-    print("\n[STEP 4/5] Benchmark di mercato...")
+    logger.debug("[STEP 4/5] Benchmark di mercato...")
     qualitative_text = None
     chart_cat_b64 = None
     market_skills_list = None
@@ -838,12 +916,12 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
             if market_skills_list:
                 save_stage_output_tenant(session_id, "market_chart_skills_base64", market_skills_list, collection_name)
         else:
-            print("Avviso: JD o testo CV non disponibili; benchmark di mercato saltato.")
+            logger.warning("JD o testo CV non disponibili; benchmark di mercato saltato.")
     except Exception as e:
-        print(f"Avviso: impossibile recuperare la JD o il titolo dal DB per il benchmark: {e}")
+        logger.warning(f"Impossibile recuperare la JD o il titolo dal DB per il benchmark: {e}")
 
     # STEP 5: Creazione Contenuto Report
-    print("\n[STEP 5/5] Creazione contenuto report PDF...")
+    logger.debug("[STEP 5/5] Creazione contenuto report PDF...")
     # OTTIMIZZATO: Usa i due report separati invece del report consolidato
     role_title = position_data.get("position_name", target_role) if position_data else target_role
     
@@ -866,7 +944,7 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
             pass
     
     # STEP 6: Generazione PDF
-    print("\n[STEP 6/6] Generazione del file PDF...")
+    logger.debug("[STEP 6/6] Generazione del file PDF...")
     temp_dir = "temp_pdf"
     os.makedirs(temp_dir, exist_ok=True)
     temp_pdf_path = os.path.join(temp_dir, f"{session_id}.pdf")
@@ -888,7 +966,7 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
         pdf_path = save_pdf_report_tenant(pdf_bytes, session_id, collection_name)
         os.remove(temp_pdf_path)
         
-    print("--- [PIPELINE] Generazione Feedback completata (tenant-aware). ---")
+    logger.info("[PIPELINE] Generazione Feedback completata (tenant-aware)")
     return pdf_path
 
 def save_pdf_report_tenant(pdf_bytes: bytes, session_id: str, collection_name: str) -> str:
@@ -907,10 +985,10 @@ def save_pdf_report_tenant(pdf_bytes: bytes, session_id: str, collection_name: s
         with open(pdf_path, "wb") as f:
             f.write(pdf_bytes)
         
-        print(f"💾 PDF salvato in: {pdf_path}")
+        logger.debug(f"PDF salvato in: {pdf_path}")
         return pdf_path
     except Exception as e:
-        print(f"Errore durante il salvataggio del PDF: {e}")
+        logger.error(f"Errore durante il salvataggio del PDF: {e}")
         return ""
 
 
@@ -935,12 +1013,12 @@ async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: s
     from feedback_generator.pathway_architect.pdf_service import create_feedback_pdf
     #from feedback_generator.market_integration import run_market_benchmark_from_text
     #from interviewer.llm_service import get_llm_response
-    print(f"--- [PIPELINE ASYNC] Avvio Generazione Feedback per sessione: {session_id} ---")
+    logger.info(f"[PIPELINE ASYNC] Avvio Generazione Feedback per sessione: {session_id}")
     
     try:
         session_data = get_session_data_tenant(session_id, collection_name)
         if not session_data:
-            print(f"Errore: Dati di sessione non trovati per l'ID: {session_id}")
+            logger.error(f"Dati di sessione non trovati per l'ID: {session_id}")
             raise ValueError("Session data not found")
         
         candidate_name = session_data.get("candidate_name", "Candidato")
@@ -953,7 +1031,7 @@ async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: s
         position_data = get_single_position_data_tenant(target_role_id, positions_collection_name) if target_role_id else None
         language = (position_data or {}).get("language", "it")
         if language not in ("it", "en"):
-            print(f"ATTENZIONE: Lingua posizione non supportata '{language}', defaulto a 'it'")
+            logger.warning(f"Lingua posizione non supportata '{language}', defaulto a 'it'")
             language = "it"
 
         role_title = (position_data or {}).get("position_name", target_role_id)
@@ -964,13 +1042,13 @@ async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: s
             raise ValueError("Report di analisi CV o valutazione del caso mancanti.")
     
         # --- INIZIO PARALLELIZZAZIONE PESANTE ---
-        print("\n[STEP 1 & 3] Avvio in parallelo di Gap Analysis e Market Benchmark...")
+        logger.debug("[STEP 1 & 3] Avvio in parallelo di Gap Analysis e Market Benchmark...")
         gap_task = asyncio.create_task(
             identify_skill_gaps_async(original_cv_report, case_eval_report, language=language)
         )
         parsed_experiences = stages_data.get("parsed_experience", [])
         if not parsed_experiences:
-            print("ATTENZIONE: Esperienze parsate non trovate. Il benchmark di mercato potrebbe essere incompleto.")
+            logger.warning("Esperienze parsate non trovate. Il benchmark di mercato potrebbe essere incompleto.")
             # Continuiamo comunque, ma il report qualitativo non avrà i dati del candidato
         
         # Estrai tenant_id dal nome della collection (formato: {tenant_id}_sessions)
@@ -996,21 +1074,21 @@ async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: s
         if isinstance(gap_analysis, Exception) or not gap_analysis:
             raise ValueError(f"Errore critico durante l'analisi dei gap: {gap_analysis}")
         save_stage_output_tenant(session_id, "gap_analysis", gap_analysis.model_dump(), collection_name)
-        print("[STEP 1/5] Analisi gap completata.")
+        logger.debug("[STEP 1/5] Analisi gap completata.")
 
         market_results = results[1]
         qualitative_text, chart_cat_b64, market_skills_list = None, None, None
         if isinstance(market_results, Exception):
-            print(f"Avviso: Benchmark di mercato fallito: {market_results}")
+            logger.warning(f"Benchmark di mercato fallito: {market_results}")
         elif market_results:
             qualitative_text, chart_cat_b64, market_skills_list = market_results
             if qualitative_text: save_stage_output_tenant(session_id, "market_benchmark_text", qualitative_text, collection_name)
             if chart_cat_b64: save_stage_output_tenant(session_id, "market_chart_categories_base64", chart_cat_b64, collection_name)
             if market_skills_list: save_stage_output_tenant(session_id, "market_chart_skills_base64", market_skills_list, collection_name)
-        print("[STEP 3/5] Benchmark di mercato completato.")
+        logger.debug("[STEP 3/5] Benchmark di mercato completato.")
 
         # STEP 2: Recupero Corsi OTTIMIZZATO (batch search senza LLM refinement)
-        print("\n[STEP 2/5] Recupero corsi in batch (ottimizzato)...")
+        logger.debug("[STEP 2/5] Recupero corsi in batch (ottimizzato)...")
         rag_service = rag_service_instance 
 
         if not rag_service:
@@ -1037,17 +1115,17 @@ async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: s
 
         enriched_gaps_content_str = json.dumps(enriched_skill_families, ensure_ascii=False, indent=2, cls=ObjectIdEncoder)
         save_stage_output_tenant(session_id, "enriched_gaps", enriched_gaps_content_str, collection_name)
-        print("[STEP 2/5] Recupero corsi completato.")
+        logger.debug("[STEP 2/5] Recupero corsi completato.")
 
         # STEP 4: Creazione Contenuto Report (ora in batch, non qui)
         # I dati sono pronti: gap_analysis, enriched_gaps, cv_report, case_report
         # Il report finale verrà generato in batch processing
-        print("\n[STEP 4/5] Dati pronti per generazione report finale in batch...")
-        print(f"--- [PIPELINE ASYNC] Preparazione dati completata per {session_id}. Report finale sarà generato in batch. ---")
+        logger.debug("[STEP 4/5] Dati pronti per generazione report finale in batch...")
+        logger.info(f"[PIPELINE ASYNC] Preparazione dati completata per {session_id}. Report finale sarà generato in batch.")
         return None  # Non generiamo più il PDF qui, sarà fatto in batch
 
     except Exception as e:
-        print(f"🔥🔥🔥 ERRORE NEL PIPELINE ASINCRONO per sessione {session_id}: {e}")
+        logger.error(f"ERRORE NEL PIPELINE ASINCRONO per sessione {session_id}: {e}")
         traceback.print_exc()
         raise
 
@@ -1060,7 +1138,7 @@ async def run_and_update_feedback_status(session_id: str, collection_name: str):
     Ora esegue solo GAP analysis e RAG corsi in real-time, poi marca la sessione come
     FEEDBACK_PENDING per la generazione del report finale in batch.
     """
-    print(f"🚀 [FEEDBACK PIPELINE] Avvio preparazione dati per sessione {session_id}")
+    logger.info(f"[FEEDBACK PIPELINE] Avvio preparazione dati per sessione {session_id}")
     
     try:
         # Esegue GAP analysis e RAG corsi (real-time)
@@ -1069,9 +1147,9 @@ async def run_and_update_feedback_status(session_id: str, collection_name: str):
         # Se il pipeline completa con successo (ritorna None), i dati sono pronti
         # Marca la sessione come FEEDBACK_BATCH_PENDING per la generazione batch
         save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_BATCH_PENDING"], collection_name)
-        print(f"✅ Dati preparati con successo per sessione {session_id}. Sessione marcata come FEEDBACK_BATCH_PENDING per batch processing.")
+        logger.info(f"Dati preparati con successo per sessione {session_id}. Sessione marcata come FEEDBACK_BATCH_PENDING per batch processing.")
     except Exception as e:
-        print(f"❌ [ERRORE] Preparazione dati fallita per sessione {session_id}: {e}")
+        logger.error(f"[ERRORE] Preparazione dati fallita per sessione {session_id}: {e}")
         traceback.print_exc()
         save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_GENERATION_FAILED"], collection_name)
         save_stage_output_tenant(session_id, "feedback_error", str(e), collection_name)
@@ -1109,7 +1187,7 @@ async def create_session(position_id: str = Form(...), cv_file: UploadFile = Fil
             {"_id": session_id},
             {"$set": {"candidate_name": candidate_name}}
         )
-        print(f"  - Nome candidato estratto (regex): {candidate_name}")
+        logger.debug(f"Nome candidato estratto (regex): {candidate_name}")
 
     # Estrai telefono: usa quello fornito manualmente, altrimenti estrai dal CV
     if not candidate_phone:
@@ -1234,7 +1312,7 @@ def download_feedback_pdf(session_id: str, auth_data=Depends(hr_auth)):
     try:
         import os
         if not os.path.exists(normalized_path):
-            print(f"🔥🔥🔥 PDF NOT FOUND AT PATH: {normalized_path}. Current working directory: {os.getcwd()}")
+            logger.error(f"PDF NOT FOUND AT PATH: {normalized_path}. Current working directory: {os.getcwd()}")
             raise HTTPException(status_code=404, detail=f"PDF file not found on disk.")
         
         with open(normalized_path, "rb") as pdf_file:
@@ -1258,7 +1336,7 @@ def download_feedback_pdf(session_id: str, auth_data=Depends(hr_auth)):
             headers={"Content-Disposition": f"attachment; filename=\"{filename}\""}
         )
     except Exception as e:
-        print(f"Error downloading feedback PDF for session {session_id}: {e}")
+        logger.error(f"Error downloading feedback PDF for session {session_id}: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Internal server error while reading the PDF file.")
 
@@ -1489,8 +1567,8 @@ def resolve_interview(token: str):
 def save_candidate_name(token: str, payload: StartInterviewPayload):
     """Salva solo nome e cognome del candidato, NON avvia l'intervista"""
     try:
-        print(f"Salvataggio nome candidato con token: {token}")
-        print(f"Payload ricevuto: name='{payload.name}', surname='{payload.surname}'")
+        logger.debug(f"Salvataggio nome candidato con token: {token}")
+        logger.debug(f"Payload ricevuto: name='{payload.name}', surname='{payload.surname}'")
     
         # Validate required fields
         if not payload.name or not payload.name.strip():
@@ -1503,7 +1581,7 @@ def save_candidate_name(token: str, payload: StartInterviewPayload):
             raise HTTPException(status_code=404, detail="Invalid or expired link")
         
         session_id, tenant_id = result
-        print(f"✅ Token risolto: session_id={session_id}, tenant_id={tenant_id}")
+        logger.debug(f"Token risolto: session_id={session_id}, tenant_id={tenant_id}")
         
         # Check if evaluation is completed
         collections = get_tenant_collections(tenant_id)
@@ -1529,13 +1607,13 @@ def save_candidate_name(token: str, payload: StartInterviewPayload):
                 }}
             )
         
-        print(f"✅ Nome candidato salvato: {full_name}")
+        logger.info(f"Nome candidato salvato: {full_name}")
         return {"message": "Candidate name saved successfully", "candidate_name": full_name}
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Errore salvataggio nome: {e}")
+        logger.error(f"Errore salvataggio nome: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
@@ -1543,15 +1621,15 @@ def save_candidate_name(token: str, payload: StartInterviewPayload):
 def start_interview(token: str):
     """Avvia l'intervista - NON salva nome (deve essere già salvato)"""
     try:
-        print(f"Tentativo di avvio colloquio con token: {token}")
+        logger.debug(f"Tentativo di avvio colloquio con token: {token}")
         
         result = resolve_token_global(token)
         if not result:
-            print(f"Token non valido o scaduto: {token}")
+            logger.warning(f"Token non valido o scaduto: {token}")
             raise HTTPException(status_code=404, detail="Invalid or expired link")
         
         session_id, tenant_id = result
-        print(f"✅ Token risolto: session_id={session_id}, tenant_id={tenant_id}")
+        logger.debug(f"Token risolto: session_id={session_id}, tenant_id={tenant_id}")
         
         # Check if evaluation is completed
         collections = get_tenant_collections(tenant_id)
@@ -1559,21 +1637,21 @@ def start_interview(token: str):
         stages = sess.get("stages", {})
         skill_relevance = stages.get("skill_relevance")
         if skill_relevance:
-            print(f"❌ Colloquio già completato per session_id={session_id}")
+            logger.warning(f"Colloquio già completato per session_id={session_id}")
             raise HTTPException(status_code=410, detail="Interview completed and evaluation finished. Access no longer available.")
         
         # Check if interview has already been started (single-use token)
         if sess.get("interview_started"):
-            print(f"❌ Colloquio già avviato per session_id={session_id}")
+            logger.warning(f"Colloquio già avviato per session_id={session_id}")
             raise HTTPException(status_code=409, detail="Interview has already been started. Token can only be used once.")
         
         # Check if candidate name is saved
         candidate_name = sess.get("candidate_name")
         if not candidate_name:
-            print(f"❌ Nome candidato non salvato per session_id={session_id}")
+            logger.warning(f"Nome candidato non salvato per session_id={session_id}")
             raise HTTPException(status_code=400, detail="Candidate name must be saved before starting interview")
         
-        print(f"✅ Controlli superati, procedo con l'avvio del colloquio per {candidate_name}")
+        logger.info(f"Controlli superati, procedo con l'avvio del colloquio per {candidate_name}")
         
         # Marca intervista come avviata PRIMA di start_interview_for_session per single-use
         if db is not None:
@@ -1588,14 +1666,14 @@ def start_interview(token: str):
         
         message = start_interview_for_session(session_id, tenant_id)
         
-        print(f"Interview started for session {session_id} - token marked as used")
+        logger.info(f"Interview started for session {session_id} - token marked as used")
         
         return {"message": message}
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Errore inaspettato in start_interview: {e}")
+        logger.error(f"Errore inaspettato in start_interview: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
@@ -1697,7 +1775,7 @@ def report_security_event(token: str, event_data: dict):
             security_events_collection = db[f"security_events_{tenant_id}"]
             try:
                 security_events_collection.insert_one(security_event)
-                print(f"Security event saved: {event_id}")
+                logger.debug(f"Security event saved: {event_id}")
             except Exception as duplicate_error:
                 if "duplicate key" in str(duplicate_error).lower():
                     # Generate new ID and retry once
@@ -1705,65 +1783,92 @@ def report_security_event(token: str, event_data: dict):
                     new_event_id = f"{session_id}_{timestamp_ms}_{new_random_suffix}"
                     security_event["_id"] = new_event_id
                     security_events_collection.insert_one(security_event)
-                    print(f"Security event saved with new ID: {new_event_id}")
+                    logger.debug(f"Security event saved with new ID: {new_event_id}")
                 else:
                     raise duplicate_error
         
-        # Update session with security summary
-        collections = get_tenant_collections(tenant_id)
-        sess = get_session_data_tenant(session_id, collections["sessions"]) or {}
-        
-        if "security_summary" not in sess:
-            sess["security_summary"] = {
-                "total_events": 0,
-                "high_severity_events": 0,
-                "medium_severity_events": 0,
-                "low_severity_events": 0,
-                "cheating_score": 0,
-                "events_by_type": {},
-                "last_updated": datetime.utcnow().isoformat()
-            }
-        
-        # Update security summary
-        summary = sess["security_summary"]
-        summary["total_events"] += 1
-        summary["last_updated"] = datetime.utcnow().isoformat()
-        
-        severity = event_data.get("severity", "low")
-        if severity == "high":
-            summary["high_severity_events"] += 1
-            summary["cheating_score"] += 10
-        elif severity == "medium":
-            summary["medium_severity_events"] += 1
-            summary["cheating_score"] += 5
-        else:
-            summary["low_severity_events"] += 1
-            summary["cheating_score"] += 1
-        
-        # Normalize cheating score to 0-100 range
-        summary["cheating_score"] = normalize_cheating_score(summary["cheating_score"])
-        
-        event_type = event_data.get("type", "unknown")
-        summary["events_by_type"][event_type] = summary["events_by_type"].get(event_type, 0) + 1
-        
-        # Save updated session to database
+        # Update session with security summary using atomic MongoDB operations
+        # This avoids read-modify-write pattern and uses direct increments
         if db is not None:
             try:
-                sessions_collection = db[f"sessions_{tenant_id}"]
+                sessions_collection = db[f"{tenant_id}_sessions"]
+                severity = event_data.get("severity", "low")
+                event_type = event_data.get("type", "unknown")
+                
+                # Calculate score increment based on severity
+                score_increment = 10 if severity == "high" else (5 if severity == "medium" else 1)
+                
+                # Use atomic update with $inc for counters and $set for last_updated
+                # Initialize summary if it doesn't exist, otherwise increment
+                update_op = {
+                    "$inc": {
+                        "security_summary.total_events": 1,
+                        f"security_summary.events_by_type.{event_type}": 1
+                    },
+                    "$set": {
+                        "security_summary.last_updated": datetime.utcnow().isoformat()
+                    }
+                }
+                
+                # Add severity-specific increments
+                if severity == "high":
+                    update_op["$inc"]["security_summary.high_severity_events"] = 1
+                    update_op["$inc"]["security_summary.cheating_score"] = 10
+                elif severity == "medium":
+                    update_op["$inc"]["security_summary.medium_severity_events"] = 1
+                    update_op["$inc"]["security_summary.cheating_score"] = 5
+                else:
+                    update_op["$inc"]["security_summary.low_severity_events"] = 1
+                    update_op["$inc"]["security_summary.cheating_score"] = 1
+                
+                # Initialize summary structure if it doesn't exist
                 sessions_collection.update_one(
-                    {"_id": session_id}, 
-                    {"$set": {"security_summary": summary}}, 
+                    {"_id": session_id},
+                    {
+                        "$setOnInsert": {
+                            "security_summary": {
+                                "total_events": 0,
+                                "high_severity_events": 0,
+                                "medium_severity_events": 0,
+                                "low_severity_events": 0,
+                                "cheating_score": 0,
+                                "events_by_type": {},
+                                "last_updated": datetime.utcnow().isoformat()
+                            }
+                        }
+                    },
                     upsert=False
                 )
-                print(f"Security summary updated for session: {session_id}")
+                
+                # Apply the increment update
+                sessions_collection.update_one(
+                    {"_id": session_id},
+                    update_op,
+                    upsert=False
+                )
+                
+                # Normalize cheating score after update (read, normalize, write)
+                # This is done separately to avoid complex aggregation in update
+                sess = sessions_collection.find_one({"_id": session_id})
+                if sess and sess.get("security_summary"):
+                    current_score = sess["security_summary"].get("cheating_score", 0)
+                    normalized_score = normalize_cheating_score(current_score)
+                    if normalized_score != current_score:
+                        sessions_collection.update_one(
+                            {"_id": session_id},
+                            {"$set": {"security_summary.cheating_score": normalized_score}},
+                            upsert=False
+                        )
+                
+                logger.debug(f"Security summary updated for session: {session_id}")
             except Exception as update_error:
-                print(f"Warning: Failed to update security summary: {update_error}")
+                logger.warning(f"Failed to update security summary: {update_error}")
                 # Continue - the event was still recorded
         
         return {"status": "success", "event_id": event_id}
         
     except Exception as e:
-        print(f"Error storing security event: {e}")
+        logger.error(f"Error storing security event: {e}")
         raise HTTPException(status_code=500, detail="Failed to store security event")
 
 
@@ -1790,9 +1895,9 @@ def get_security_report(session_id: str, auth_data=Depends(hr_auth)):
                 security_events_collection = db[f"security_events_{tenant_id}"]
                 events_cursor = security_events_collection.find({"session_id": session_id})
                 security_events = list(events_cursor)
-                print(f"🔍 Found {len(security_events)} security events for session {session_id}")
+                logger.debug(f"Found {len(security_events)} security events for session {session_id}")
             except Exception as e:
-                print(f"Error retrieving security events: {e}")
+                logger.error(f"Error retrieving security events: {e}")
         
         # Get security summary from session
         security_summary = sess.get("security_summary", {
@@ -1807,7 +1912,7 @@ def get_security_report(session_id: str, auth_data=Depends(hr_auth)):
         
         # If we have events but no summary, calculate it from events
         if security_events and security_summary.get("total_events", 0) == 0:
-            print(f"🔧 Recalculating security summary from {len(security_events)} events")
+            logger.debug(f"Recalculating security summary from {len(security_events)} events")
             security_summary = {
                 "total_events": len(security_events),
                 "high_severity_events": sum(1 for e in security_events if e.get("severity") == "high"),
@@ -1867,7 +1972,7 @@ def get_security_report(session_id: str, auth_data=Depends(hr_auth)):
         }
         
     except Exception as e:
-        print(f"Error retrieving security report: {e}")
+        logger.error(f"Error retrieving security report: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve security report")
 
 
@@ -1892,7 +1997,7 @@ def fix_existing_cheating_scores():
     This should be run once to fix historical data.
     """
     if db is None:
-        print("Database not available for score normalization")
+        logger.warning("Database not available for score normalization")
         return False
     
     try:
@@ -1918,14 +2023,14 @@ def fix_existing_cheating_scores():
                     {"$set": {"security_summary.cheating_score": new_score}}
                 )
                 
-                print(f"Fixed session {session['_id']}: {old_score} -> {new_score}")
+                logger.debug(f"Fixed session {session['_id']}: {old_score} -> {new_score}")
                 fixed_count += 1
         
-        print(f"Fixed {fixed_count} sessions with scores > 100")
+        logger.info(f"Fixed {fixed_count} sessions with scores > 100")
         return True
         
     except Exception as e:
-        print(f"Error fixing cheating scores: {e}")
+        logger.error(f"Error fixing cheating scores: {e}")
         return False
 
 def get_security_recommendation(cheating_score: int) -> str:
@@ -2006,9 +2111,9 @@ def recompute_course_embeddings_admin(auth_data=Depends(hr_auth)):
         
         # Reinitialize RAG service with new embeddings
         global rag_service_instance
-        print("🔄 Reinizializzazione RAG Service con nuovi embeddings...")
+        logger.info("Reinizializzazione RAG Service con nuovi embeddings...")
         rag_service_instance = RAGService()
-        print("✅ RAG Service reinizializzato con successo")
+        logger.info("RAG Service reinizializzato con successo")
         
         return {
             "message": f"Embeddings recomputed successfully for {updated_count} courses",
@@ -2197,12 +2302,12 @@ async def bulk_upload_cvs(
                 with fitz.open(stream=cv_bytes, filetype="pdf") as doc:
                     cv_text = "".join(page.get_text() for page in doc)
             except Exception as e:
-                print(f"⚠️ Errore lettura PDF {file.filename}: {e}")
+                logger.error(f"Errore lettura PDF {file.filename}: {e}")
                 continue
             
             # Validazione dimensione file
             if len(cv_bytes) > 10 * 1024 * 1024:  # 10MB limit
-                print(f"⚠️ File {file.filename} troppo grande (>10MB), saltato")
+                logger.warning(f"File {file.filename} troppo grande (>10MB), saltato")
                 continue
             
             # 2. Estrai email e telefono con regex
@@ -2251,7 +2356,7 @@ async def bulk_upload_cvs(
                 # Aggiungi nome candidato se estratto
                 if candidate_name:
                     update_data["candidate_name"] = candidate_name
-                    print(f"  - Nome candidato estratto (regex): {candidate_name}")
+                    logger.debug(f"Nome candidato estratto (regex): {candidate_name}")
                 
                 # Aggiungi telefono se trovato
                 if candidate_phone:
@@ -2272,16 +2377,16 @@ async def bulk_upload_cvs(
             })
             
         except Exception as e:
-            print(f"❌ Errore processing file {file.filename}: {e}")
+            logger.error(f"Errore processing file {file.filename}: {e}")
             continue
     
     # Crea automaticamente un batch job per i CV caricati
-    print(f"[BATCH] Creazione batch job per {len(uploaded_sessions)} CV...")
+    logger.info(f"[BATCH] Creazione batch job per {len(uploaded_sessions)} CV...")
     batch_service = BatchService()
     batch_job_id = batch_service.create_cv_analysis_batch()
     
     if batch_job_id:
-        print(f"[OK] Batch job creato: {batch_job_id}")
+        logger.info(f"[OK] Batch job creato: {batch_job_id}")
         return {
             "message": f"{len(uploaded_sessions)} CV caricati e batch job creato con successo",
             "sessions": uploaded_sessions,
@@ -2291,7 +2396,7 @@ async def bulk_upload_cvs(
             "note": "I CV verranno processati tramite Azure OpenAI Batch API"
         }
     else:
-        print(f"[WARN] Nessun batch job creato - nessun CV da processare")
+        logger.warning(f"[WARN] Nessun batch job creato - nessun CV da processare")
         return {
             "message": f"{len(uploaded_sessions)} CV caricati con successo",
             "sessions": uploaded_sessions,
@@ -2345,22 +2450,49 @@ async def retrieve_batch_results(batch_id: str):
 
 @app.get("/api/batch/list", dependencies=[Depends(hr_auth)])
 async def list_batches(auth_data: dict = Depends(hr_auth)):
-    """Lista tutti i batch jobs"""
+    """Lista tutti i batch jobs (solo lettura dal DB, senza sincronizzazione Azure).
+    
+    Per sincronizzare manualmente, usa POST /api/batch/sync
+    """
     try:
-        print(f"Tentativo di listare batch jobs per tenant: {auth_data.get('tenant_id')}")
-        
         batch_service = BatchService()
-        print(f"BatchService inizializzato")
-        
         batches = batch_service.list_batches(limit=20)
-        print(f"Batch jobs recuperati: {len(batches)} items")
-        
         return {"batches": batches}
     except Exception as e:
-        import traceback
-        print(f"❌ Errore in list_batches endpoint: {e}")
-        print(f"❌ Traceback completo: {traceback.format_exc()}")
+        logger.error(f"Errore in list_batches endpoint: {e}")
         return {"batches": [], "error": str(e)}
+
+@app.post("/api/batch/sync", dependencies=[Depends(hr_auth)])
+async def sync_batch_status(auth_data: dict = Depends(hr_auth)):
+    """Sincronizza manualmente lo stato dei batch attivi con Azure (chiamato dal pulsante Aggiorna)"""
+    try:
+        batch_service = BatchService()
+        
+        # Trova batch attivi nel DB
+        if batch_service.batch_collection is None:
+            return {"batches": [], "synced": 0}
+        
+        active_batches = list(batch_service.batch_collection.find({
+            "status": {"$in": ["validating", "in_progress", "finalizing"]}
+        }))
+        
+        synced_count = 0
+        for batch in active_batches:
+            batch_id = batch["_id"]
+            try:
+                # Sincronizza stato con Azure
+                new_status = batch_service.check_batch_status(batch_id)
+                if new_status != "error":
+                    synced_count += 1
+            except Exception as e:
+                logger.warning(f"Errore sincronizzazione batch {batch_id}: {e}")
+        
+        # Ritorna lista aggiornata
+        batches = batch_service.list_batches(limit=20)
+        return {"batches": batches, "synced": synced_count}
+    except Exception as e:
+        logger.error(f"Errore in sync_batch_status endpoint: {e}")
+        return {"batches": [], "synced": 0, "error": str(e)}
 
 # Startup events per batch processor
 @app.on_event("startup")
@@ -2370,26 +2502,26 @@ async def startup_event():
     
     try:
         # Initialize heavy services once at startup
-        print("[STARTUP] Inizializzazione RAGService...")
+        logger.info("[STARTUP] Inizializzazione RAGService...")
         rag_service_instance = RAGService()
-        print("[STARTUP] RAGService pronto.")
+        logger.info("[STARTUP] RAGService pronto.")
         
-        print("[STARTUP] Inizializzazione RecruitmentPipeline...")
+        logger.info("[STARTUP] Inizializzazione RecruitmentPipeline...")
         recruitment_pipeline_instance = RecruitmentPipeline() 
-        print("[STARTUP] RecruitmentPipeline pronto.")
+        logger.info("[STARTUP] RecruitmentPipeline pronto.")
         
-        print("[STARTUP] Inizializzazione CVNormalizer (potrebbe essere lento)...")
+        logger.info("[STARTUP] Inizializzazione CVNormalizer (potrebbe essere lento)...")
         cv_normalizer_instance = CVNormalizer()
-        print("[STARTUP] CVNormalizer pronto.")
+        logger.info("[STARTUP] CVNormalizer pronto.")
         
         # Avvia batch processor per monitoring automatico
         from services.batch_processor import get_processor
         processor = get_processor()
         processor.start_monitoring(check_interval_seconds=300)  # 5 minuti
-        print("Batch processor avviato (controllo ogni 5 minuti)")
+        logger.info("Batch processor avviato (controllo ogni 5 minuti)")
         
     except Exception as e:
-        print(f"Errore inizializzazione servizi: {e}")
+        logger.error(f"Errore inizializzazione servizi: {e}")
         import traceback
         traceback.print_exc()
 
@@ -2402,9 +2534,9 @@ async def shutdown_event():
         processor = get_processor()
         processor.stop_monitoring()
         
-        print("✅ Batch processor fermato")
+        logger.info("Batch processor fermato")
     except Exception as e:
-        print(f"⚠️ Errore durante shutdown: {e}")
+        logger.error(f"Errore durante shutdown: {e}")
 
 if __name__ == "__main__":
     import uvicorn

@@ -40,7 +40,7 @@ Ragionamento
 Utilizza questa sezione per pianificare la costruzione del report e approfondire passo per passo quanto richiesto nelle istruzioni
 
 Knowledge Base Insight
-In questa sezione è contenuto il report che, con brevi paragrafi, sintetizza i progetti e le attività estratte dalla documentazione verticale, da cui prendere spunto e senza l'utilizzo di dati particolarmente sensibili.
+In questa sezione è contenuto il report che, con brevi paragrafi, sintetizza i progetti e le attività estratte dalla documentazione, da cui prendere spunto e senza l'utilizzo di dati particolarmente sensibili.
 Attenzione: Non produrre ulteriore testo oltre alle due parti sopra citate. Niente introduzioni o frasi conclusive ulteriori agli output richiesti
 ---
 **DOCUMENTAZIONE (KNOWLEDGE BASE):**

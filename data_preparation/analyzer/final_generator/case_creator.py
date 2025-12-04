@@ -1,9 +1,35 @@
 import json
+import re
 from typing import List
 from pydantic import BaseModel, Field
 from interviewer.llm_service import get_structured_llm_response
 from . import prompts_final
 from interviewer.llm_service import AZURE_DEPLOYMENT_NAME
+
+def _normalize_skill_name(skill_name: str) -> str:
+    """
+    Normalizza il nome di una skill rimuovendo suffissi comuni come "(technical)" o "(soft)".
+    
+    Args:
+        skill_name: Nome della skill da normalizzare
+    
+    Returns:
+        Nome normalizzato (lowercase, senza spazi extra, senza suffissi tra parentesi)
+    """
+    if not skill_name:
+        return ""
+    
+    # Rimuovi spazi extra e converti in lowercase
+    normalized = skill_name.strip().lower()
+    
+    # Rimuovi pattern comuni come "(technical)", "(soft)", "(technical skill)", etc.
+    # Pattern regex per rimuovere parentesi con contenuto
+    normalized = re.sub(r'\s*\([^)]*\)\s*$', '', normalized)
+    
+    # Rimuovi spazi extra finali
+    normalized = normalized.strip()
+    
+    return normalized
 
 class SkillToTest(BaseModel):
     skill_name: str = Field(description="Il nome della skill o competenza da verificare (es. 'Problem Solving', 'Python').")
@@ -33,21 +59,51 @@ def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, senior
     reasoning_steps: Numero di reasoning steps richiesti dall'HR (il sistema aggiungerà automaticamente lo step 0)
     canonical_skills: Lista canonica delle skills (UNICA fonte di verità) - se None, non viene validata
     """
-    example_skill = SkillToTest(skill_name="Esempio Skill", testing_method="Esempio metodo di test")
+    # Calcola quante skill devono essere distribuite
+    total_skills = len(canonical_skills) if canonical_skills else 0
+    total_steps_per_case = reasoning_steps + 1  # +1 per step 0
+    total_steps_all_cases = 5 * total_steps_per_case  # 5 case
+    
+    # Calcola skills per step (minimo per coprire tutto, massimo 5)
+    if total_skills > 0 and total_steps_all_cases > 0:
+        # Calcola il minimo necessario per coprire tutte le skill
+        min_skills_per_step = max(2, (total_skills + total_steps_all_cases - 1) // total_steps_all_cases)  # Arrotondamento per eccesso
+        min_skills_per_step = min(min_skills_per_step, 5)  # Max 5
+        # Assicurati che con questo minimo si coprano tutte le skill
+        if min_skills_per_step * total_steps_all_cases < total_skills:
+            min_skills_per_step = min(5, min_skills_per_step + 1)
+    else:
+        min_skills_per_step = 2
+    
+    # Crea esempio con più skills (3) per mostrare la varietà e incoraggiare l'uso di più skill
+    example_skills = [
+        SkillToTest(skill_name="Esempio Skill 1", testing_method="Metodo di test per skill 1"),
+        SkillToTest(skill_name="Esempio Skill 2", testing_method="Metodo di test per skill 2"),
+        SkillToTest(skill_name="Esempio Skill 3", testing_method="Metodo di test per skill 3"),
+    ]
     example_step = {
-        "id": 0, "title": "Titolo Esempio Step", "description": "Descrizione Esempio Step",
-        "skills_to_test": [example_skill.model_dump()]
+        "id": 0, 
+        "title": "Titolo Esempio Step", 
+        "description": "Descrizione Esempio Step",
+        "skills_to_test": [skill.model_dump() for skill in example_skills]
     }
     example_case = {
-        "question_id": "case-example-01", "question_title": "Titolo Esempio Caso",
-        "question_text": "Testo Esempio Caso", "reasoning_steps": [example_step]
+        "question_id": "case-example-01", 
+        "question_title": "Titolo Esempio Caso",
+        "question_text": "Testo Esempio Caso", 
+        "reasoning_steps": [example_step]
     }
     example_collection = {"cases": [example_case]}
     json_example_str = json.dumps(example_collection, indent=2)
 
     print("1. Creazione del prompt finale con esempio JSON...")
+    if total_skills > 0:
+        print(f"   - Skill canoniche da distribuire: {total_skills}")
+        print(f"   - Reasoning steps totali (5 case × {total_steps_per_case} step): {total_steps_all_cases}")
+        print(f"   - Minimo skill per step consigliato: {min_skills_per_step}")
+    
     final_prompt = prompts_final.create_final_case_prompt(
-        icp_text, guide_text, kb_summary, seniority_level, json_example_str, hr_special_needs, reasoning_steps, language, canonical_skills=canonical_skills
+        icp_text, guide_text, kb_summary, seniority_level, json_example_str, hr_special_needs, reasoning_steps, language, canonical_skills=canonical_skills, min_skills_per_step=min_skills_per_step, total_skills=total_skills
     )
 
     print(f"2. Invio della richiesta al modello '{FINAL_MODEL}' per la generazione strutturata...")
@@ -146,34 +202,35 @@ def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, senior
         # Valida che tutte le skills_to_test corrispondano alle canonical_skills
         if canonical_skills:
             print("4. Validazione coerenza skills con lista canonica...")
-            canonical_skill_names = {skill['skill_name'].strip().lower() for skill in canonical_skills}
+            # Crea mappe normalizzate per matching flessibile (ignora suffissi come "(technical)", "(soft)")
+            canonical_skill_names_normalized = {_normalize_skill_name(skill['skill_name']): skill['skill_name'] for skill in canonical_skills}
+            canonical_skill_map = {_normalize_skill_name(skill['skill_name']): skill['skill_name'] for skill in canonical_skills}
+            
             invalid_skills = []
             corrected_count = 0
             
             for case in validated_data.cases:
                 for step in case.reasoning_steps:
                     for skill_test in step.skills_to_test:
-                        skill_name_normalized = skill_test.skill_name.strip().lower()
-                        # Verifica se la skill corrisponde esattamente o è simile a una canonical skill
-                        if skill_name_normalized not in canonical_skill_names:
-                            # Prova matching fuzzy (case-insensitive)
-                            matched = False
-                            for canonical_skill in canonical_skills:
-                                if canonical_skill['skill_name'].strip().lower() == skill_name_normalized:
-                                    # Match esatto (case-insensitive), correggi il nome
-                                    skill_test.skill_name = canonical_skill['skill_name']
-                                    matched = True
-                                    corrected_count += 1
-                                    print(f"    ✓ Corretto nome skill: '{skill_test.skill_name}' -> '{canonical_skill['skill_name']}'")
-                                    break
-                            
-                            if not matched:
-                                invalid_skills.append({
-                                    'case': case.question_id,
-                                    'step': step.id,
-                                    'skill': skill_test.skill_name
-                                })
-                                print(f"    ⚠ Skill non canonica trovata: '{skill_test.skill_name}' in case {case.question_id}, step {step.id}")
+                        skill_name_normalized = _normalize_skill_name(skill_test.skill_name)
+                        original_skill_name = skill_test.skill_name
+                        
+                        # Verifica se la skill corrisponde (usando normalizzazione)
+                        if skill_name_normalized in canonical_skill_names_normalized:
+                            # Match trovato! Normalizza il nome al canonical
+                            canonical_name = canonical_skill_map[skill_name_normalized]
+                            if original_skill_name != canonical_name:
+                                skill_test.skill_name = canonical_name
+                                corrected_count += 1
+                                print(f"    ✓ Corretto nome skill: '{original_skill_name}' -> '{canonical_name}'")
+                        else:
+                            # Skill non trovata nemmeno con normalizzazione
+                            invalid_skills.append({
+                                'case': case.question_id,
+                                'step': step.id,
+                                'skill': original_skill_name
+                            })
+                            print(f"    ⚠ Skill non canonica trovata: '{original_skill_name}' in case {case.question_id}, step {step.id}")
             
             if invalid_skills:
                 print(f"  ⚠ ATTENZIONE: Trovate {len(invalid_skills)} skill non canoniche nei reasoning steps.")
@@ -183,8 +240,33 @@ def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, senior
             
             if corrected_count > 0:
                 print(f"  ✓ Corrette {corrected_count} skill con matching case-insensitive.")
+            
+            # VALIDAZIONE CRITICA: Verifica che TUTTE le skill canoniche siano state incluse
+            print("5. Validazione copertura completa delle skill canoniche...")
+            skills_found = set()
+            
+            for case in validated_data.cases:
+                for step in case.reasoning_steps:
+                    for skill_test in step.skills_to_test:
+                        skill_name_normalized = _normalize_skill_name(skill_test.skill_name)
+                        if skill_name_normalized in canonical_skill_names_normalized:
+                            skills_found.add(skill_name_normalized)
+            
+            missing_skills_normalized = set(canonical_skill_names_normalized.keys()) - skills_found
+            if missing_skills_normalized:
+                print(f"  ⚠ ERRORE CRITICO: {len(missing_skills_normalized)} skill canoniche NON sono state incluse in nessun reasoning step!")
+                for missing_normalized in missing_skills_normalized:
+                    # Trova il nome originale (case-sensitive) dalla mappa
+                    original_name = canonical_skill_map.get(missing_normalized, missing_normalized)
+                    print(f"     - {original_name}")
+                print(f"  ⚠ ATTENZIONE: La generazione NON ha incluso tutte le skill richieste.")
+                print(f"     Skill incluse: {len(skills_found)}/{len(canonical_skill_names_normalized)}")
+                print(f"     Considera di rigenerare i case per includere tutte le skill canoniche.")
+            else:
+                print(f"  ✓ Validazione completata: TUTTE le {len(canonical_skill_names_normalized)} skill canoniche sono state incluse nei reasoning steps.")
+                print(f"     Skill incluse: {len(skills_found)}/{len(canonical_skill_names_normalized)}")
         
-        print("5. Dati validati con successo. Generazione completata.")
+        print("6. Dati validati con successo. Generazione completata.")
         return validated_data
         
     except json.JSONDecodeError as json_err:

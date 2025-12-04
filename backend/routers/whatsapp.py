@@ -139,26 +139,19 @@ async def engage_candidate(
         if parts and parts[0]:
             candidate_first_name = parts[0]
     
-    # Recupera nome posizione
+    # Recupera nome posizione reale dalla collection positions_data
     position_name = "la posizione"
     if position_id:
         from services.tenant_data_manager import get_single_position_data_tenant
-        print(f"🔍 Cercando posizione: position_id='{position_id}', collection='{collections['positions']}'")
         position_data = get_single_position_data_tenant(position_id, collections["positions"])
-        print(f"🔍 Risultato posizione: {position_data}")
+        # Nei documenti posizione il campo standard è "position_name"
         if position_data:
-            pos_name = position_data.get("name")
-            if pos_name and pos_name.strip():
+            pos_name = (
+                position_data.get("position_name")
+                or position_data.get("name")  # fallback legacy
+            )
+            if pos_name and isinstance(pos_name, str) and pos_name.strip():
                 position_name = pos_name.strip()
-        else:
-            # Prova a cercare anche con campo "id" invece di "_id"
-            from services.data_manager import db
-            alt_position = db[collections["positions"]].find_one({"id": position_id})
-            print(f"🔍 Ricerca alternativa con 'id': {alt_position}")
-            if alt_position:
-                pos_name = alt_position.get("name")
-                if pos_name and pos_name.strip():
-                    position_name = pos_name.strip()
     
     # Recupera nome azienda dal tenant
     from services.tenant_service import get_tenant_by_id
@@ -384,7 +377,8 @@ async def handle_incoming_message(message: Dict[str, Any], value: Dict[str, Any]
             position_id=position_id,
             tenant_id=tenant_id,
             cv_text=cv_text,  # Testo CV per conversazione naturale
-            position_data=position_data
+            position_data=position_data,
+            session_data=session  # Passa i dati della sessione per verificare flag ritiro
         )
         
         # Invia risposta
@@ -419,6 +413,15 @@ async def handle_incoming_message(message: Dict[str, Any], value: Dict[str, Any]
                 update_data["interruption_reason"] = interruption_reason or "unknown"
                 # Allinea whatsapp_status con il risultato
                 update_data["whatsapp_status"] = "interrupted"
+                
+                # Se è un ritiro volontario (inizia con "ritiro:" o è "ritiro_candidato"), salva il flag
+                if interruption_reason and (interruption_reason.startswith("ritiro:") or interruption_reason == "ritiro_candidato"):
+                    if interruption_reason == "ritiro_candidato":
+                        # Ritiro appena iniziato, flag in corso
+                        update_data["_withdrawal_in_progress"] = True
+                    else:
+                        # Motivazione ricevuta, ritiro completato
+                        update_data["_withdrawal_in_progress"] = False
             elif is_qualified is not None:
                 update_data["whatsapp_screening_result"] = "qualified" if is_qualified else "disqualified"
                 

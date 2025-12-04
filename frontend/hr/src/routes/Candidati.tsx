@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { BarChart3, Search, Mail, Clock, FileText, CheckCircle2, AlertTriangle, AlertCircle, Info, Lock, Download, MessageCircle, Target, TrendingUp, RefreshCw, Rocket, MessageSquare, Send } from 'lucide-react'
 import { SecurityReport } from '../components/SecurityReport'
 
@@ -386,6 +386,14 @@ export function Candidati() {
   const [whatsappData, setWhatsappData] = useState<Record<string, { status?: string; phone_number?: string }>>({})
   const [engaging, setEngaging] = useState<Record<string, boolean>>({})
   const token = localStorage.getItem('hr_jwt')
+  
+  // Cache refs per evitare ricaricamenti
+  const securityReportsCache = useRef<Record<string, any>>({})
+  const overallMeansCache = useRef<Record<string, number>>({})
+  const skillsCache = useRef<Record<string, any[]>>({})
+  const whatsappDataCache = useRef<Record<string, { status?: string; phone_number?: string }>>({})
+  const loadingSecurityReports = useRef<Set<string>>(new Set())
+  const loadingSkills = useRef<Set<string>>(new Set())
 
   // Toggle skill expansion
   const toggleSkillExpansion = (sessionId: string, skillIndex: number) => {
@@ -424,21 +432,15 @@ export function Candidati() {
       if (res.ok) {
         const data = await res.json()
         const items = data.items || []
-        console.log(`[CANDIDATI] Caricati ${items.length} candidati. Stati trovati:`, 
-          items.map((r: Row) => ({ name: r.candidate_name, status: r.status })))
-        // Debug dettagliato per ogni item
-        items.forEach((r: Row) => {
-          if (r.status) {
-            console.log(`[CANDIDATI STATUS] ${r.candidate_name}: '${r.status}' (includes batch: ${r.status.includes('batch')})`)
-          }
-        })
         setRows(items)
         
-        // Load WhatsApp data for all sessions
-        await loadWhatsappData(items)
-        
-        // Load security reports and overall means for all sessions
-        await loadSecurityReportsAndMeans(items)
+        // Load WhatsApp data only for candidates that need it (not already processed)
+        await loadWhatsappData(items.filter((session: Row) => {
+          const statusLower = (session.status || '').toLowerCase()
+          return !statusLower.includes('colloquiato') && 
+                 !statusLower.includes('feedback') && 
+                 !statusLower.includes('qualificato')
+        }))
       } else {
         console.error('Failed to load candidates:', res.statusText)
       }
@@ -450,27 +452,33 @@ export function Candidati() {
   }
 
   async function loadWhatsappData(sessions: Row[]) {
+    if (sessions.length === 0) return
+    
     const whatsappDataMap: Record<string, { status?: string; phone_number?: string }> = {}
     
-    const promises = sessions.map(async (session) => {
-      try {
-        const res = await fetch(`${API_BASE}/whatsapp/session/${session.session_id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (res.ok) {
-          const data = await res.json()
-          whatsappDataMap[session.session_id] = {
-            status: data.whatsapp_status,
-            phone_number: data.phone_number
+    const promises = sessions
+      .filter((session: Row) => !whatsappDataCache.current[session.session_id]) // Skip already cached
+      .map(async (session: Row) => {
+        try {
+          const res = await fetch(`${API_BASE}/whatsapp/session/${session.session_id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+          if (res.ok) {
+            const data = await res.json()
+            const whatsappInfo = {
+              status: data.whatsapp_status,
+              phone_number: data.phone_number
+            }
+            whatsappDataMap[session.session_id] = whatsappInfo
+            whatsappDataCache.current[session.session_id] = whatsappInfo
           }
+        } catch (error) {
+          console.error(`Error loading WhatsApp data for ${session.session_id}:`, error)
         }
-      } catch (error) {
-        console.error(`Error loading WhatsApp data for ${session.session_id}:`, error)
-      }
-    })
+      })
     
     await Promise.all(promises)
-    setWhatsappData(whatsappDataMap)
+    setWhatsappData(prev => ({ ...prev, ...whatsappDataMap, ...whatsappDataCache.current }))
   }
 
   async function engageCandidate(sessionId: string, phoneNumber: string) {
@@ -511,54 +519,180 @@ export function Candidati() {
     }
   }
 
-  async function loadSecurityReportsAndMeans(sessions: Row[]) {
-    const securityReports: Record<string, any> = {}
-    const overallMeans: Record<string, number> = {}
+  // Load security report for a single session (lazy loading)
+  async function loadSecurityReport(sessionId: string) {
+    if (securityReportsCache.current[sessionId]) {
+      setSecurityReports(prev => ({ ...prev, [sessionId]: securityReportsCache.current[sessionId] }))
+      return
+    }
     
-    // Load data for all sessions in parallel
-    const promises = sessions.map(async (session) => {
-      const sessionId = session.session_id
-      
-      // Load security report
-      try {
-        const securityRes = await fetch(`${API_BASE}/sessions/${sessionId}/security-report`, { 
-          headers: { Authorization: `Bearer ${token}` } 
-        })
-        if (securityRes.ok) {
-          const securityData = await securityRes.json()
-          securityReports[sessionId] = securityData
-        }
-      } catch (error) {
-        console.error(`Error loading security report for ${sessionId}:`, error)
+    if (loadingSecurityReports.current.has(sessionId)) {
+      return // Already loading
+    }
+    
+    loadingSecurityReports.current.add(sessionId)
+    
+    try {
+      const securityRes = await fetch(`${API_BASE}/sessions/${sessionId}/security-report`, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      })
+      if (securityRes.ok) {
+        const securityData = await securityRes.json()
+        securityReportsCache.current[sessionId] = securityData
+        setSecurityReports(prev => ({ ...prev, [sessionId]: securityData }))
       }
-      
-      // Load skills and calculate overall mean
-      try {
-        const skillsRes = await fetch(`${API_BASE}/sessions/${sessionId}/skills_scaled`, { 
-          headers: { Authorization: `Bearer ${token}` } 
-        })
-        if (skillsRes.ok) {
-          const skillsData = await skillsRes.json()
-          const skillList = skillsData.items || []
-          const mean = calculateOverallMean(skillList)
-          if (mean > 0) {
-            overallMeans[sessionId] = mean
-          }
+    } catch (error) {
+      console.error(`Error loading security report for ${sessionId}:`, error)
+    } finally {
+      loadingSecurityReports.current.delete(sessionId)
+    }
+  }
+  
+  // Load skills and overall mean for a single session (lazy loading)
+  async function loadSkillsAndMean(sessionId: string) {
+    if (skillsCache.current[sessionId] && overallMeansCache.current[sessionId]) {
+      setSkills(prev => ({ ...prev, [sessionId]: skillsCache.current[sessionId] }))
+      setOverallMeans(prev => ({ ...prev, [sessionId]: overallMeansCache.current[sessionId] }))
+      return
+    }
+    
+    if (loadingSkills.current.has(sessionId)) {
+      return // Already loading
+    }
+    
+    loadingSkills.current.add(sessionId)
+    
+    try {
+      const skillsRes = await fetch(`${API_BASE}/sessions/${sessionId}/skills_scaled`, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      })
+      if (skillsRes.ok) {
+        const skillsData = await skillsRes.json()
+        const skillList = skillsData.items || []
+        const mean = calculateOverallMean(skillList)
+        
+        skillsCache.current[sessionId] = skillList
+        if (mean > 0) {
+          overallMeansCache.current[sessionId] = mean
         }
-      } catch (error) {
-        console.error(`Error loading skills for ${sessionId}:`, error)
+        
+        setSkills(prev => ({ ...prev, [sessionId]: skillList }))
+        if (mean > 0) {
+          setOverallMeans(prev => ({ ...prev, [sessionId]: mean }))
+        }
       }
-    })
-    
-    await Promise.all(promises)
-    
-    // Update state with loaded data
-    setSecurityReports(securityReports)
-    setOverallMeans(overallMeans)
+    } catch (error) {
+      console.error(`Error loading skills for ${sessionId}:`, error)
+    } finally {
+      loadingSkills.current.delete(sessionId)
+    }
   }
 
 
   useEffect(() => { load() }, [])
+  
+  // Get unique positions for filter dropdown
+  const uniquePositions = Array.from(new Set(rows.map(r => r.position_name || r.position_id).filter(Boolean)))
+  
+  // Helper function to determine feedback status
+  const getFeedbackStatus = (row: Row): 'in_elaborazione' | 'da_scaricare' | 'scaricati' | null => {
+    // Scaricati: se c'è downloaded_at
+    if (row.downloaded_at) {
+      return 'scaricati'
+    }
+    
+    // In elaborazione: se status indica generazione in corso o batch
+    const statusLower = (row.status || '').toLowerCase()
+    if (row.status === 'Feedback in elaborazione' ||
+        row.status === 'Generazione feedback in corso...' || 
+        row.status?.includes('batch') ||
+        statusLower.includes('feedback in elaborazione') ||
+        statusLower.includes('elaborazione')) {
+      return 'in_elaborazione'
+    }
+    
+    // Da scaricare: se status è "Feedback pronto" o "Feedback ready" e non è stato scaricato
+    if (row.status === 'Feedback pronto' || row.status === 'Feedback ready') {
+      return 'da_scaricare'
+    }
+    
+    return null
+  }
+
+  // Filter and sort rows - calcolato con useMemo per ottimizzazione
+  const filteredAndSortedRows = useMemo(() => {
+    return rows
+      .filter(row => {
+        // Filter by position
+        const positionMatch = !selectedPosition || row.position_name === selectedPosition || row.position_id === selectedPosition
+        
+        // Se nessun filtro, mostra tutto
+        if (feedbackFilter === 'all') {
+          return positionMatch
+        }
+        
+        // Normalizza lo status per il confronto
+        const status = (row.status || '').toLowerCase()
+        
+        // Filtro per stati standardizzati
+        if (feedbackFilter === 'interrupted') {
+          return positionMatch && status.includes('interrotto')
+        }
+        
+        if (feedbackFilter === 'qualified') {
+          return positionMatch && status.includes('qualificato')
+        }
+        
+        if (feedbackFilter === 'interviewed') {
+          return positionMatch && status.includes('colloquiato') && !status.includes('feedback in elaborazione') && !status.includes('elaborazione')
+        }
+        
+        if (feedbackFilter === 'feedback_in_progress') {
+          return positionMatch && (status.includes('feedback in elaborazione') || 
+                                   status.includes('elaborazione') || 
+                                   status.includes('batch') ||
+                                   row.status === 'Generazione feedback in corso...')
+        }
+        
+        if (feedbackFilter === 'feedback_ready') {
+          return positionMatch && status.includes('feedback pronto')
+        }
+        
+        if (feedbackFilter === 'feedback_downloaded') {
+          return positionMatch && status.includes('feedback scaricato')
+        }
+        
+        return positionMatch
+      })
+      .sort((a, b) => {
+        if (sortOrder === 'none') return 0
+        const meanA = overallMeans[a.session_id] || 0
+        const meanB = overallMeans[b.session_id] || 0
+        return sortOrder === 'desc' ? meanB - meanA : meanA - meanB
+      })
+  }, [rows, selectedPosition, feedbackFilter, sortOrder, overallMeans])
+  
+  // Load security reports and overall means for visible candidates (lazy loading)
+  useEffect(() => {
+    const candidatesToLoad = filteredAndSortedRows
+      .filter(r => {
+        const statusLower = (r.status || '').toLowerCase()
+        const hasCompletedInterview = statusLower.includes('colloquiato') ||
+          statusLower.includes('feedback') ||
+          statusLower.includes('batch') ||
+          statusLower.includes('pronto per generare')
+        
+        return hasCompletedInterview && 
+               !securityReportsCache.current[r.session_id] &&
+               !overallMeansCache.current[r.session_id]
+      })
+      .slice(0, 5) // Load only first 5 to avoid too many requests at once
+    
+    candidatesToLoad.forEach(r => {
+      loadSecurityReport(r.session_id)
+      loadSkillsAndMean(r.session_id)
+    })
+  }, [filteredAndSortedRows])
 
   function calculateOverallMean(skillList: any[]): number {
     if (skillList.length === 0) return 0
@@ -568,17 +702,12 @@ export function Candidati() {
   }
 
   async function toggle(id: string) {
-    setExpanded(prev => (prev === id ? null : id))
-    if (!skills[id]) {
-      const r = await fetch(`${API_BASE}/sessions/${id}/skills_scaled`, { headers: { Authorization: `Bearer ${token}` } })
-      if (r.ok) {
-        const d = await r.json()
-        const skillList = d.items || []
-        setSkills(prev => ({ ...prev, [id]: skillList }))
-        // Calculate and store overall mean for this candidate
-        const mean = calculateOverallMean(skillList)
-        setOverallMeans(prev => ({ ...prev, [id]: mean }))
-      }
+    const newExpanded = expanded === id ? null : id
+    setExpanded(newExpanded)
+    
+    // Load skills and mean only when expanding
+    if (newExpanded && !skills[id]) {
+      await loadSkillsAndMean(id)
     }
   }
 
@@ -635,22 +764,6 @@ export function Candidati() {
     }
   }
 
-  async function loadSecurityReport(id: string) {
-    try {
-      const response = await fetch(`${API_BASE}/sessions/${id}/security-report`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      
-      if (response.ok) {
-        const data = await response.json()
-        setSecurityReports(prev => ({ ...prev, [id]: data }))
-      } else {
-        console.error('Failed to load security report')
-      }
-    } catch (error) {
-      console.error('Error loading security report:', error)
-    }
-  }
 
   async function handleGenerateFeedback(id: string) {
       // Salva lo stato precedente in caso di errore
@@ -713,84 +826,6 @@ export function Candidati() {
   }
 
 
-  // Get unique positions for filter dropdown
-  const uniquePositions = Array.from(new Set(rows.map(r => r.position_name || r.position_id).filter(Boolean)))
-  
-  // Helper function to determine feedback status
-  const getFeedbackStatus = (row: Row): 'in_elaborazione' | 'da_scaricare' | 'scaricati' | null => {
-    // Scaricati: se c'è downloaded_at
-    if (row.downloaded_at) {
-      return 'scaricati'
-    }
-    
-    // In elaborazione: se status indica generazione in corso o batch
-    const statusLower = (row.status || '').toLowerCase()
-    if (row.status === 'Feedback in elaborazione' ||
-        row.status === 'Generazione feedback in corso...' || 
-        row.status?.includes('batch') ||
-        statusLower.includes('feedback in elaborazione') ||
-        statusLower.includes('elaborazione')) {
-      return 'in_elaborazione'
-    }
-    
-    // Da scaricare: se status è "Feedback pronto" o "Feedback ready" e non è stato scaricato
-    if (row.status === 'Feedback pronto' || row.status === 'Feedback ready') {
-      return 'da_scaricare'
-    }
-    
-    return null
-  }
-
-  // Filter and sort rows
-  const filteredAndSortedRows = rows
-    .filter(row => {
-      // Filter by position
-      const positionMatch = !selectedPosition || row.position_name === selectedPosition || row.position_id === selectedPosition
-      
-      // Se nessun filtro, mostra tutto
-      if (feedbackFilter === 'all') {
-        return positionMatch
-      }
-      
-      // Normalizza lo status per il confronto
-      const status = (row.status || '').toLowerCase()
-      
-      // Filtro per stati standardizzati
-      if (feedbackFilter === 'interrupted') {
-        return positionMatch && status.includes('interrotto')
-      }
-      
-      if (feedbackFilter === 'qualified') {
-        return positionMatch && status.includes('qualificato')
-      }
-      
-      if (feedbackFilter === 'interviewed') {
-        return positionMatch && status.includes('colloquiato') && !status.includes('feedback in elaborazione') && !status.includes('elaborazione')
-      }
-      
-      if (feedbackFilter === 'feedback_in_progress') {
-        return positionMatch && (status.includes('feedback in elaborazione') || 
-                                 status.includes('elaborazione') || 
-                                 status.includes('batch') ||
-                                 row.status === 'Generazione feedback in corso...')
-      }
-      
-      if (feedbackFilter === 'feedback_ready') {
-        return positionMatch && status.includes('feedback pronto')
-      }
-      
-      if (feedbackFilter === 'feedback_downloaded') {
-        return positionMatch && status.includes('feedback scaricato')
-      }
-      
-      return positionMatch
-    })
-    .sort((a, b) => {
-      if (sortOrder === 'none') return 0
-      const meanA = overallMeans[a.session_id] || 0
-      const meanB = overallMeans[b.session_id] || 0
-      return sortOrder === 'desc' ? meanB - meanA : meanA - meanB
-    })
 
   return (
     <div className="container" style={{ display: 'grid', gap: 16 }}>
@@ -982,8 +1017,6 @@ export function Candidati() {
         <div style={{ display: 'grid', gap: 12 }}>
           {filteredAndSortedRows.map((r) => {
             const isExpanded = expanded === r.session_id
-            // Debug: verifica lo status ricevuto per ogni candidato
-            console.log(`[RENDER] Candidato: ${r.candidate_name}, Status: '${r.status}', includes batch: ${r.status?.includes('batch') || false}`)
             const currentKind = reportKind[r.session_id] || 'cv'
             const isInterrupted = (r.status || '').toLowerCase().includes('interrotto') || r.interruption_reason
             return (
@@ -1253,11 +1286,13 @@ export function Candidati() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     {/* Select e Show skills - Solo se colloquio completato */}
                     {(() => {
+                      const statusLower = (r.status || '').toLowerCase()
                       const hasCompletedInterview = r.status && (
                         r.status.includes('Colloquio completato') ||
                         r.status.includes('Feedback') ||
                         r.status.includes('batch') ||
-                        r.status.includes('Pronto per generare')
+                        r.status.includes('Pronto per generare') ||
+                        statusLower.includes('colloquiato')
                       )
                       
                       if (!hasCompletedInterview) return null
@@ -1327,43 +1362,7 @@ export function Candidati() {
                       
                       return (
                         <>
-                    {/* PRIORITÀ 1: Feedback già scaricato - mostra info download */}
-                    {statusLower.includes('feedback scaricato') && r.downloaded_at && (
-                        <div style={{ 
-                          width: '120px',
-                          minHeight: '60px',
-                          padding: '8px 6px', 
-                          background: '#E0E7FF', 
-                          border: '2px solid #4338CA', 
-                          borderRadius: 'var(--radius-md)', 
-                          display: 'flex', 
-                          flexDirection: 'column',
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          gap: '4px',
-                          textAlign: 'center'
-                        }}>
-                            <CheckCircle2 size={16} color="#4338CA" />
-                            <span style={{ 
-                              fontSize: '10px', 
-                              fontWeight: '600',
-                              color: '#4338CA',
-                              lineHeight: '1.2'
-                            }}>
-                              Scaricato
-                            </span>
-                            <span style={{ 
-                              fontSize: '9px', 
-                              color: '#4338CA',
-                              opacity: 0.8,
-                              lineHeight: '1.1'
-                            }}>
-                              {new Date(r.downloaded_at).toLocaleDateString('it-IT')}
-                            </span>
-                        </div>
-                    )}
-                    
-                    {/* PRIORITÀ 2: Feedback pronto - mostra bottone download */}
+                    {/* PRIORITÀ 1: Feedback pronto - mostra bottone download */}
                     {statusLower.includes('feedback pronto') && (
                         <button 
                             onClick={() => downloadFeedback(r.session_id)}

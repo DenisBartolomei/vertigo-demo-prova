@@ -22,7 +22,7 @@ def create_icp_generation_prompt(job_description_text: str, hr_special_needs: st
 **Istruzioni Critiche - Distinzione Requisiti vs Attività**:
 
 **COSA SONO I REQUISITI (SKILL)**:
-I requisiti sono competenze, conoscenze o capacità che il candidato DEVE POSSEDERE per essere considerato per la posizione. Sono caratteristiche del candidato stesso.
+I requisiti sono competenze, conoscenze o capacità che il candidato DEVE POSSEDERE per essere considerato per la posizione. Sono caratteristiche del candidato stesso, non attività che svolgerà o responsabilità che avrà.
 
 Esempi di REQUISITI (vanno in "Competenze tecniche" o "Competenze trasversali"):
 - "Conoscenza di Python" → REQUISITO TECNICO
@@ -57,6 +57,7 @@ o	ATTENZIONE CRITICA: non confondere MAI i requisiti con le attività. Se una fr
 o	Non considerare MAI le lingue come skill, evitale e non inserirle mai nell'output finale.
 o	Non considerare MAI lauree, diplomi, certificazioni e/o esperienze lavorative pregresse come skills. Evitale e non inserirle mai nell'output finale.
 o	Non dedurre o inferire nulla, attieniti strettamente a quanto scritto nella Job Description.
+o	Se alcune skill sono considerabili affini, aggregale in un'unica riga. Esempio: "Comunicazione" e "Relazionalità" possono essere aggregate in "Comunicazione e Relazionalità".
 
 **Indicazioni Speciali HR**: queste sono inserite direttamente dagli interessati all'assunzione, trattale con cura e integrale in modo naturale con il resto.
 {hr_block}
@@ -77,7 +78,7 @@ IMPORTANTE: Assicurati che ogni elemento sia nella categoria corretta. Le attivi
 **Critical Instructions - Distinguishing Requirements vs Activities**:
 
 **WHAT ARE REQUIREMENTS (SKILLS)**:
-Requirements are competencies, knowledge, or abilities that the candidate MUST POSSESS to be considered for the position. They are characteristics of the candidate themselves.
+Requirements are competencies, knowledge, or abilities that the candidate MUST POSSESS to be considered for the position. They are characteristics of the candidate themselves, not activities that they will perform or responsibilities that they will have.
 
 Examples of REQUIREMENTS (go in "Technical skills" or "Soft skills"):
 - "Knowledge of Python" → TECHNICAL REQUIREMENT
@@ -112,6 +113,7 @@ o	CRITICAL ATTENTION: NEVER confuse requirements with activities. If a phrase de
 o	NEVER consider languages as skills, avoid them and never include them in the final output.
 o	NEVER consider degrees, diplomas, certifications, and/or previous work experience as skills. Avoid them and never include them in the final output.
 o	Do not deduce or infer anything, stick strictly to what is written in the Job Description.
+o	If some skills are considered similar, aggregate them into a single line. Example: "Communication" and "Relationship Building" can be aggregated into "Communication and Relationship Building".
 
 **HR Special Instructions**: these are entered directly by those interested in hiring, treat them carefully and integrate them naturally with the rest.
 {hr_block}

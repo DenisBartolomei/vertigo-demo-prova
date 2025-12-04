@@ -780,12 +780,65 @@ def get_dashboard_data_tenant(tenant_id: str, time_range: str = "30d", position_
         interruption_reasons_raw = list(sessions_collection.aggregate(interruption_pipeline))
         interruption_reasons = [{"reason": r["_id"], "count": r["count"]} for r in interruption_reasons_raw]
         
+        # In attesa di risposta: CV ingaggiati WhatsApp ma processo non concluso (non qualificati né interrotti)
+        # Sessioni con whatsapp_status "sent" o "active" che non hanno ancora un risultato finale
+        waiting_response = sessions_collection.count_documents({
+            **query,
+            "whatsapp_status": {"$in": ["sent", "active"]},
+            "$or": [
+                {"whatsapp_screening_result": {"$exists": False}},
+                {"whatsapp_screening_result": {"$nin": ["qualified", "interrupted", "qualified_whatsapp"]}}
+            ]
+        })
+        
+        # Dettaglio interrotti: distinguere tra mancanza requisiti base e ritiro candidatura
+        interrupted_sessions = list(sessions_collection.find({
+            **query,
+            "whatsapp_status": "interrupted"
+        }, {
+            "_id": 1,
+            "interruption_reason": 1
+        }))
+        
+        # Categorizza interrotti
+        missing_requirements_count = 0
+        withdrawal_count = 0
+        withdrawal_reasons = {}
+        
+        for session in interrupted_sessions:
+            reason = session.get("interruption_reason", "").lower() if session.get("interruption_reason") else ""
+            
+            # Se contiene parole chiave di knockout/requisiti, è mancanza requisiti base
+            knockout_keywords = ["knockout", "requisito", "requirement", "mancanza", "manca", "non possiede", "non ha", "non soddisfa", "non rispetta"]
+            withdrawal_keywords = ["ritiro", "withdrawal", "rinuncia", "non interessato", "non più interessato", "cambio idea", "cambiato idea"]
+            
+            is_knockout = any(keyword in reason for keyword in knockout_keywords)
+            is_withdrawal = any(keyword in reason for keyword in withdrawal_keywords)
+            
+            if is_knockout or (not is_withdrawal and reason):
+                # Se è chiaramente un knockout o non è chiaramente un ritiro, consideralo mancanza requisiti
+                missing_requirements_count += 1
+            elif is_withdrawal:
+                withdrawal_count += 1
+                # Raggruppa per motivazione
+                reason_key = reason[:100] if reason else "Motivazione non specificata"
+                withdrawal_reasons[reason_key] = withdrawal_reasons.get(reason_key, 0) + 1
+            else:
+                # Default: se non si capisce, consideralo mancanza requisiti
+                missing_requirements_count += 1
+        
         whatsapp_stats = {
             "total_engaged": whatsapp_total_engaged,
             "qualified": whatsapp_qualified,
             "interrupted": whatsapp_interrupted,
             "qualification_rate": round(qualification_rate, 1),
-            "interruption_reasons": interruption_reasons
+            "interruption_reasons": interruption_reasons,
+            "waiting_response": waiting_response,
+            "interrupted_details": {
+                "missing_requirements": missing_requirements_count,
+                "withdrawal": withdrawal_count,
+                "withdrawal_reasons": [{"reason": k, "count": v} for k, v in withdrawal_reasons.items()]
+            }
         }
         
         # PERFORMANCE PER POSIZIONE (top 5)
@@ -901,7 +954,13 @@ def get_dashboard_data_tenant(tenant_id: str, time_range: str = "30d", position_
                 "qualified": 0,
                 "interrupted": 0,
                 "qualification_rate": 0,
-                "interruption_reasons": []
+                "interruption_reasons": [],
+                "waiting_response": 0,
+                "interrupted_details": {
+                    "missing_requirements": 0,
+                    "withdrawal": 0,
+                    "withdrawal_reasons": []
+                }
             },
             "by_position": [],
             "positions": []

@@ -67,6 +67,7 @@ REGOLE ANTI-RIPETIZIONE (CRITICHE):
 - Se il candidato ha GIÀ RISPOSTO a una domanda/requisito, NON richiederlo
 - Tieni traccia mentale di cosa hai già chiesto e cosa hai già ricevuto come risposta
 - Se il candidato ha confermato un requisito, PASSA AL PROSSIMO senza tornare su quello già verificato
+- NON ripetere MAI saluti come "Ciao" o "Ciao [Nome]" dopo il primo messaggio - la conversazione è già iniziata, continua naturalmente
 
 REGOLA RISPOSTA A DOMANDE:
 - Se il candidato fa una domanda, rispondi SOLO a quella domanda specifica
@@ -219,15 +220,17 @@ REGOLE ANTI-RIPETIZIONE:
 - NON ripetere MAI una domanda che hai già fatto
 - Se il candidato ha già confermato un requisito (es. "sì ho la patente"), NON chiederlo di nuovo
 - Passa SOLO ai requisiti NON ANCORA verificati
+- NON salutare di nuovo (NON dire "Ciao" o "Ciao [Nome]") - la conversazione è già iniziata, continua naturalmente
 
 COSA DEVI FARE:
+- Continua la conversazione in modo naturale, come se stessi chattando con un amico
 - Se ha CONFERMATO un requisito → passa DIRETTAMENTE al prossimo NON ANCORA CHIESTO
 - Per il prossimo requisito (non ancora chiesto), collegalo al CV
 - Se manca un requisito FONDAMENTALE → chiudi con garbo
 - Se TUTTI i requisiti sono stati confermati → "Ottimo, hai tutto quello che serve!"
 
 ESEMPIO DI ERRORE DA EVITARE:
-❌ "Hai la patente B?" (se lo hai già chiesto prima)
+❌ "Ciao Marco! Hai la patente B?" (se lo hai già chiesto prima e la conversazione è già iniziata)
 ✅ "Perfetto per la patente! Passiamo al prossimo punto: hai esperienza con SAP?"
 """
 
@@ -294,6 +297,8 @@ def get_phase_prompt_complete(interview_url: str, conversation_text: str) -> str
 Link colloquio: {interview_url or "[link non disponibile]"}
 
 COSA DEVI FARE:
+- NON salutare di nuovo (NON dire "Ciao" o "Ciao [Nome]") - la conversazione è già iniziata
+- Continua la conversazione in modo naturale, come se stessi chattando con un amico
 - Se fa una domanda, rispondi usando le info disponibili
 - Se non ha iniziato il colloquio, ricorda gentilmente il link
 - Sii disponibile e cordiale
@@ -323,6 +328,8 @@ CONVERSAZIONE:
 {conversation_text}
 
 REGOLA FONDAMENTALE: RISPONDI SOLO ALLA DOMANDA
+- NON salutare di nuovo (NON dire "Ciao" o "Ciao [Nome]") - la conversazione è già iniziata
+- Continua la conversazione in modo naturale, come se stessi chattando con un amico
 - Leggi la DOMANDA del candidato
 - Rispondi ESCLUSIVAMENTE a quella domanda
 - NON aggiungere altre informazioni non richieste
@@ -355,16 +362,23 @@ def get_withdrawal_ask_motivation_prompt(candidate_name: str) -> str:
     """Prompt per chiedere la motivazione del ritiro."""
     return f"""Il candidato {candidate_name} ha espresso l'intenzione di NON proseguire con la candidatura.
 
+IMPORTANTE: Questo è un RITIRO VOLONTARIO del candidato, NON una mancanza di requisiti.
+Il candidato ha scelto autonomamente di ritirarsi dalla candidatura.
+
 COSA DEVI FARE:
-1. Mostra comprensione per la sua decisione
-2. Chiedi BREVEMENTE se può condividere il motivo (opzionale)
-3. Ringrazialo per il tempo dedicato
-4. Augurargli buona fortuna
+1. Accetta la sua scelta con comprensione e rispetto
+2. Mostra comprensione per la sua decisione
+3. Chiedi BREVEMENTE se può condividere il motivo (opzionale) - è importante per migliorare il processo
+4. Ringrazialo per il tempo dedicato
+5. Augurargli buona fortuna
 
 Esempio:
-"Capisco perfettamente, Denis! 😊 Posso chiederti cosa ti ha fatto cambiare idea? È solo per migliorare, non c'è obbligo di rispondere. In ogni caso, ti ringrazio per il tempo dedicato e ti auguro il meglio per la tua ricerca! 🍀"
+"Capisco perfettamente, Denis! 😊 Rispetto la tua decisione. Posso chiederti cosa ti ha fatto cambiare idea? È solo per migliorare il nostro processo, non c'è obbligo di rispondere. In ogni caso, ti ringrazio per il tempo dedicato e ti auguro il meglio per la tua ricerca! 🍀"
 
-IMPORTANTE: Questo è un messaggio di CHIUSURA. Sii breve, cordiale e non forzare.
+IMPORTANTE: 
+- Questo è un messaggio di CHIUSURA. Sii breve, cordiale e non forzare.
+- NON menzionare requisiti o mancanze - il candidato si ritira per sua volontà
+- La motivazione è importante per capire come migliorare il processo di selezione
 """
 
 
@@ -419,6 +433,7 @@ Esempio: "Ottimo [nome]! 🎉 Sono felice di dirti che hai superato la nostra pr
 def get_interrupted_late_message_prompt() -> str:
     """Prompt per messaggi ricevuti dopo che la candidatura è stata interrotta."""
     return """Il candidato ha scritto dopo che la candidatura è stata chiusa. 
+NON salutare di nuovo (NON dire "Ciao" o "Ciao [Nome]") - la conversazione è già iniziata e conclusa.
 Ringrazialo brevemente per il messaggio e conferma che hai preso nota del suo feedback. 
 Sii cordiale ma breve - la conversazione è già conclusa."""
 
@@ -426,6 +441,7 @@ Sii cordiale ma breve - la conversazione è già conclusa."""
 def get_interrupted_followup_prompt() -> str:
     """Prompt per follow-up dopo interruzione."""
     return """Il candidato ha scritto dopo che la candidatura è stata chiusa.
+NON salutare di nuovo (NON dire "Ciao" o "Ciao [Nome]") - la conversazione è già iniziata e conclusa.
 Rispondi brevemente in modo cordiale. La conversazione è già conclusa, non c'è bisogno di riaprire nulla."""
 
 

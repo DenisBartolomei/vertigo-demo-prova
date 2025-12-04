@@ -79,6 +79,23 @@ export function useSpeechRecognition(language: string = 'it-IT') {
     }
   }
 
+  // Funzione per richiedere autorizzazione microfono (chiama start/stop rapidamente)
+  const requestMicrophonePermission = () => {
+    if (recognitionRef.current) {
+      try {
+        // Prova ad avviare e fermare immediatamente per richiedere autorizzazione
+        recognitionRef.current.start()
+        setTimeout(() => {
+          if (recognitionRef.current) {
+            recognitionRef.current.stop()
+          }
+        }, 100)
+      } catch (err) {
+        console.error('Failed to request microphone permission:', err)
+      }
+    }
+  }
+
   const stopListening = () => {
     if (recognitionRef.current && isListening) {
       try {
@@ -102,6 +119,7 @@ export function useSpeechRecognition(language: string = 'it-IT') {
     error,
     startListening,
     stopListening,
-    resetTranscript
+    resetTranscript,
+    requestMicrophonePermission
   }
 }

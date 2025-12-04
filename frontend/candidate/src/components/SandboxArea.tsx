@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef, useImperativeHandle, forwardRef } from 'react'
 import { PartyPopper, Hand, AlertCircle, Mic, Square, Clock, Send } from 'lucide-react'
 
 interface SandboxAreaProps {
@@ -14,7 +14,11 @@ interface SandboxAreaProps {
   isCompleted: boolean
 }
 
-export function SandboxArea({
+export interface SandboxAreaRef {
+  focus: () => void
+}
+
+export const SandboxArea = forwardRef<SandboxAreaRef, SandboxAreaProps>(({
   input,
   setInput,
   onSend,
@@ -25,11 +29,45 @@ export function SandboxArea({
   speechError,
   isStarted,
   isCompleted
-}: SandboxAreaProps) {
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+}, ref) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const micButtonRef = useRef<HTMLButtonElement>(null)
+
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      textareaRef.current?.focus()
+    }
+  }))
+
+  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Invio per inviare (come prima)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       onSend()
+      return
+    }
+
+    // Tab per spostare il focus sul microfono
+    if (e.key === 'Tab' && !e.shiftKey) {
+      e.preventDefault()
+      micButtonRef.current?.focus()
+      return
+    }
+  }
+
+  const handleMicKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    // Enter o Space per attivare/disattivare il microfono
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onVoiceToggle()
+      return
+    }
+
+    // Tab per tornare alla textarea
+    if (e.key === 'Tab') {
+      e.preventDefault()
+      textareaRef.current?.focus()
+      return
     }
   }
 
@@ -95,11 +133,13 @@ export function SandboxArea({
           <h3>Write or speak your answer</h3>
           
           <textarea
+            ref={textareaRef}
             className="sandbox-textarea"
             value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Write or speak your answer here... (Press Enter to send, Shift+Enter for new line, or use the microphone icon for voice input)"
+            onKeyDown={handleTextareaKeyDown}
+            tabIndex={0}
+            placeholder="Write or speak your answer here... (Enter: send, Shift+Enter: new line, Tab: vai al microfono)"
             disabled={loading}
           />
           
@@ -109,6 +149,9 @@ export function SandboxArea({
               <button
                 className={`voice-button ${isListening ? 'listening' : ''}`}
                 onClick={onVoiceToggle}
+                onKeyDown={handleMicKeyDown}
+                tabIndex={0}
+                ref={micButtonRef}
                 disabled={loading}
                 style={{
                   background: isListening 
@@ -174,4 +217,6 @@ export function SandboxArea({
       </div>
     </div>
   )
-}
+})
+
+SandboxArea.displayName = 'SandboxArea'

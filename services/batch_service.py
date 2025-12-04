@@ -1,11 +1,45 @@
 import os
 import json
 import tempfile
+import sys
+import io
 from typing import List, Dict, Optional
 from datetime import datetime
 from openai import AzureOpenAI
 from services.data_manager import db
 from services.email_parser import extract_email_from_text
+
+# Sopprimi errori tkinter da PyMuPDF durante upload batch
+class TkinterErrorFilter:
+    """Filtra errori tkinter non bloccanti da stderr"""
+    def __init__(self, original_stderr):
+        self.original_stderr = original_stderr
+    
+    def write(self, message):
+        # Filtra errori tkinter comuni (non bloccanti)
+        if any(keyword in message for keyword in [
+            'RuntimeError: main thread is not in main loop',
+            'Tcl_AsyncDelete',
+            'Exception ignored in: <function Image.__del__',
+            'Exception ignored in: <function Variable.__del__',
+            'function Image.__del__',
+            'function Variable.__del__'
+        ]):
+            # Ignora questi errori (sono non bloccanti e causati da PyMuPDF)
+            return
+        # Scrivi tutto il resto su stderr originale
+        self.original_stderr.write(message)
+    
+    def flush(self):
+        self.original_stderr.flush()
+    
+    def __enter__(self):
+        sys.stderr = self
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        sys.stderr = self.original_stderr
+        return False
 
 # Configurazione credenziali batch con fallback
 BATCH_ENDPOINT = os.getenv("AZURE_OPENAI_BATCH_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
@@ -141,11 +175,13 @@ class BatchService:
         # 4. Upload file ad Azure OpenAI
         print("[CLOUD] Upload batch file ad Azure...")
         try:
-            with open(temp_file_path, 'rb') as f:
-                batch_input_file = batch_client.files.create(
-                    file=f,
-                    purpose="batch"
-                )
+            # Sopprimi errori tkinter non bloccanti durante upload
+            with TkinterErrorFilter(sys.stderr):
+                with open(temp_file_path, 'rb') as f:
+                    batch_input_file = batch_client.files.create(
+                        file=f,
+                        purpose="batch"
+                    )
         except Exception as e:
             print(f"ERR Errore upload file: {e}")
             # Cleanup file temporaneo
@@ -442,11 +478,13 @@ class BatchService:
         # 5. Upload file ad Azure OpenAI
         print("[CLOUD] Upload batch file ad Azure...")
         try:
-            with open(temp_file_path, 'rb') as f:
-                batch_input_file = batch_client.files.create(
-                    file=f,
-                    purpose="batch"
-                )
+            # Sopprimi errori tkinter non bloccanti durante upload
+            with TkinterErrorFilter(sys.stderr):
+                with open(temp_file_path, 'rb') as f:
+                    batch_input_file = batch_client.files.create(
+                        file=f,
+                        purpose="batch"
+                    )
         except Exception as e:
             print(f"ERR Errore upload file: {e}")
             if os.path.exists(temp_file_path):
@@ -496,26 +534,36 @@ class BatchService:
         return batch_job.id
     
     def check_batch_status(self, batch_id: str) -> str:
-        """Controlla lo status di un batch job"""
+        """Controlla lo status di un batch job su Azure e sincronizza il DB.
+        
+        Nota: l'Azure OpenAI Batch API usa lo stato `succeeded` quando il batch
+        è completato con successo. Internamente lo normalizziamo a `completed`
+        per coerenza con il resto del codice (batch processor, UI, ecc.).
+        """
         if not batch_client:
             return "error"
             
         try:
             batch = batch_client.batches.retrieve(batch_id)
             
+            # Normalizza lo stato Azure -> interno
+            raw_status = getattr(batch, "status", None)
+            normalized_status = "completed" if raw_status == "succeeded" else raw_status
+            
             # Aggiorna status nel DB
-            if self.batch_collection is not None:
+            if self.batch_collection is not None and normalized_status is not None:
                 update_data = {
-                    "status": batch.status,
+                    "status": normalized_status,
                     "updated_at": datetime.utcnow()
                 }
                 
-                if batch.status == "completed":
+                if normalized_status == "completed":
                     update_data["completed_at"] = datetime.utcnow()
-                elif batch.status == "failed":
+                elif normalized_status == "failed":
                     update_data["failed_at"] = datetime.utcnow()
                 
-                if hasattr(batch, 'request_counts') and batch.request_counts:
+                # request_counts è disponibile solo dopo la validazione
+                if hasattr(batch, "request_counts") and batch.request_counts:
                     update_data["request_counts"] = {
                         "total": batch.request_counts.total,
                         "completed": batch.request_counts.completed,
@@ -527,7 +575,7 @@ class BatchService:
                     {"$set": update_data}
                 )
             
-            return batch.status
+            return normalized_status or "error"
         except Exception as e:
             print(f"ERR Errore controllo status batch {batch_id}: {e}")
             return "error"
@@ -544,8 +592,12 @@ class BatchService:
             # 1. Ottieni info batch
             batch = batch_client.batches.retrieve(batch_id)
             
-            if batch.status != "completed":
-                print(f"[WARN] Batch non completato. Status: {batch.status}")
+            # Normalizza status Azure -> interno (succeeded -> completed)
+            raw_status = getattr(batch, "status", None)
+            normalized_status = "completed" if raw_status == "succeeded" else raw_status
+            
+            if normalized_status != "completed":
+                print(f"[WARN] Batch non completato. Status Azure: {raw_status}, normalizzato: {normalized_status}")
                 return False
             
             # 2. Download file risultati
@@ -553,13 +605,23 @@ class BatchService:
                 print("ERR Nessun file output disponibile")
                 return False
             
+            print(f"[DOWNLOAD] File output ID: {batch.output_file_id}")
             result_file_content = batch_client.files.content(batch.output_file_id)
+            print(f"[DOWNLOAD] File risultati scaricato ({len(result_file_content.text)} caratteri)")
             
             # 3. Parse risultati (JSONL)
             results = []
-            for line in result_file_content.text.strip().split('\n'):
+            lines = result_file_content.text.strip().split('\n')
+            print(f"[PARSE] Parsing {len(lines)} righe JSONL...")
+            for line_num, line in enumerate(lines, 1):
                 if line.strip():
-                    results.append(json.loads(line))
+                    try:
+                        results.append(json.loads(line))
+                    except json.JSONDecodeError as e:
+                        print(f"[WARN] Errore parsing riga {line_num}: {e}")
+                        print(f"       Contenuto: {line[:100]}...")
+            
+            print(f"[PARSE] Parsati {len(results)} risultati validi")
             
             # 4. Salva risultati in MongoDB con tenant isolation
             success_count = 0
@@ -686,8 +748,12 @@ class BatchService:
             # 1. Ottieni info batch
             batch = batch_client.batches.retrieve(batch_id)
             
-            if batch.status != "completed":
-                print(f"[WARN] Batch non completato. Status: {batch.status}")
+            # Normalizza status Azure -> interno (succeeded -> completed)
+            raw_status = getattr(batch, "status", None)
+            normalized_status = "completed" if raw_status == "succeeded" else raw_status
+            
+            if normalized_status != "completed":
+                print(f"[WARN] Batch non completato. Status Azure: {raw_status}, normalizzato: {normalized_status}")
                 return False
             
             # 2. Download file risultati

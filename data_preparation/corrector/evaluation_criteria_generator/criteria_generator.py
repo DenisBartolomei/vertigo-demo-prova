@@ -17,16 +17,53 @@ class EvaluationCriteriaCollection(BaseModel):
 
 GENERATION_MODEL = AZURE_DEPLOYMENT_NAME
 
-def _is_likely_activity(requirement: str, language: str = "it") -> bool:
+def _normalize_skill_name(skill_name: str) -> str:
+    """
+    Normalizza il nome di una skill rimuovendo suffissi comuni come "(technical)" o "(soft)".
+    
+    Args:
+        skill_name: Nome della skill da normalizzare
+    
+    Returns:
+        Nome normalizzato (lowercase, senza spazi extra, senza suffissi tra parentesi)
+    """
+    if not skill_name:
+        return ""
+    
+    # Rimuovi spazi extra e converti in lowercase
+    normalized = skill_name.strip().lower()
+    
+    # Rimuovi pattern comuni come "(technical)", "(soft)", "(technical skill)", etc.
+    # Pattern regex per rimuovere parentesi con contenuto
+    normalized = re.sub(r'\s*\([^)]*\)\s*$', '', normalized)
+    
+    # Rimuovi spazi extra finali
+    normalized = normalized.strip()
+    
+    return normalized
+
+def _is_likely_activity(requirement: str, language: str = "it", canonical_skills: list = None) -> bool:
     """
     Valida se un requirement sembra essere un'attività invece di una skill.
     Usa pattern matching basato su parole chiave comuni.
+    
+    Args:
+        requirement: Il requirement da validare
+        language: Lingua del requirement
+        canonical_skills: Lista delle skill canoniche - se il requirement corrisponde a una skill canonica, NON è un'attività
     
     Returns:
         True se sembra un'attività (da scartare), False se sembra una skill valida
     """
     if not requirement:
         return False
+    
+    # WHITELIST: Se il requirement corrisponde a una skill canonica, NON è un'attività
+    if canonical_skills:
+        req_normalized = _normalize_skill_name(requirement)
+        canonical_skill_names_normalized = {_normalize_skill_name(skill['skill_name']) for skill in canonical_skills}
+        if req_normalized in canonical_skill_names_normalized:
+            return False  # È una skill canonica, non un'attività
     
     req_lower = requirement.lower().strip()
     
@@ -81,9 +118,14 @@ def _is_likely_activity(requirement: str, language: str = "it") -> bool:
     
     return False
 
-def _validate_and_filter_requirements(collection: EvaluationCriteriaCollection, language: str = "it") -> EvaluationCriteriaCollection:
+def _validate_and_filter_requirements(collection: EvaluationCriteriaCollection, language: str = "it", canonical_skills: list = None) -> EvaluationCriteriaCollection:
     """
     Valida e filtra i requisiti per rimuovere attività erroneamente classificate come requisiti.
+    
+    Args:
+        collection: Collezione di criteri da filtrare
+        language: Lingua dei requisiti
+        canonical_skills: Lista delle skill canoniche - usata per whitelist (non scartare skill canoniche)
     
     Returns:
         EvaluationCriteriaCollection filtrato con solo requisiti validi
@@ -95,7 +137,7 @@ def _validate_and_filter_requirements(collection: EvaluationCriteriaCollection, 
     for req_eval in collection.evaluation_schema:
         requirement = req_eval.requirement.strip()
         
-        if _is_likely_activity(requirement, language):
+        if _is_likely_activity(requirement, language, canonical_skills=canonical_skills):
             filtered_out.append(requirement)
             print(f"  - [VALIDATION] Scartato come attività (non requisito): '{requirement}'")
         else:
@@ -149,66 +191,66 @@ def generate_evaluation_criteria(icp_text: str, cases_json_str: str, seniority_l
         
         print("4. Validazione Pydantic completata. Applicazione filtro attività...")
         # Applica validazione post-estrazione per filtrare attività erroneamente classificate come requisiti
-        filtered_data = _validate_and_filter_requirements(validated_data, language)
+        # Passa canonical_skills per whitelist: non scartare skill canoniche anche se contengono parole "sospette"
+        filtered_data = _validate_and_filter_requirements(validated_data, language, canonical_skills=canonical_skills)
         
         # Se canonical_skills è fornita, valida che tutti i criteri corrispondano alle canonical skills
         if canonical_skills:
             print("5. Validazione coerenza con lista canonica skills...")
-            canonical_skill_names = {skill['skill_name'].strip().lower() for skill in canonical_skills}
-            canonical_skill_map = {skill['skill_name'].strip().lower(): skill['skill_name'] for skill in canonical_skills}
+            # Crea mappe normalizzate per il matching flessibile
+            canonical_skill_names_normalized = {_normalize_skill_name(skill['skill_name']): skill['skill_name'] for skill in canonical_skills}
+            canonical_skill_map = {_normalize_skill_name(skill['skill_name']): skill['skill_name'] for skill in canonical_skills}
             
             validated_schema = []
             missing_skills = []
             invalid_skills = []
-            created_default_criteria = []
+            matched_criteria = set()  # Traccia quali criteri sono stati già abbinati
             
             # Verifica che ogni canonical skill abbia un criterio corrispondente
             for canonical_skill in canonical_skills:
-                skill_name_lower = canonical_skill['skill_name'].strip().lower()
+                skill_name_normalized = _normalize_skill_name(canonical_skill['skill_name'])
                 found = False
+                matched_req_eval = None
+                
                 for req_eval in filtered_data.evaluation_schema:
-                    req_name_lower = req_eval.requirement.strip().lower()
-                    if req_name_lower == skill_name_lower:
-                        # Match esatto, normalizza il nome al canonical
+                    req_name_normalized = _normalize_skill_name(req_eval.requirement)
+                    original_req_name = req_eval.requirement  # Salva il nome originale prima della normalizzazione
+                    
+                    # Match normalizzato (ignora "(technical)", "(soft)", etc.)
+                    if req_name_normalized == skill_name_normalized:
+                        # Match trovato! Normalizza il nome al canonical
                         req_eval.requirement = canonical_skill['skill_name']
                         validated_schema.append(req_eval)
+                        matched_criteria.add(id(req_eval))  # Traccia che questo criterio è stato abbinato
                         found = True
+                        if original_req_name != canonical_skill['skill_name']:
+                            print(f"    ✓ Criterio trovato per skill canonica: '{canonical_skill['skill_name']}' (generato come: '{original_req_name}' - normalizzato)")
                         break
                 
                 if not found:
-                    # CREA automaticamente un criterio di default per questa skill canonica
+                    # Criterio mancante per skill canonica - NON creare un criterio generico
+                    # Segnala l'errore e richiedi rigenerazione
                     missing_skills.append(canonical_skill['skill_name'])
-                    print(f"    ⚠ Criterio mancante per skill canonica: '{canonical_skill['skill_name']}' - creazione criterio di default...")
-                    
-                    # Crea criterio di default nella stessa lingua del prompt
-                    if language == "it":
-                        default_criterion_text = f"Valutare la competenza del candidato in {canonical_skill['skill_name']} basandosi sulle evidenze emerse durante il colloquio e sui case study proposti."
-                    else:
-                        default_criterion_text = f"Evaluate the candidate's competence in {canonical_skill['skill_name']} based on evidence emerged during the interview and the proposed case studies."
-                    
-                    # Crea il criterio di default
-                    default_criterion = EvaluationCriterion(evaluation_criteria_1=default_criterion_text)
-                    default_req_eval = RequirementEvaluation(
-                        requirement=canonical_skill['skill_name'],
-                        criteria=default_criterion
-                    )
-                    validated_schema.append(default_req_eval)
-                    created_default_criteria.append(canonical_skill['skill_name'])
-                    print(f"    ✓ Criterio di default creato per: '{canonical_skill['skill_name']}'")
+                    print(f"    ❌ ERRORE CRITICO: Criterio mancante per skill canonica: '{canonical_skill['skill_name']}'")
+                    print(f"       Il modello non ha generato un criterio per questa skill. Rigenera i criteri o verifica il prompt.")
             
-            # Verifica che non ci siano criteri per skill non canoniche
+            # Verifica che non ci siano criteri per skill non canoniche (non ancora abbinati)
             for req_eval in filtered_data.evaluation_schema:
-                req_name_lower = req_eval.requirement.strip().lower()
-                if req_name_lower not in canonical_skill_names:
+                if id(req_eval) in matched_criteria:
+                    continue  # Già abbinato, salta
+                
+                req_name_normalized = _normalize_skill_name(req_eval.requirement)
+                if req_name_normalized not in canonical_skill_names_normalized:
                     invalid_skills.append(req_eval.requirement)
                     print(f"    ⚠ Criterio per skill non canonica: '{req_eval.requirement}'")
-                elif req_name_lower not in [r.requirement.strip().lower() for r in validated_schema]:
-                    # Aggiungi solo se non è già stato aggiunto
-                    req_eval.requirement = canonical_skill_map.get(req_name_lower, req_eval.requirement)
-                    validated_schema.append(req_eval)
             
-            if created_default_criteria:
-                print(f"  ✓ Creati {len(created_default_criteria)} criteri di default per skill canoniche mancanti.")
+            if missing_skills:
+                print(f"  ❌ ERRORE: {len(missing_skills)} skill canoniche senza criterio generato:")
+                for skill in missing_skills:
+                    print(f"     - {skill}")
+                print(f"  ⚠ ATTENZIONE: La generazione è INCOMPLETA. Rigenera i criteri per includere tutte le skill canoniche.")
+                # Non aggiungere criteri generici - fallisci invece
+                raise ValueError(f"Generazione incompleta: {len(missing_skills)} criteri mancanti per skill canoniche. Rigenera i criteri.")
             
             if invalid_skills:
                 print(f"  ⚠ ATTENZIONE: {len(invalid_skills)} criteri per skill non canoniche (saranno scartati).")

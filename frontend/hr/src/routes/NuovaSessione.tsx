@@ -475,44 +475,45 @@ export function NuovaSessione() {
                     </button>
                   )}
                   
-                  {/* WhatsApp Status Badge */}
-                  {whatsappData[session.session_id]?.status && (
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '6px 12px',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                      fontWeight: '500',
-                      background: whatsappData[session.session_id].status === 'qualified' ? '#D1FAE5' :
-                                 whatsappData[session.session_id].status === 'disqualified' ? '#FEE2E2' :
-                                 whatsappData[session.session_id].status === 'active' ? '#DBEAFE' :
-                                 whatsappData[session.session_id].status === 'sent' ? '#FEF3C7' :
-                                 whatsappData[session.session_id].status === 'ready' ? '#E0E7FF' :
-                                 whatsappData[session.session_id].status === 'interrupted' ? '#FEE2E2' :
-                                 '#F3F4F6',
-                      color: whatsappData[session.session_id].status === 'qualified' ? '#065F46' :
-                             whatsappData[session.session_id].status === 'disqualified' ? '#991B1B' :
-                             whatsappData[session.session_id].status === 'active' ? '#1E40AF' :
-                             whatsappData[session.session_id].status === 'sent' ? '#92400E' :
-                             whatsappData[session.session_id].status === 'ready' ? '#3730A3' :
-                             whatsappData[session.session_id].status === 'interrupted' ? '#991B1B' :
-                             '#374151',
-                      border: `1px solid ${
-                        whatsappData[session.session_id].status === 'qualified' ? '#10B981' :
-                        whatsappData[session.session_id].status === 'disqualified' ? '#EF4444' :
-                        whatsappData[session.session_id].status === 'active' ? '#3B82F6' :
-                        whatsappData[session.session_id].status === 'sent' ? '#F59E0B' :
-                        whatsappData[session.session_id].status === 'ready' ? '#6366F1' :
-                        whatsappData[session.session_id].status === 'interrupted' ? '#EF4444' :
-                        '#D1D5DB'
-                      }`
-                    }}>
+                  {/* WhatsApp Status Badge (hidden when status is 'ready') */}
+                  {whatsappData[session.session_id]?.status &&
+                   whatsappData[session.session_id].status !== 'ready' && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 12px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontWeight: '500',
+                        background:
+                          whatsappData[session.session_id].status === 'qualified' ? '#D1FAE5' :
+                          whatsappData[session.session_id].status === 'disqualified' ? '#FEE2E2' :
+                          whatsappData[session.session_id].status === 'active' ? '#DBEAFE' :
+                          whatsappData[session.session_id].status === 'sent' ? '#FEF3C7' :
+                          whatsappData[session.session_id].status === 'interrupted' ? '#FEE2E2' :
+                          '#F3F4F6',
+                        color:
+                          whatsappData[session.session_id].status === 'qualified' ? '#065F46' :
+                          whatsappData[session.session_id].status === 'disqualified' ? '#991B1B' :
+                          whatsappData[session.session_id].status === 'active' ? '#1E40AF' :
+                          whatsappData[session.session_id].status === 'sent' ? '#92400E' :
+                          whatsappData[session.session_id].status === 'interrupted' ? '#991B1B' :
+                          '#374151',
+                        border: `1px solid ${
+                          whatsappData[session.session_id].status === 'qualified' ? '#10B981' :
+                          whatsappData[session.session_id].status === 'disqualified' ? '#EF4444' :
+                          whatsappData[session.session_id].status === 'active' ? '#3B82F6' :
+                          whatsappData[session.session_id].status === 'sent' ? '#F59E0B' :
+                          whatsappData[session.session_id].status === 'interrupted' ? '#EF4444' :
+                          '#D1D5DB'
+                        }`
+                      }}
+                    >
                       <MessageSquare size={14} />
                       <span>
-                        {whatsappData[session.session_id].status === 'ready' ? 'Pronto' :
-                         whatsappData[session.session_id].status === 'sent' ? 'Inviato' :
+                        {whatsappData[session.session_id].status === 'sent' ? 'Inviato' :
                          whatsappData[session.session_id].status === 'active' ? 'Attivo' :
                          whatsappData[session.session_id].status === 'qualified' ? 'Qualificato' :
                          whatsappData[session.session_id].status === 'disqualified' ? 'Squalificato' :

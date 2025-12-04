@@ -92,19 +92,59 @@ Il tuo compito è creare un sistema che permetta di valutare il soddisfacimento 
 
 I requisiti tecnici e trasversali saranno forniti nel report "ICP", nei paragrafi **Competenze tecniche richieste esplicitamente dall'annuncio** e **Competenze trasversali richieste esplicitamente dall'annuncio (escluse le lingue)**. {extraction_instruction}IGNORA completamente la sezione delle attività.
 
-Esempio di REQUISITO da estrarre:
-Requisito: problem solving.
-Evaluation criterion: adozione di analisi e approccio strutturati al problema durante tutta la risoluzione, che evidenziano un approccio brillante anche in caso di "problemi" più complessi, incluso l'approccio alla risoluzione di vincoli complessi come quelli legali che potrebbero bloccare il raggiungimento della soluzione, dimostrando la capacità di identificare rapidamente le variabili chiave e proporre soluzioni alternative quando necessario.
+**⚠️ REGOLE CRITICHE PER LA SPECIFICITÀ DEI CRITERI ⚠️**
 
-Esempio di COSA NON estrarre (è un'attività):
-"Sviluppare applicazioni web" → NON è un requisito, è un'attività. NON estrarlo.
-"Gestire il CRM aziendale" → NON è un requisito, è un'attività. NON estrarlo.
+1. **ANALIZZA I REASONING STEPS E LE SKILLS_TO_TEST**:
+   - Per ogni skill, analizza TUTTI i reasoning steps di TUTTI i case study forniti
+   - Identifica in quali reasoning steps quella skill è presente nel campo `skills_to_test`
+   - Leggi attentamente il `testing_method` associato a quella skill in ciascun reasoning step
+   - Usa queste informazioni per creare un criterio SPECIFICO che rifletta come quella skill viene effettivamente testata nei case
+
+2. **RIFERIMENTI AL CONTENUTO SPECIFICO DEL CASE**:
+   - Il criterio DEVE fare riferimento a elementi concreti e specifici dei case study (es. "analisi dei requisiti di business", "progettazione di architetture cloud", "gestione di progetti Agile")
+   - NON usare frasi generiche come "basandosi sulle evidenze emerse durante il colloquio" o "sui case study proposti"
+   - Il criterio deve descrivere COSA specificamente il candidato deve dimostrare, basandoti sui reasoning steps e sul contenuto dei case
+
+3. **CALIBRAZIONE SUL LIVELLO DI SENIORITY**:
+   - Per Junior: focus su conoscenze base, capacità di apprendimento, approccio guidato
+   - Per Mid-Level: competenze consolidate, autonomia operativa, capacità di problem-solving pratico
+   - Per Senior: competenze avanzate, visione strategica, capacità di mentoring e leadership tecnica
+   - Per Lead: visione architetturale, leadership strategica, capacità di definire standard e best practices
+
+4. **STRUTTURA DEL CRITERIO**:
+   - Inizia descrivendo COSA specificamente il candidato deve dimostrare (non "valutare la competenza")
+   - Indica DOVE/DOVE questa skill viene testata (riferimenti ai reasoning steps specifici)
+   - Specifica COME viene valutata (metodi di testing, aspetti chiave da osservare)
+   - Includi indicatori concreti di successo per quel livello di seniority
+
+**ESEMPI DI CRITERI SPECIFICI (CORRETTI)**:
+
+Esempio 1 - Skill: "Problem Solving" (Mid-Level):
+Il candidato deve dimostrare capacità di analisi strutturata dei problemi complessi, identificando variabili chiave e vincoli critici. Durante i reasoning steps che richiedono problem solving (es. analisi di processi aziendali, risoluzione di colli di bottiglia operativi), deve mostrare capacità di decomporre problemi in sottoproblemi gestibili, proporre soluzioni alternative valutando pro/contro, e anticipare potenziali rischi o impatti delle soluzioni proposte. Per il livello Mid-Level, si attende autonomia nell'identificare approcci risolutivi senza necessità di guida costante.
+
+Esempio 2 - Skill: "Tecnologie Microsoft" (Senior):
+Il candidato deve dimostrare padronanza avanzata delle tecnologie Microsoft (Azure, .NET, Power Platform) attraverso la capacità di progettare soluzioni architetturali complesse e guidare scelte tecnologiche strategiche. Nei reasoning steps che testano questa skill (es. progettazione di architetture cloud, integrazione di sistemi enterprise), deve mostrare comprensione profonda delle best practices Microsoft, capacità di valutare trade-off tra diverse tecnologie dello stack, e visione strategica sull'evoluzione delle piattaforme. Per il livello Senior, si attende capacità di mentoring tecnico e definizione di standard aziendali.
+
+**ESEMPI DI CRITERI GENERICI (SBAGLIATI - DA EVITARE)**:
+
+❌ SBAGLIATO: "Valutare la competenza del candidato in Problem Solving basandosi sulle evidenze emerse durante il colloquio e sui case study proposti."
+❌ SBAGLIATO: "Il candidato deve dimostrare conoscenza di Tecnologie Microsoft durante la risoluzione dei case."
+❌ SBAGLIATO: "Valutare la capacità del candidato di applicare le competenze richieste."
+
+**PERCHÉ QUESTI SONO SBAGLIATI**:
+- Non specificano COSA esattamente il candidato deve dimostrare
+- Non fanno riferimento a elementi concreti dei case study
+- Usano frasi generiche che non guidano la valutazione
+- Non sono calibrati sul livello di seniority
 
 ---
 Istruzioni
 - Nel produrre gli evaluation criteria dei requisiti sii calibrato rispetto al livello di seniority indicato di seguito.
 - Estrai SOLO requisiti (skill), MAI attività
 - Rifletti attentamente sul contenuto degli input per distinguere requisiti da attività
+- **CRITICO**: Per ogni skill, analizza i reasoning steps dei case study per identificare come quella skill viene testata e crea un criterio SPECIFICO basato su questi elementi concreti
+- **CRITICO**: Evita TASSATIVAMENTE frasi generiche come "basandosi sulle evidenze emerse" o "durante il colloquio". Usa invece riferimenti specifici ai reasoning steps e al contenuto dei case
+- **CRITICO**: Il criterio deve descrivere COSA specificamente il candidato deve dimostrare, DOVE (in quali reasoning steps), e COME (metodi di testing), calibrato sul livello di seniority
 - Usa un buon grado di dettaglio, per evitare equivoci o problemi interpretativi
 - Produci sempre 1 evaluation criterion completo e dettagliato per ogni REQUISITO individuato
 - Il criterio deve essere esaustivo e coprire gli aspetti principali del requisito per permettere una valutazione accurata
@@ -162,19 +202,59 @@ Your task is to create a system that allows you to evaluate the fulfillment of t
 
 The technical and soft skill requirements will be provided in the "ICP" report, in the paragraphs **Technical skills explicitly required by the posting** and **Soft skills explicitly required by the posting (excluding languages)**. {extraction_instruction}COMPLETELY IGNORE the activities section.
 
-Example of REQUIREMENT to extract:
-Requirement: problem solving.
-Evaluation criterion: adoption of structured analysis and approach to the problem throughout the resolution, which highlight a brilliant approach even in the case of more complex "problems", including the approach to resolving complex constraints such as legal ones that could block the achievement of the solution, demonstrating the ability to quickly identify key variables and propose alternative solutions when necessary.
+**⚠️ CRITICAL RULES FOR CRITERIA SPECIFICITY ⚠️**
 
-Example of WHAT NOT to extract (it's an activity):
-"Develop web applications" → NOT a requirement, it's an activity. Do NOT extract it.
-"Manage company CRM" → NOT a requirement, it's an activity. Do NOT extract it.
+1. **ANALYZE REASONING STEPS AND SKILLS_TO_TEST**:
+   - For each skill, analyze ALL reasoning steps of ALL case studies provided
+   - Identify in which reasoning steps that skill is present in the `skills_to_test` field
+   - Carefully read the `testing_method` associated with that skill in each reasoning step
+   - Use this information to create a SPECIFIC criterion that reflects how that skill is actually tested in the cases
+
+2. **REFERENCES TO SPECIFIC CASE CONTENT**:
+   - The criterion MUST reference concrete and specific elements of the case studies (e.g., "business requirements analysis", "cloud architecture design", "Agile project management")
+   - DO NOT use generic phrases like "based on evidence emerged during the interview" or "on the proposed case studies"
+   - The criterion must describe WHAT specifically the candidate must demonstrate, based on the reasoning steps and case content
+
+3. **CALIBRATION ON SENIORITY LEVEL**:
+   - For Junior: focus on basic knowledge, learning ability, guided approach
+   - For Mid-Level: consolidated skills, operational autonomy, practical problem-solving ability
+   - For Senior: advanced skills, strategic vision, technical mentoring and leadership capability
+   - For Lead: architectural vision, strategic leadership, ability to define standards and best practices
+
+4. **CRITERION STRUCTURE**:
+   - Start by describing WHAT specifically the candidate must demonstrate (not "evaluate the competence")
+   - Indicate WHERE this skill is tested (references to specific reasoning steps)
+   - Specify HOW it is evaluated (testing methods, key aspects to observe)
+   - Include concrete success indicators for that seniority level
+
+**EXAMPLES OF SPECIFIC CRITERIA (CORRECT)**:
+
+Example 1 - Skill: "Problem Solving" (Mid-Level):
+The candidate must demonstrate structured analysis capability of complex problems, identifying key variables and critical constraints. During reasoning steps that require problem solving (e.g., business process analysis, operational bottleneck resolution), they must show ability to decompose problems into manageable sub-problems, propose alternative solutions evaluating pros/cons, and anticipate potential risks or impacts of proposed solutions. For Mid-Level, autonomy in identifying resolution approaches without constant guidance is expected.
+
+Example 2 - Skill: "Microsoft Technologies" (Senior):
+The candidate must demonstrate advanced mastery of Microsoft technologies (Azure, .NET, Power Platform) through the ability to design complex architectural solutions and guide strategic technology choices. In reasoning steps that test this skill (e.g., cloud architecture design, enterprise system integration), they must show deep understanding of Microsoft best practices, ability to evaluate trade-offs between different technologies in the stack, and strategic vision on platform evolution. For Senior level, technical mentoring capability and definition of company standards is expected.
+
+**EXAMPLES OF GENERIC CRITERIA (WRONG - TO AVOID)**:
+
+❌ WRONG: "Evaluate the candidate's competence in Problem Solving based on evidence emerged during the interview and the proposed case studies."
+❌ WRONG: "The candidate must demonstrate knowledge of Microsoft Technologies during case resolution."
+❌ WRONG: "Evaluate the candidate's ability to apply the required competencies."
+
+**WHY THESE ARE WRONG**:
+- They don't specify WHAT exactly the candidate must demonstrate
+- They don't reference concrete elements of the case studies
+- They use generic phrases that don't guide evaluation
+- They are not calibrated on seniority level
 
 ---
 Instructions
 - In producing the evaluation criteria of the requirements, be calibrated with respect to the seniority level indicated below.
 - Extract ONLY requirements (skills), NEVER activities
 - Reflect carefully on the content of the inputs to distinguish requirements from activities
+- **CRITICAL**: For each skill, analyze the reasoning steps of the case studies to identify how that skill is tested and create a SPECIFIC criterion based on these concrete elements
+- **CRITICAL**: ABSOLUTELY avoid generic phrases like "based on evidence emerged" or "during the interview". Instead use specific references to reasoning steps and case content
+- **CRITICAL**: The criterion must describe WHAT specifically the candidate must demonstrate, WHERE (in which reasoning steps), and HOW (testing methods), calibrated on seniority level
 - Use a good degree of detail, to avoid misunderstandings or interpretive problems
 - Always produce 1 complete and detailed evaluation criterion for each REQUIREMENT identified
 - The criterion should be comprehensive and cover the main aspects of the requirement to allow for accurate evaluation

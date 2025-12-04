@@ -38,6 +38,12 @@ interface DashboardData {
     interrupted: number
     qualification_rate: number
     interruption_reasons: Array<{ reason: string; count: number }>
+    waiting_response?: number
+    interrupted_details?: {
+      missing_requirements: number
+      withdrawal: number
+      withdrawal_reasons: Array<{ reason: string; count: number }>
+    }
   }
   by_position: Array<{
     position_id: string
@@ -293,44 +299,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* KPI Principali - Prima riga: Funnel Overview */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(4, 1fr)', 
-        gap: '16px',
-        marginBottom: '16px'
-      }}>
-        <KPICard
-          title="Candidature Totali"
-          value={data.funnel?.total || 0}
-          icon={<Users size={22} />}
-          color="#6366f1"
-          subtitle="Sessioni create"
-        />
-        <KPICard
-          title="Qualificati"
-          value={data.funnel?.qualified || 0}
-          icon={<CheckCircle2 size={22} />}
-          color="#22c55e"
-          subtitle={`${data.whatsapp?.qualification_rate || 0}% tasso qualificazione`}
-        />
-        <KPICard
-          title="Colloquiati"
-          value={data.funnel?.interviewed || 0}
-          icon={<Target size={22} />}
-          color="#3b82f6"
-          subtitle="Colloqui AI completati"
-        />
-        <KPICard
-          title="Feedback Pronti"
-          value={(data.funnel?.feedback_ready || 0) + (data.funnel?.feedback_downloaded || 0)}
-          icon={<FileText size={22} />}
-          color="#f59e0b"
-          subtitle={`${data.funnel?.feedback_downloaded || 0} già scaricati`}
-        />
-      </div>
-      
-      {/* KPI Secondarie - Seconda riga: Metriche Performance */}
+      {/* KPI Principali - Solo 4 card richieste */}
       <div style={{ 
         display: 'grid', 
         gridTemplateColumns: 'repeat(4, 1fr)', 
@@ -338,25 +307,18 @@ export function Dashboard() {
         marginBottom: '28px'
       }}>
         <KPICard
-          title="Interrotti"
+          title="Candidati Totali"
+          value={data.funnel?.total || 0}
+          icon={<Users size={22} />}
+          color="#6366f1"
+          subtitle="Sessioni create"
+        />
+        <KPICard
+          title="Candidature Interrotte"
           value={data.funnel?.interrupted || 0}
           icon={<AlertTriangle size={22} />}
           color="#ef4444"
           subtitle="Candidature non proseguite"
-        />
-        <KPICard
-          title="In Attesa"
-          value={(data.funnel?.cv_analyzed || 0) + (data.funnel?.engaged || 0)}
-          icon={<Clock size={22} />}
-          color="#8b5cf6"
-          subtitle="CV + Ingaggiati"
-        />
-        <KPICard
-          title="Scoring Medio"
-          value={data.metrics.avg_overall_score?.toFixed(2) || '0.00'}
-          icon={<Star size={22} />}
-          color="#f59e0b"
-          subtitle="su scala 0-4"
         />
         <KPICard
           title="Recovery Rate"
@@ -364,6 +326,40 @@ export function Dashboard() {
           icon={<TrendingUp size={22} />}
           color="#10b981"
           subtitle={`${data.metrics.recovery_count || 0} candidati migliorati`}
+        />
+        <KPICard
+          title="In Attesa di Risposta"
+          value={data.whatsapp?.waiting_response || 0}
+          icon={<Clock size={22} />}
+          color="#8b5cf6"
+          subtitle="CV ingaggiati WhatsApp, processo non concluso"
+        />
+      </div>
+
+      {/* Sezione Grafici - Dettaglio Interrotti */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: '1fr', 
+        gap: '24px',
+        marginBottom: '28px'
+      }}>
+        <InterruptedDetailsChart 
+          interruptedDetails={data.whatsapp?.interrupted_details}
+          totalInterrupted={data.funnel?.interrupted || 0}
+        />
+      </div>
+
+      {/* Sezione Grafici - Valutazioni */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: '1fr', 
+        gap: '24px',
+        marginBottom: '28px'
+      }}>
+        <EvaluationsChart 
+          avgCvScore={data.metrics.avg_cv_score}
+          avgInterviewScore={data.metrics.avg_interview_score}
+          avgOverallScore={data.metrics.avg_overall_score}
         />
       </div>
 
@@ -377,20 +373,7 @@ export function Dashboard() {
         {/* Funnel di Conversione */}
         <FunnelChart funnel={data.funnel} />
         
-        {/* Performance per Posizione */}
-        <PositionChart positions={data.by_position} />
-      </div>
-
-      {/* Sezione Dettaglio - 2 colonne */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: '1fr 1fr', 
-        gap: '24px'
-      }}>
-        {/* WhatsApp Insights */}
-        <WhatsAppInsightsCard whatsapp={data.whatsapp} />
-        
-        {/* Performance Pie Chart (compatto) */}
+        {/* Performance CV vs Colloquio */}
         <PerformancePieChart
           recoveryCount={data.metrics.recovery_count}
           underperformingCount={data.metrics.underperforming_count}
@@ -479,12 +462,12 @@ function FunnelChart({ funnel }: { funnel: DashboardData['funnel'] }) {
   
   // Funnel principale (flusso positivo)
   const mainStages = [
-    { name: '📄 CV Analizzato', value: funnel.cv_analyzed, color: '#6366f1', icon: '📄' },
-    { name: '📱 Ingaggiato', value: funnel.engaged, color: '#8b5cf6', icon: '📱' },
-    { name: '✓ Qualificato', value: funnel.qualified, color: '#22c55e', icon: '✓' },
-    { name: '🎯 Colloquiato', value: funnel.interviewed, color: '#3b82f6', icon: '🎯' },
-    { name: '📋 Feedback Pronto', value: funnel.feedback_ready, color: '#f59e0b', icon: '📋' },
-    { name: '✅ Feedback Scaricato', value: funnel.feedback_downloaded, color: '#10b981', icon: '✅' }
+    { name: '📄 CV Analizzati', value: funnel.cv_analyzed, color: '#6366f1', icon: '📄' },
+    { name: '📱 Candidati Ingaggiati', value: funnel.engaged, color: '#8b5cf6', icon: '📱' },
+    { name: '✓ Pre-screening superato', value: funnel.qualified, color: '#22c55e', icon: '✓' },
+    { name: '🎯 Colloquiati', value: funnel.interviewed, color: '#3b82f6', icon: '🎯' },
+    { name: '📋 Feedback Pronti', value: funnel.feedback_ready, color: '#f59e0b', icon: '📋' },
+    { name: '✅ Feedback Scaricati / inviati', value: funnel.feedback_downloaded, color: '#10b981', icon: '✅' }
   ]
   
   // Totale sessioni per calcolo percentuali
@@ -755,127 +738,6 @@ function PositionChart({ positions }: { positions: DashboardData['by_position'] 
   )
 }
 
-// WhatsApp Insights Card
-function WhatsAppInsightsCard({ whatsapp }: { whatsapp: DashboardData['whatsapp'] }) {
-  if (!whatsapp) return null
-  
-  const total = whatsapp.qualified + whatsapp.interrupted
-  const qualifiedPercent = total > 0 ? (whatsapp.qualified / total * 100) : 0
-  const interruptedPercent = total > 0 ? (whatsapp.interrupted / total * 100) : 0
-
-  return (
-    <div style={{
-      background: 'white',
-      borderRadius: '16px',
-      padding: '24px',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-      border: '1px solid var(--border-light)'
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-        <div style={{
-          width: '36px',
-          height: '36px',
-          borderRadius: '10px',
-          background: 'linear-gradient(135deg, #22c55e20, #16a34a20)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#22c55e'
-        }}>
-          <MessageCircle size={20} />
-        </div>
-        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Pre-screening WhatsApp</h3>
-      </div>
-
-      {/* Barra Qualificati vs Interrotti */}
-      <div style={{ marginBottom: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <span style={{ fontSize: '13px', color: '#22c55e', fontWeight: '600' }}>
-            Qualificati: {whatsapp.qualified}
-          </span>
-          <span style={{ fontSize: '13px', color: '#ef4444', fontWeight: '600' }}>
-            Interrotti: {whatsapp.interrupted}
-          </span>
-        </div>
-        <div style={{ 
-          height: '12px', 
-          background: '#f3f4f6', 
-          borderRadius: '6px',
-          overflow: 'hidden',
-          display: 'flex'
-        }}>
-          <div style={{
-            width: `${qualifiedPercent}%`,
-            background: 'linear-gradient(90deg, #22c55e, #16a34a)',
-            transition: 'width 0.5s ease'
-          }} />
-          <div style={{
-            width: `${interruptedPercent}%`,
-            background: 'linear-gradient(90deg, #ef4444, #dc2626)',
-            transition: 'width 0.5s ease'
-          }} />
-        </div>
-      </div>
-
-      {/* Motivi Interruzione */}
-      {whatsapp.interruption_reasons && whatsapp.interruption_reasons.length > 0 && (
-        <div>
-          <div style={{ 
-            fontSize: '12px', 
-            fontWeight: '600', 
-            color: 'var(--text-secondary)',
-            marginBottom: '10px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.3px'
-          }}>
-            Principali Motivi Interruzione
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {whatsapp.interruption_reasons.slice(0, 3).map((reason, idx) => (
-              <div key={idx} style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '8px',
-                padding: '8px 12px',
-                background: '#fef2f2',
-                borderRadius: '8px',
-                borderLeft: '3px solid #ef4444'
-              }}>
-                <AlertTriangle size={14} style={{ color: '#ef4444', flexShrink: 0 }} />
-                <span style={{ fontSize: '12px', color: 'var(--text-primary)', flex: 1 }}>
-                  {reason.reason || 'Motivo non specificato'}
-                </span>
-                <span style={{ 
-                  fontSize: '12px', 
-                  fontWeight: '700', 
-                  color: '#ef4444',
-                  background: 'white',
-                  padding: '2px 8px',
-                  borderRadius: '4px'
-                }}>
-                  {reason.count}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {(!whatsapp.interruption_reasons || whatsapp.interruption_reasons.length === 0) && (
-        <div style={{ 
-          padding: '16px', 
-          background: '#f0fdf4', 
-          borderRadius: '8px',
-          textAlign: 'center',
-          color: '#16a34a',
-          fontSize: '13px'
-        }}>
-          Nessuna interruzione registrata nel periodo selezionato
-        </div>
-      )}
-    </div>
-  )
-}
 
 // Performance Pie Chart (compatto)
 function PerformancePieChart({ 
@@ -999,6 +861,308 @@ function PerformancePieChart({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Grafico Dettaglio Interrotti
+function InterruptedDetailsChart({ 
+  interruptedDetails, 
+  totalInterrupted 
+}: { 
+  interruptedDetails?: {
+    missing_requirements: number
+    withdrawal: number
+    withdrawal_reasons: Array<{ reason: string; count: number }>
+  }
+  totalInterrupted: number
+}) {
+  if (!interruptedDetails || totalInterrupted === 0) {
+    return (
+      <div style={{
+        background: 'white',
+        borderRadius: '16px',
+        padding: '24px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+        border: '1px solid var(--border-light)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '280px'
+      }}>
+        <AlertTriangle size={48} style={{ color: '#d1d5db', marginBottom: '12px' }} />
+        <p style={{ color: 'var(--text-secondary)', margin: 0 }}>Nessuna candidatura interrotta</p>
+      </div>
+    )
+  }
+
+  const { missing_requirements, withdrawal, withdrawal_reasons } = interruptedDetails
+
+  const chartData = [
+    { name: 'Mancanza Requisiti Base', value: missing_requirements, color: '#ef4444' },
+    { name: 'Ritiro Candidatura', value: withdrawal, color: '#f59e0b' }
+  ].filter(item => item.value > 0)
+
+  const COLORS = chartData.map(item => item.color)
+
+  return (
+    <div style={{
+      background: 'white',
+      borderRadius: '16px',
+      padding: '24px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+      border: '1px solid var(--border-light)'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+        <div style={{
+          width: '36px',
+          height: '36px',
+          borderRadius: '10px',
+          background: 'linear-gradient(135deg, #ef444420, #f59e0b20)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#ef4444'
+        }}>
+          <AlertTriangle size={20} />
+        </div>
+        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Dettaglio Candidature Interrotte</h3>
+      </div>
+
+      <div style={{ display: 'flex', gap: '32px', alignItems: 'flex-start' }}>
+        {/* Pie Chart */}
+        <div style={{ width: '200px', height: '200px', flexShrink: 0 }}>
+          <ResponsiveContainer>
+            <PieChart>
+              <Pie
+                data={chartData}
+                cx="50%"
+                cy="50%"
+                outerRadius={80}
+                innerRadius={40}
+                dataKey="value"
+                animationDuration={600}
+                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+              >
+                {chartData.map((_, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index]} />
+                ))}
+              </Pie>
+              <Tooltip 
+                contentStyle={{
+                  background: 'rgba(0,0,0,0.9)',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '11px'
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Dettagli */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Statistiche principali */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {chartData.map((item, index) => (
+              <div key={index} style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                padding: '12px',
+                background: `${item.color}08`,
+                borderRadius: '8px',
+                border: `1px solid ${item.color}30`
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '3px',
+                    background: item.color,
+                    flexShrink: 0
+                  }} />
+                  <span style={{ fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' }}>
+                    {item.name}
+                  </span>
+                </div>
+                <span style={{ 
+                  fontSize: '18px', 
+                  fontWeight: '700', 
+                  color: item.color 
+                }}>
+                  {item.value}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Motivazioni ritiro (se presenti) */}
+          {withdrawal > 0 && withdrawal_reasons && withdrawal_reasons.length > 0 && (
+            <div style={{ 
+              marginTop: '8px',
+              paddingTop: '16px',
+              borderTop: '1px solid var(--border-light)'
+            }}>
+              <div style={{ 
+                fontSize: '12px', 
+                fontWeight: '600', 
+                color: 'var(--text-secondary)',
+                marginBottom: '12px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}>
+                Motivazioni Ritiro Candidatura
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {withdrawal_reasons.slice(0, 5).map((item, index) => (
+                  <div key={index} style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '8px 12px',
+                    background: '#f9fafb',
+                    borderRadius: '6px',
+                    fontSize: '13px'
+                  }}>
+                    <span style={{ 
+                      color: 'var(--text-primary)',
+                      flex: 1,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      marginRight: '12px'
+                    }}>
+                      {item.reason}
+                    </span>
+                    <span style={{ 
+                      fontSize: '14px', 
+                      fontWeight: '600', 
+                      color: '#f59e0b',
+                      flexShrink: 0
+                    }}>
+                      {item.count}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Card Valutazioni (solo numeri, senza grafico)
+function EvaluationsChart({ 
+  avgCvScore, 
+  avgInterviewScore, 
+  avgOverallScore 
+}: { 
+  avgCvScore: number
+  avgInterviewScore: number
+  avgOverallScore: number
+}) {
+  return (
+    <div style={{
+      background: 'white',
+      borderRadius: '16px',
+      padding: '20px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+      border: '1px solid var(--border-light)'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+        <div style={{
+          width: '36px',
+          height: '36px',
+          borderRadius: '10px',
+          background: 'linear-gradient(135deg, #6366f120, #8b5cf620)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#6366f1'
+        }}>
+          <Star size={20} />
+        </div>
+        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Valutazioni Candidati</h3>
+        <span style={{ 
+          fontSize: '11px', 
+          color: 'var(--text-muted)',
+          marginLeft: 'auto',
+          padding: '4px 8px',
+          background: '#f3f4f6',
+          borderRadius: '6px'
+        }}>
+          Scala: 0-4
+        </span>
+      </div>
+
+      {/* Valori sintetici */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: '16px',
+        marginTop: '8px'
+      }}>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '4px',
+          flex: 1
+        }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '500' }}>
+            Valutazione CV
+          </span>
+          <span style={{ 
+            fontSize: '22px', 
+            fontWeight: '700', 
+            color: '#6366f1' 
+          }}>
+            {avgCvScore.toFixed(2)}
+          </span>
+        </div>
+
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '4px',
+          flex: 1
+        }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '500' }}>
+            Valutazione Colloquio
+          </span>
+          <span style={{ 
+            fontSize: '22px', 
+            fontWeight: '700', 
+            color: '#3b82f6' 
+          }}>
+            {avgInterviewScore.toFixed(2)}
+          </span>
+        </div>
+
+        <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '4px',
+            flex: 1
+        }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '500' }}>
+            Valutazione Complessiva
+          </span>
+          <span style={{ 
+            fontSize: '22px', 
+            fontWeight: '700', 
+            color: '#8b5cf6' 
+          }}>
+            {avgOverallScore.toFixed(2)}
+          </span>
+        </div>
+      </div>
     </div>
   )
 }

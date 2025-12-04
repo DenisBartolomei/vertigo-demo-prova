@@ -20,6 +20,14 @@
   --radius-2xl: 20px;
 }
 
+/* Nascondi cursore sistema quando pointer lock è attivo */
+body.pointer-locked *,
+body.pointer-locked,
+html.pointer-locked *,
+html.pointer-locked {
+  cursor: none !important;
+}
+
 * { 
   box-sizing: border-box; 
   margin: 0;
@@ -167,6 +175,19 @@ html, body, #root {
 
 .message.user .message-time {
   text-align: left;
+}
+
+/* Evidenziazione focus per accessibilità (textarea e microfono) */
+.sandbox-textarea:focus-visible {
+  outline: 3px solid var(--primary-purple);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.2);
+}
+
+.voice-button:focus-visible {
+  outline: 3px solid var(--primary-purple);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.3);
 }
 
 /* Typing indicator */

@@ -2,396 +2,286 @@
   {
     "ID": 13,
     "scartato": true,
-    "motivazione": "Esperienza non in ambito software o tech, profilo troppo commerciale."
+    "motivazione": "Esperienza non IT/Digital Transformation, profilo commerciale."
   },
   {
-    "ID": 19,
+    "ID": 39,
     "scartato": true,
-    "motivazione": "Esperienza branding, manca background tecnico e gestione prodotto software."
-  },
-  {
-    "ID": 1,
-    "scartato": true,
-    "motivazione": "Branding e licensing, nessuna esperienza in prodotto software o tech."
-  },
-  {
-    "ID": 4,
-    "scartato": true,
-    "motivazione": "Solo marketing/branding, nessuna esperienza prodotto software o tech."
-  },
-  {
-    "ID": 30,
-    "scartato": true,
-    "motivazione": "Junior, esperienza solo marketing, non in ambito tech o prodotto software."
-  },
-  {
-    "ID": 28,
-    "scartato": true,
-    "motivazione": "Brand manager automotive, nessuna esperienza prodotto software o tech."
+    "motivazione": "Profilo marketing/comunicazione, non project management IT."
   },
   {
     "ID": 55,
     "scartato": true,
-    "motivazione": "Profilo marketing, manca esperienza prodotto software e background tecnico."
-  },
-  {
-    "ID": 8,
-    "scartato": true,
-    "motivazione": "Esperienza retail branding, non in prodotto software o tech."
-  },
-  {
-    "ID": 16,
-    "scartato": true,
-    "motivazione": "Solo branding/marketing, nessuna esperienza prodotto software o tech."
+    "motivazione": "Esperienza marketing, non gestione progetti IT/digitali."
   },
   {
     "ID": 38,
     "scartato": true,
-    "motivazione": "Digital marketing, non gestione prodotto software o tech."
-  },
-  {
-    "ID": 5,
-    "scartato": true,
-    "motivazione": "Solo branding/marketing, nessuna esperienza prodotto software o tech."
-  },
-  {
-    "ID": 12,
-    "scartato": true,
-    "motivazione": "Brand manager automotive, manca esperienza prodotto software o tech."
-  },
-  {
-    "ID": 14,
-    "scartato": true,
-    "motivazione": "Solo branding/marketing, nessuna esperienza prodotto software o tech."
+    "motivazione": "Esperienza marketing digitale, non project management IT."
   },
   {
     "ID": 24,
     "scartato": true,
-    "motivazione": "Junior, solo digital marketing, non prodotto software o tech."
-  },
-  {
-    "ID": 9,
-    "scartato": true,
-    "motivazione": "Solo branding/marketing, nessuna esperienza prodotto software o tech."
+    "motivazione": "Profilo junior, non esperienza richiesta in IT/digital project management."
   },
   {
     "ID": 53,
     "scartato": false,
-    "motivazione": "Esperienza project management tech, gestione progetti IT internazionali."
+    "motivazione": "Esperienza project management IT, contesto internazionale, profilo coerente."
   },
   {
-    "ID": 10,
+    "ID": 46,
     "scartato": true,
-    "motivazione": "Solo branding/marketing, nessuna esperienza prodotto software o tech."
-  },
-  {
-    "ID": 22,
-    "scartato": true,
-    "motivazione": "Brand manager moda, manca esperienza prodotto software o tech."
-  },
-  {
-    "ID": 23,
-    "scartato": true,
-    "motivazione": "Brand manager moda, manca esperienza prodotto software o tech."
+    "motivazione": "Esperienza comunicazione digitale, non project management IT."
   },
   {
     "ID": 20,
     "scartato": true,
-    "motivazione": "Marketing manager, non gestione prodotto software o tech."
-  },
-  {
-    "ID": 109,
-    "scartato": false,
-    "motivazione": "Senior IT project manager, esperienza gestione progetti tech complessi."
-  },
-  {
-    "ID": 132,
-    "scartato": false,
-    "motivazione": "Esperienza project management digitale, gestione team e sviluppo soluzioni tech."
-  },
-  {
-    "ID": 112,
-    "scartato": false,
-    "motivazione": "Esperienza project management IT, gestione piattaforme e team tecnici."
-  },
-  {
-    "ID": 114,
-    "scartato": false,
-    "motivazione": "Senior IT analyst, esperienza sviluppo software e coordinamento team."
-  },
-  {
-    "ID": 123,
-    "scartato": false,
-    "motivazione": "Project manager IT, esperienza in sviluppo e gestione prodotto tech."
-  },
-  {
-    "ID": 127,
-    "scartato": false,
-    "motivazione": "Project manager IT, esperienza in sviluppo e gestione prodotto tech."
-  },
-  {
-    "ID": 120,
-    "scartato": false,
-    "motivazione": "Project manager IT, esperienza in sviluppo e gestione prodotto tech."
-  },
-  {
-    "ID": 129,
-    "scartato": false,
-    "motivazione": "Project manager IT, esperienza in sviluppo e gestione prodotto tech."
-  },
-  {
-    "ID": 71,
-    "scartato": true,
-    "motivazione": "Consulente sostenibilità, nessuna esperienza prodotto software o tech."
-  },
-  {
-    "ID": 62,
-    "scartato": true,
-    "motivazione": "Consulente sostenibilità, nessuna esperienza prodotto software o tech."
-  },
-  {
-    "ID": 121,
-    "scartato": false,
-    "motivazione": "Team leader e analista tecnico, esperienza ciclo vita software."
+    "motivazione": "Esperienza marketing, non project management IT/digital."
   },
   {
     "ID": 33,
     "scartato": true,
-    "motivazione": "Profilo digital marketing, non gestione prodotto software o tech."
+    "motivazione": "Profilo marketing/web, non project management IT."
+  },
+  {
+    "ID": 109,
+    "scartato": false,
+    "motivazione": "Senior IT Project Manager, esperienza su progetti complessi, profilo idoneo."
+  },
+  {
+    "ID": 132,
+    "scartato": false,
+    "motivazione": "Digital Project Manager, esperienza coerente con la posizione."
+  },
+  {
+    "ID": 112,
+    "scartato": false,
+    "motivazione": "Project Manager IT, esperienza su progetti tecnologici complessi."
+  },
+  {
+    "ID": 116,
+    "scartato": false,
+    "motivazione": "IT Project Manager, esperienza su progetti IT e finanziari."
+  },
+  {
+    "ID": 128,
+    "scartato": false,
+    "motivazione": "Senior Engineering Project Manager, esperienza gestione progetti complessi."
+  },
+  {
+    "ID": 123,
+    "scartato": false,
+    "motivazione": "Project Manager IT, esperienza su progetti digitali e sicurezza."
+  },
+  {
+    "ID": 127,
+    "scartato": false,
+    "motivazione": "Project Manager IT, esperienza su progetti digitali e sicurezza."
   },
   {
     "ID": 117,
     "scartato": false,
-    "motivazione": "Product owner e IT project manager, esperienza gestione prodotto digitale."
+    "motivazione": "Product Owner/IT Project Manager, esperienza su progetti digitali complessi."
   },
   {
     "ID": 119,
     "scartato": false,
-    "motivazione": "Digital project manager, esperienza gestione progetti tech."
+    "motivazione": "Digital Project Manager, esperienza coerente con la posizione."
   },
   {
-    "ID": 118,
+    "ID": 120,
     "scartato": false,
-    "motivazione": "Digital project manager, esperienza gestione progetti tech."
-  },
-  {
-    "ID": 131,
-    "scartato": true,
-    "motivazione": "Assistant project manager, ruolo troppo junior per la posizione."
-  },
-  {
-    "ID": 66,
-    "scartato": true,
-    "motivazione": "Consulente sostenibilità, nessuna esperienza prodotto software o tech."
-  },
-  {
-    "ID": 67,
-    "scartato": true,
-    "motivazione": "Consulente sostenibilità, nessuna esperienza prodotto software o tech."
-  },
-  {
-    "ID": 91,
-    "scartato": true,
-    "motivazione": "Consulente sostenibilità, nessuna esperienza prodotto software o tech."
-  },
-  {
-    "ID": 110,
-    "scartato": false,
-    "motivazione": "IT project manager, esperienza gestione progetti digitali complessi."
-  },
-  {
-    "ID": 86,
-    "scartato": false,
-    "motivazione": "Project manager strategico, esperienza gestione progetti tech e innovazione."
-  },
-  {
-    "ID": 126,
-    "scartato": false,
-    "motivazione": "Technical project manager, esperienza gestione progetti tech e CRM."
-  },
-  {
-    "ID": 149,
-    "scartato": true,
-    "motivazione": "Solo branding/marketing, nessuna esperienza prodotto software o tech."
-  },
-  {
-    "ID": 154,
-    "scartato": false,
-    "motivazione": "Product manager junior, esperienza gestione prodotto, anche se in moda."
-  },
-  {
-    "ID": 25,
-    "scartato": false,
-    "motivazione": "Fondatore startup tech, esperienza sviluppo prodotto e gestione team."
+    "motivazione": "Project Manager IT, esperienza su progetti digitali e sicurezza."
   },
   {
     "ID": 122,
     "scartato": false,
-    "motivazione": "Senior IT project manager, esperienza gestione progetti digitali complessi."
+    "motivazione": "Senior IT Project Manager, esperienza in digital transformation."
   },
   {
-    "ID": 158,
+    "ID": 121,
+    "scartato": false,
+    "motivazione": "Team Leader/Senior Analyst, esperienza su progetti IT complessi."
+  },
+  {
+    "ID": 113,
+    "scartato": false,
+    "motivazione": "IT Project Manager, esperienza su progetti tecnologici infrastrutturali."
+  },
+  {
+    "ID": 131,
     "scartato": true,
-    "motivazione": "Esperienza junior e settore giocattoli, non tech/software."
+    "motivazione": "Profilo di supporto, non seniority richiesta."
   },
   {
-    "ID": 145,
+    "ID": 115,
     "scartato": false,
-    "motivazione": "Esperienza in product management tech/media, profilo coerente."
+    "motivazione": "Project/Service Manager IT, esperienza settore energetico."
   },
   {
-    "ID": 146,
+    "ID": 125,
     "scartato": false,
-    "motivazione": "Esperienza in product management, gestione ciclo di vita prodotto."
+    "motivazione": "IT Project Manager EMEA, esperienza su progetti IT internazionali."
   },
   {
-    "ID": 141,
+    "ID": 126,
     "scartato": false,
-    "motivazione": "Esperienza in product management B2C, digitale, e-commerce."
+    "motivazione": "Technical Project Manager, esperienza su progetti digitali."
   },
   {
-    "ID": 138,
-    "scartato": true,
-    "motivazione": "Ruolo project manager IT, non product manager tech."
-  },
-  {
-    "ID": 165,
+    "ID": 110,
     "scartato": false,
-    "motivazione": "Senior product manager in IT/telecomunicazioni, profilo idoneo."
-  },
-  {
-    "ID": 167,
-    "scartato": true,
-    "motivazione": "Esperienza solo settore moda, non tech/software."
-  },
-  {
-    "ID": 173,
-    "scartato": true,
-    "motivazione": "Analista strategico, non product manager tech."
-  },
-  {
-    "ID": 163,
-    "scartato": false,
-    "motivazione": "Product manager tech/digitale, esperienza coerente."
-  },
-  {
-    "ID": 168,
-    "scartato": false,
-    "motivazione": "Product manager tech/digitale, esperienza coerente."
-  },
-  {
-    "ID": 152,
-    "scartato": false,
-    "motivazione": "Product manager tech/digitale, esperienza coerente."
-  },
-  {
-    "ID": 170,
-    "scartato": true,
-    "motivazione": "Analista strategico moda, non product manager tech."
-  },
-  {
-    "ID": 137,
-    "scartato": true,
-    "motivazione": "Digital project manager, non product manager."
-  },
-  {
-    "ID": 161,
-    "scartato": false,
-    "motivazione": "Product manager tech/digitale, esperienza coerente."
-  },
-  {
-    "ID": 179,
-    "scartato": false,
-    "motivazione": "Esperienza in gestione prodotti tech consumer."
-  },
-  {
-    "ID": 142,
-    "scartato": true,
-    "motivazione": "Senior business manager, non product manager tech."
-  },
-  {
-    "ID": 144,
-    "scartato": false,
-    "motivazione": "Product manager tech/digitale, esperienza coerente."
-  },
-  {
-    "ID": 160,
-    "scartato": false,
-    "motivazione": "Product manager tech/digitale, esperienza coerente."
-  },
-  {
-    "ID": 175,
-    "scartato": true,
-    "motivazione": "Analista strategico, non product manager tech."
+    "motivazione": "IT Project Manager, esperienza su progetti digitali/media."
   },
   {
     "ID": 134,
+    "scartato": false,
+    "motivazione": "Project Manager, esperienza su progetti complessi e innovazione tecnologica."
+  },
+  {
+    "ID": 135,
+    "scartato": false,
+    "motivazione": "IT Project Manager/Agile Coach, esperienza su progetti cloud e Agile."
+  },
+  {
+    "ID": 86,
+    "scartato": false,
+    "motivazione": "Project Manager, esperienza in progetti complessi e innovazione."
+  },
+  {
+    "ID": 124,
+    "scartato": false,
+    "motivazione": "Project Manager IT, esperienza digital transformation settore energetico."
+  },
+  {
+    "ID": 7324,
+    "scartato": false,
+    "motivazione": "Project/Service Manager IT, esperienza settore energetico."
+  },
+  {
+    "ID": 163,
     "scartato": true,
-    "motivazione": "Project manager accademico, non product manager tech."
+    "motivazione": "Product Manager, non project management IT/digital transformation."
   },
   {
-    "ID": 136,
+    "ID": 168,
     "scartato": true,
-    "motivazione": "IT analyst/programmer, non product manager."
+    "motivazione": "Product Manager, non project management IT/digital transformation."
   },
   {
-    "ID": 156,
-    "scartato": false,
-    "motivazione": "Product manager tech/digitale, esperienza coerente."
+    "ID": 152,
+    "scartato": true,
+    "motivazione": "Product Manager, non project management IT/digital transformation."
   },
   {
-    "ID": 166,
-    "scartato": false,
-    "motivazione": "Product manager in ambito IoT, esperienza coerente."
+    "ID": 161,
+    "scartato": true,
+    "motivazione": "Product Manager, non project management IT/digital transformation."
   },
   {
-    "ID": 151,
-    "scartato": false,
-    "motivazione": "Product manager settore finanziario, esperienza tech."
+    "ID": 144,
+    "scartato": true,
+    "motivazione": "Product Manager, non project management IT/digital transformation."
   },
   {
-    "ID": 155,
-    "scartato": false,
-    "motivazione": "Product manager B2C digitale, esperienza coerente."
-  },
-  {
-    "ID": 139,
-    "scartato": false,
-    "motivazione": "Product manager tech/digitale, esperienza coerente."
-  },
-  {
-    "ID": 162,
-    "scartato": false,
-    "motivazione": "Product manager tech/digitale, esperienza coerente."
-  },
-  {
-    "ID": 147,
-    "scartato": false,
-    "motivazione": "Product manager tech/digitale, esperienza coerente."
+    "ID": 160,
+    "scartato": true,
+    "motivazione": "Product Manager, non project management IT/digital transformation."
   },
   {
     "ID": 164,
+    "scartato": true,
+    "motivazione": "Product Manager, non project management IT/digital transformation."
+  },
+  {
+    "ID": 156,
+    "scartato": true,
+    "motivazione": "Product Manager, non project management IT/digital transformation."
+  },
+  {
+    "ID": 139,
+    "scartato": true,
+    "motivazione": "Product Manager, non project management IT/digital transformation."
+  },
+  {
+    "ID": 145,
+    "scartato": true,
+    "motivazione": "Product Manager, non project management IT/digital transformation."
+  },
+  {
+    "ID": 165,
+    "scartato": true,
+    "motivazione": "Senior Product Manager, non project management IT/digital transformation."
+  },
+  {
+    "ID": 137,
     "scartato": false,
-    "motivazione": "Product manager tech/digitale, esperienza coerente."
+    "motivazione": "Digital Project Manager, esperienza coerente con la posizione."
+  },
+  {
+    "ID": 118,
+    "scartato": false,
+    "motivazione": "Digital Project Manager, esperienza coerente con la posizione."
+  },
+  {
+    "ID": 42,
+    "scartato": false,
+    "motivazione": "Digital Project Manager, esperienza coerente con la posizione."
+  },
+  {
+    "ID": 38,
+    "scartato": true,
+    "motivazione": "Esperienza marketing digitale, non project management IT."
+  },
+  {
+    "ID": 39,
+    "scartato": true,
+    "motivazione": "Profilo marketing/comunicazione, non project management IT."
+  },
+  {
+    "ID": 147,
+    "scartato": true,
+    "motivazione": "Esperienza solo come Product Manager, manca focus su project management IT e requisiti specifici."
+  },
+  {
+    "ID": 162,
+    "scartato": true,
+    "motivazione": "Esperienza solo come Product Manager, non evidenzia requisiti IT/digital richiesti."
+  },
+  {
+    "ID": 166,
+    "scartato": true,
+    "motivazione": "Esperienza verticale su videocitofonia, non allineato a project management IT richiesto."
+  },
+  {
+    "ID": 133,
+    "scartato": false,
+    "motivazione": "Esperienza in project management IT, gestione progetti digitali e sicurezza, profilo idoneo."
+  },
+  {
+    "ID": 183,
+    "scartato": true,
+    "motivazione": "Esperienza in settori spaziali, non evidenzia requisiti IT/digital transformation richiesti."
+  },
+  {
+    "ID": 151,
+    "scartato": true,
+    "motivazione": "Esperienza in ambito bancario/fintech, manca focus su project management IT richiesto."
   },
   {
     "ID": 159,
-    "scartato": false,
-    "motivazione": "Product manager tech/digitale, esperienza coerente."
+    "scartato": true,
+    "motivazione": "Solo Product Manager, non evidenzia esperienza in project management IT."
+  },
+  {
+    "ID": 234,
+    "scartato": true,
+    "motivazione": "Esperienza marketing, non project management IT/digital transformation richiesto."
   },
   {
     "ID": 225,
-    "scartato": true,
-    "motivazione": "Esperienza Project Manager IT, non specifica Product Manager, mancano riferimenti a ciclo di vita prodotto."
-  },
-  {
-    "ID": 226,
-    "scartato": true,
-    "motivazione": "Ruolo tecnico e architetturale, non emerge esperienza diretta come Product Manager."
-  },
-  {
-    "ID": 233,
-    "scartato": true,
-    "motivazione": "Esperienza in ambito vendite, non in gestione prodotto tech o ciclo di vita software."
+    "scartato": false,
+    "motivazione": "Senior IT Project Manager, esperienza in demand management e progetti digitali, profilo idoneo."
   }
 ]

@@ -4,6 +4,74 @@ import sys
 import json
 import random
 import uuid
+import warnings
+
+# Sopprimi warning tkinter da PyMuPDF (non bloccanti)
+warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*main thread is not in main loop.*")
+warnings.filterwarnings("ignore", message=".*Tcl_AsyncDelete.*")
+
+# Filtra errori tkinter non bloccanti da stderr causati da PyMuPDF
+class TkinterErrorFilter:
+    """Filtra errori tkinter non bloccanti da stderr causati da PyMuPDF"""
+    def __init__(self, original_stderr):
+        self.original_stderr = original_stderr
+        self.buffer = ""  # Buffer per messaggi multi-linea
+        self.in_tkinter_traceback = False  # Flag per tracciare se siamo in un traceback tkinter
+    
+    def write(self, message):
+        # Accumula messaggi per gestire traceback multi-linea
+        self.buffer += message
+        
+        # Controlla se inizia un traceback tkinter
+        if 'Exception ignored in:' in message or 'Traceback (most recent call last):' in message:
+            self.in_tkinter_traceback = True
+        
+        # Controlla se siamo in un traceback tkinter
+        if self.in_tkinter_traceback:
+            # Filtra errori tkinter comuni (non bloccanti)
+            if any(keyword in self.buffer for keyword in [
+                'RuntimeError: main thread is not in main loop',
+                'Tcl_AsyncDelete',
+                'tkinter',
+                '__del__',
+                'self.tk.call',
+                'info", "exists"',
+                'File "C:\\Python'
+            ]):
+                # Se il messaggio è completo (termina con newline), resetta
+                if message.endswith('\n'):
+                    self.buffer = ""
+                    self.in_tkinter_traceback = False
+                return
+        
+        # Se non siamo in un traceback tkinter, controlla se il messaggio contiene keyword tkinter
+        if any(keyword in message for keyword in [
+            'RuntimeError: main thread is not in main loop',
+            'Tcl_AsyncDelete',
+            'Exception ignored in:',
+            'function Image.__del__',
+            'function Variable.__del__',
+            'tkinter',
+            '__del__'
+        ]):
+            # Ignora questi errori (sono non bloccanti e causati da PyMuPDF)
+            if message.endswith('\n'):
+                self.buffer = ""
+                self.in_tkinter_traceback = False
+            return
+        
+        # Scrivi tutto il resto su stderr originale
+        self.original_stderr.write(message)
+        if message.endswith('\n'):
+            self.buffer = ""
+            self.in_tkinter_traceback = False
+    
+    def flush(self):
+        self.original_stderr.flush()
+
+# Applica il filtro a stderr per sopprimere errori tkinter
+sys.stderr = TkinterErrorFilter(sys.stderr)
+
 import fitz
 from io import BytesIO
 
