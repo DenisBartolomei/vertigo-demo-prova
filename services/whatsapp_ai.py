@@ -360,6 +360,14 @@ def get_conversation_state(conversation_history: List[Dict[str, str]], config: W
                 "phase": "interrupted",
                 "knockout_verified": False
             }
+        
+        # IMPORTANTE: Se il candidato è già qualificato, NON tornare mai a fase knockout
+        if ws_status == "qualified" or ws_status == "qualified_whatsapp" or ws_result == "qualified":
+            print(f"   → Phase: QUALIFIED (candidato già qualificato - solo domande informative)")
+            return {
+                "phase": "qualified",
+                "knockout_verified": True  # Già verificato, non richiedere più
+            }
     
     # Se è il primo messaggio dell'utente (risposta al template), siamo in fase greeting
     if len(user_messages) <= 1:
@@ -495,7 +503,8 @@ def process_whatsapp_message(
         workflow_type = position_data.get("workflow_type", "full")
     
     # Determina lo stato corrente della conversazione
-    state = get_conversation_state(conversation_history, config)
+    # Passa session_data per verificare stato qualificato/interrotto
+    state = get_conversation_state(conversation_history, config, session_data)
     
     print(f"📱 WhatsApp AI - State: {state}, Position: {position_name}, Knockout: {len(knockout_requirements)} requisiti")
     print(f"   CV Text: {'Sì (' + str(len(cv_text)) + ' chars)' if cv_text else 'No'}")
@@ -592,6 +601,26 @@ def process_whatsapp_message(
     # ========================================
     # FASI STANDARD DEL FLUSSO
     # ========================================
+    
+    # IMPORTANTE: Se il candidato è già qualificato, gestisci solo domande informative
+    # NON richiedere mai più i requisiti knockout
+    if state["phase"] == "qualified" or state["knockout_verified"] == True:
+        print(f"✅ Candidato già qualificato - gestisco solo domande informative")
+        
+        # Se l'intent è una domanda, rispondi solo a quella
+        if intent == "question":
+            print(f"💬 Domanda informativa da candidato qualificato")
+            response = generate_conversational_response(**question_context, phase="answer_question")
+            return (response, None, None, None)
+        else:
+            # Se non è una domanda, reindirizza gentilmente a domande informative
+            print(f"💬 Messaggio non-domanda da candidato qualificato - reindirizzo a domande")
+            response = generate_conversational_response(
+                **question_context,
+                phase="complete",
+                specific_instruction="Il candidato è già qualificato. Se ha fatto una domanda, rispondi. Altrimenti, invitalo gentilmente a fare domande sulla posizione o sul processo se ha bisogno di informazioni."
+            )
+            return (response, None, None, None)
     
     # 1. FASE GREETING: Prima risposta dell'utente (dopo il template)
     if state["phase"] == "greeting":

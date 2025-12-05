@@ -329,6 +329,42 @@ async def handle_incoming_message(message: Dict[str, Any], value: Dict[str, Any]
     collections = get_tenant_collections(tenant_id)
     session = db[collections["sessions"]].find_one({"_id": session_id})
     
+    # CONTROLLO: Se il candidato è interrotto, blocca il messaggio e invia risposta automatica
+    if session:
+        whatsapp_status = session.get("whatsapp_status")
+        whatsapp_screening_result = session.get("whatsapp_screening_result")
+        
+        if whatsapp_status == "interrupted" or whatsapp_screening_result == "interrupted":
+            print(f"🚫 Messaggio bloccato: candidato {session_id} è interrotto")
+            
+            # Messaggio automatico
+            auto_message = "Ci dispiace, ma il processo di selezione per questa posizione è stato interrotto. Ti aspettiamo per una prossima candidatura! 👋"
+            
+            # Invia messaggio automatico
+            try:
+                client = WhatsAppClient()
+                response_data = client.send_text_message(to=from_phone, text=auto_message)
+                response_message_id = response_data.get("messages", [{}])[0].get("id") if response_data.get("messages") else None
+                
+                # Salva messaggio automatico nel log
+                bot_message = ChatMessage(
+                    sender="bot",
+                    text=auto_message,
+                    message_id=response_message_id
+                )
+                update_session_whatsapp_status(
+                    session_id,
+                    tenant_id,
+                    WhatsappStatus.INTERRUPTED,  # Mantieni stato interrupted
+                    bot_message
+                )
+                
+                print(f"✅ Messaggio automatico inviato a candidato interrotto")
+                return  # NON processare con AI
+            except Exception as e:
+                print(f"Errore invio messaggio automatico per candidato interrotto: {e}")
+                return
+    
     conversation_history = session.get("whatsapp_chat_log", []) if session else []
     candidate_name = session.get("candidate_name", "Candidato") if session else "Candidato"
     
@@ -378,6 +414,7 @@ async def handle_incoming_message(message: Dict[str, Any], value: Dict[str, Any]
             tenant_id=tenant_id,
             cv_text=cv_text,  # Testo CV per conversazione naturale
             position_data=position_data,
+            session_data=session  # Passa session_data per verificare stato qualificato/interrotto
             session_data=session  # Passa i dati della sessione per verificare flag ritiro
         )
         

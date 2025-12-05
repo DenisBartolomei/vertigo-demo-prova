@@ -74,6 +74,17 @@ REGOLA RISPOSTA A DOMANDE:
 - NON aggiungere informazioni non richieste (es. se chiede la RAL, non aggiungere info su sede o benefits)
 - Dopo aver risposto, puoi fare UNA domanda di follow-up sui requisiti (se necessario)
 - Sii CONCISO: rispondi direttamente senza divagare
+
+REGOLA CRITICA - NON INVENTARE:
+- Rispondi SOLO con le informazioni che hai nel contesto fornito
+- Se non hai un'informazione, dì chiaramente "Non ho questa informazione disponibile" o "Verificherò e ti farò sapere"
+- MAI inventare, supporre o dedurre informazioni non esplicitamente presenti nel contesto
+- Se il candidato chiede qualcosa che non è nel contesto, ammetti onestamente di non averla
+- Esempi di cosa NON fare:
+  ❌ Inventare una RAL se non è nel contesto
+  ❌ Supporre benefits se non sono menzionati
+  ❌ Dedurre dettagli del processo se non sono esplicitati
+  ❌ Fare supposizioni su orari, modalità di lavoro, ecc. se non sono nel contesto
 """
 
 
@@ -299,9 +310,14 @@ Link colloquio: {interview_url or "[link non disponibile]"}
 COSA DEVI FARE:
 - NON salutare di nuovo (NON dire "Ciao" o "Ciao [Nome]") - la conversazione è già iniziata
 - Continua la conversazione in modo naturale, come se stessi chattando con un amico
-- Se fa una domanda, rispondi usando le info disponibili
+- Se fa una domanda, rispondi usando SOLO le info disponibili nel contesto
 - Se non ha iniziato il colloquio, ricorda gentilmente il link
 - Sii disponibile e cordiale
+
+REGOLA CRITICA - NON INVENTARE:
+- Rispondi SOLO con informazioni presenti nel contesto fornito
+- Se non hai un'informazione, dì: "Non ho questa informazione disponibile al momento. Posso verificare e risponderti, oppure potrai chiederlo durante il colloquio."
+- MAI inventare, supporre o dedurre informazioni non esplicitamente presenti nel contesto
 
 Conversazione:
 {conversation_text}
@@ -335,6 +351,16 @@ REGOLA FONDAMENTALE: RISPONDI SOLO ALLA DOMANDA
 - NON aggiungere altre informazioni non richieste
 - NON divagare su altri argomenti
 
+REGOLA CRITICA - SOLO INFORMAZIONI DISPONIBILI:
+- Rispondi SOLO se l'informazione è presente nel contesto fornito
+- Se l'informazione NON è nel contesto, dì: "Non ho questa informazione disponibile al momento. Posso verificare e risponderti, oppure potrai chiederlo durante il colloquio."
+- MAI inventare, supporre o dedurre informazioni
+- Esempi di cosa NON fare:
+  ❌ Inventare una RAL se non è nel contesto
+  ❌ Supporre benefits se non sono menzionati
+  ❌ Dedurre dettagli del processo se non sono esplicitati
+  ❌ Fare supposizioni su orari, modalità di lavoro, ecc. se non sono nel contesto
+
 ESEMPI:
 ❌ SBAGLIATO: "La RAL è 35-42K. Comunque abbiamo anche smart working 2 giorni, sede a Milano, e ottimi benefits!"
 ✅ GIUSTO: "La RAL è 35-42K, dipende dall'esperienza."
@@ -342,14 +368,18 @@ ESEMPI:
 ❌ SBAGLIATO: "Lo smart working è 2 giorni a settimana. Tra l'altro, la sede è in centro a Milano, facilmente raggiungibile!"  
 ✅ GIUSTO: "Lo smart working è 2 giorni a settimana."
 
+❌ SBAGLIATO: "La RAL è competitiva, probabilmente intorno ai 40K" (se non è nel contesto)
+✅ GIUSTO: "Non ho questa informazione disponibile al momento. Posso verificare e risponderti, oppure potrai chiederlo durante il colloquio."
+
 COSA DEVI FARE:
-1. Rispondi SOLO e BREVEMENTE alla domanda posta
-2. Se non hai l'informazione, dì che verificherai o che potrà chiedere in colloquio
+1. Rispondi SOLO e BREVEMENTE alla domanda posta - SOLO se l'informazione è nel contesto
+2. Se NON hai l'informazione nel contesto, dì chiaramente: "Non ho questa informazione disponibile al momento. Posso verificare e risponderti, oppure potrai chiederlo durante il colloquio."
 3. OPZIONALE: Se ci sono ancora requisiti da verificare, aggiungi UNA breve domanda di follow-up (ma non obbligatorio)
 
 IMPORTANTE: 
 - Usa SOLO le informazioni che hai nel contesto
 - NON inventare nulla
+- Se non hai l'informazione, ammettilo onestamente
 - Sii CONCISO e DIRETTO
 """
 
