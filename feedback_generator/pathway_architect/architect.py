@@ -6,6 +6,7 @@ from interviewer.llm_service import get_structured_llm_response
 from . import prompts_pathway
 import difflib
 from services.data_manager import db
+from utils.json_toon_converter import convert_json_to_toon
 
 # --- 1. Definizione dello Schema Dati Pydantic per l'Output ---
 
@@ -81,11 +82,18 @@ def create_final_feedback_content(
     """
     print("1. Creazione del prompt per il report di feedback finale con report CV e colloquio separati...")
     
+    # Converti a TOON per il prompt
+    try:
+        enriched_gaps_toon_str = convert_json_to_toon(enriched_gaps_json_str)
+    except Exception as e:
+        print(f"⚠ ERRORE durante conversione TOON enriched_gaps: {e}, uso JSON originale")
+        enriched_gaps_toon_str = enriched_gaps_json_str
+    
     # OTTIMIZZATO: Usa i due report separati invece del report consolidato
     prompt = prompts_pathway.create_final_report_prompt(
         cv_analysis_report,
         case_evaluation_report,
-        enriched_gaps_json_str, 
+        enriched_gaps_toon_str, 
         candidate_name, 
         target_role,
         language
@@ -133,10 +141,18 @@ async def create_final_feedback_content_async(
     """Versione ASINCRONA: Genera il contenuto testuale e strutturato per il report finale.
     OTTIMIZZATO: Usa i due report separati (CV e colloquio) invece del report consolidato."""
     print("1. [Report Finale] Creazione del prompt con report CV e colloquio separati...")
+    
+    # Converti a TOON per il prompt
+    try:
+        enriched_gaps_toon_str = convert_json_to_toon(enriched_gaps_json_str)
+    except Exception as e:
+        print(f"⚠ ERRORE durante conversione TOON enriched_gaps (async): {e}, uso JSON originale")
+        enriched_gaps_toon_str = enriched_gaps_json_str
+    
     prompt = prompts_pathway.create_final_report_prompt(
         cv_analysis_report,
         case_evaluation_report,
-        enriched_gaps_json_str, 
+        enriched_gaps_toon_str, 
         candidate_name, 
         target_role,
         language

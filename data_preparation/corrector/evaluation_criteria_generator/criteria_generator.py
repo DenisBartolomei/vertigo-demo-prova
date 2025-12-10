@@ -4,6 +4,7 @@ from typing import List
 from pydantic import BaseModel, Field
 from interviewer.llm_service import get_structured_llm_response, AZURE_DEPLOYMENT_NAME
 from . import prompts_eval_criteria
+from utils.json_toon_converter import convert_json_to_toon
 
 class EvaluationCriterion(BaseModel):
     evaluation_criteria_1: str = Field(description="Criterio di valutazione per il requisito.")
@@ -166,8 +167,22 @@ def generate_evaluation_criteria(icp_text: str, cases_json_str: str, seniority_l
     output_schema_example = EvaluationCriteriaCollection.model_json_schema()
 
     print("1. Creazione del prompt per la generazione dei criteri di valutazione...")
+    
+    # Converti a TOON per il prompt
+    try:
+        cases_toon_str = convert_json_to_toon(cases_json_str)
+    except Exception as e:
+        print(f"⚠ ERRORE durante conversione TOON cases: {e}, uso JSON originale")
+        cases_toon_str = cases_json_str
+    
+    try:
+        output_schema_toon_str = convert_json_to_toon(output_schema_example)
+    except Exception as e:
+        print(f"⚠ ERRORE durante conversione TOON schema: {e}, uso JSON originale")
+        output_schema_toon_str = json.dumps(output_schema_example, indent=2)
+    
     prompt = prompts_eval_criteria.create_evaluation_criteria_prompt(
-        icp_text, cases_json_str, seniority_level, json.dumps(output_schema_example, indent=2), hr_special_needs, language, canonical_skills=canonical_skills
+        icp_text, cases_toon_str, seniority_level, output_schema_toon_str, hr_special_needs, language, canonical_skills=canonical_skills
     )
 
     print(f"2. Invio della richiesta al modello '{GENERATION_MODEL}'...")

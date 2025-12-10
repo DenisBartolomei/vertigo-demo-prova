@@ -24,7 +24,7 @@ Analizza i dati forniti per creare un report di feedback completo e personalizza
 **Dati a Disposizione:**
 1.  **Report Analisi CV:** Una valutazione basata esclusivamente sulle esperienze e competenze dichiarate nel curriculum del candidato.
 2.  **Report Valutazione Colloquio:** Una valutazione della performance pratica del candidato durante un caso di studio simulato.
-3.  **Analisi dei Gap e Corsi Suggeriti:** Un file JSON che elenca le carenze complessive e una lista di corsi potenzialmente utili.
+3.  **Analisi dei Gap e Corsi Suggeriti:** Nei dati strutturati di seguito sono elencate le carenze complessive e una lista di corsi potenzialmente utili.
 4.  **Dati Candidato:** Nome (`{candidate_name}`) e Ruolo Target (`{target_role}`).
 
 **Struttura dell'output (deve essere un JSON con chiavi esattamente come elencate):**
@@ -47,8 +47,8 @@ Analizza i dati forniti per creare un report di feedback completo e personalizza
 3.  **Per la sezione "interview_outcome":**
     *   Leggi il "Report Valutazione Colloquio". Descrivi come ti sei comportato nella prova pratica. Metti in evidenza le competenze che hai dimostrato efficacemente e quelle dove sono emerse difficoltà. Fai un confronto costruttivo con quanto emergeva dal CV.
 4.  **Per la sezione "suggested_pathway":**
-    *   Analizza la lista di "corsi suggeriti" nel JSON per ciascuna skill family.
-    *   Seleziona fino a 2 corsi per famiglia di gap presenti nel JSON ANALISI DEI GAP E CORSI SUGGERITI che creino il percorso più logico ed efficiente.
+    *   Analizza la lista di "corsi suggeriti" nei dati strutturati per ciascuna skill family.
+    *   Seleziona fino a 2 corsi per famiglia di gap presenti nei dati strutturati ANALISI DEI GAP E CORSI SUGGERITI che creino il percorso più logico ed efficiente.
     *   Ordina i corsi in modo sequenziale (es. Beginner prima di Advanced).
     *   Per ogni corso, giustifica brevemente perché è stato scelto e a quale gap risponde.
     *   Metti nel report ALMENO 3 corsi
@@ -69,7 +69,8 @@ Rispondi esclusivamente con un oggetto JSON che rispetti la struttura richiesta.
 
 ---
 
-[ANALISI DEI GAP E CORSI SUGGERITI (JSON)]
+[ANALISI DEI GAP E CORSI SUGGERITI]
+Nei dati strutturati di seguito sono contenuti i gap e i corsi suggeriti:
 {enriched_gaps_json_str}
 """,
         "en": f"""
@@ -79,7 +80,7 @@ Analyze the provided data to create a complete and personalized feedback report 
 **Available Data:**
 1.  **CV Analysis Report:** An evaluation based exclusively on the experiences and skills declared in the candidate's resume.
 2.  **Interview Evaluation Report:** An evaluation of the candidate's practical performance during a simulated case study.
-3.  **Gap Analysis and Suggested Courses:** A JSON file that lists the overall gaps and a list of potentially useful courses.
+3.  **Gap Analysis and Suggested Courses:** In the structured data below are listed the overall gaps and a list of potentially useful courses.
 4.  **Candidate Data:** Name (`{candidate_name}`) and Target Role (`{target_role}`).
 
 **Output Structure (must be a JSON):**
@@ -102,8 +103,8 @@ Analyze the provided data to create a complete and personalized feedback report 
 3.  **For the "interview_outcome" section:**
     *   Read the "Interview Evaluation Report". Describe how you performed in the practical test. Highlight the skills you demonstrated effectively and those where difficulties emerged. Make a constructive comparison with what emerged from the CV.
 4.  **For the "suggested_pathway" section:**
-    *   Analyze the list of "suggested courses" in the JSON for each skill family.
-    *   Select up to 2 courses per gap family present in the GAP ANALYSIS AND SUGGESTED COURSES JSON that create the most logical and efficient path.
+    *   Analyze the list of "suggested courses" in the structured data for each skill family.
+    *   Select up to 2 courses per gap family present in the structured data GAP ANALYSIS AND SUGGESTED COURSES that create the most logical and efficient path.
     *   Sort courses sequentially (e.g. Beginner before Advanced).
     *   For each course, briefly justify why it was chosen and which gap it addresses.
     *   Put AT LEAST 3 courses in the report
@@ -124,7 +125,8 @@ Reply exclusively with a JSON object that respects the required structure.
 
 ---
 
-[GAP ANALYSIS AND SUGGESTED COURSES (JSON)]
+[GAP ANALYSIS AND SUGGESTED COURSES]
+In the structured data below are contained the gaps and suggested courses:
 {enriched_gaps_json_str}
 """
     }

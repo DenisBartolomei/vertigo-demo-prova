@@ -414,7 +414,6 @@ async def handle_incoming_message(message: Dict[str, Any], value: Dict[str, Any]
             tenant_id=tenant_id,
             cv_text=cv_text,  # Testo CV per conversazione naturale
             position_data=position_data,
-            session_data=session  # Passa session_data per verificare stato qualificato/interrotto
             session_data=session  # Passa i dati della sessione per verificare flag ritiro
         )
         

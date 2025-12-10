@@ -125,8 +125,8 @@ o	Non usare ulteriore testo oltre alla produzione di quanto richiesto sopra.
 o   **IMPORTANTE**: Per il campo `skills_to_test`, assicurati di generare una lista di oggetti, dove ogni oggetto ha due chiavi: `skill_name` e `testing_method`. Non generare una semplice lista di stringhe. Le skills_to_test devono essere ESCLUSIVAMENTE dalla LISTA CANONICA DELLE SKILL fornita sopra, usando i nomi ESATTI senza variazioni, abbreviazioni o sinonimi. NON inventare, NON dedurre, NON variare i nomi delle skill.
 o   **FORMATO JSON OBBLIGATORIO**: Il tuo output finale DEVE essere un oggetto JSON che rispetta esattamente la struttura, i nomi delle chiavi e i tipi di dati mostrati nell'esempio di seguito.
 
-ESEMPIO DELLA STRUTTURA JSON ATTESA:
-```json
+ESEMPIO DELLA STRUTTURA ATTESA (nei dati strutturati di seguito):
+```
 {{json_example_str}}
 ---
 INPUTS
@@ -183,8 +183,8 @@ o	Do not use additional text beyond the production of what is required above.
 o   **IMPORTANT**: For the `skills_to_test` field, make sure to generate a list of objects, where each object has two keys: `skill_name` and `testing_method`. Do not generate a simple list of strings. The skills_to_test must be EXCLUSIVELY from the CANONICAL SKILLS LIST provided above, using the EXACT names without variations, abbreviations or synonyms. DO NOT invent, DO NOT deduce, DO NOT vary the skill names.
 o   **MANDATORY JSON FORMAT**: Your final output MUST be a JSON object that exactly respects the structure, key names and data types shown in the example below.
 
-EXPECTED JSON STRUCTURE EXAMPLE:
-```json
+EXPECTED STRUCTURE EXAMPLE (in the structured data below):
+```
 {{json_example_str}}
 ---
 INPUTS

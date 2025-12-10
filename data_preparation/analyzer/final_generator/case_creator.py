@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from interviewer.llm_service import get_structured_llm_response
 from . import prompts_final
 from interviewer.llm_service import AZURE_DEPLOYMENT_NAME
+from utils.json_toon_converter import convert_json_to_toon
 
 def _normalize_skill_name(skill_name: str) -> str:
     """
@@ -95,15 +96,22 @@ def generate_final_cases(icp_text: str, guide_text: str, kb_summary: str, senior
     }
     example_collection = {"cases": [example_case]}
     json_example_str = json.dumps(example_collection, indent=2)
+    
+    # Converti a TOON per il prompt
+    try:
+        example_toon_str = convert_json_to_toon(json_example_str)
+    except Exception as e:
+        print(f"⚠ ERRORE durante conversione TOON esempio: {e}, uso JSON originale")
+        example_toon_str = json_example_str
 
-    print("1. Creazione del prompt finale con esempio JSON...")
+    print("1. Creazione del prompt finale con esempio strutturato...")
     if total_skills > 0:
         print(f"   - Skill canoniche da distribuire: {total_skills}")
         print(f"   - Reasoning steps totali (5 case × {total_steps_per_case} step): {total_steps_all_cases}")
         print(f"   - Minimo skill per step consigliato: {min_skills_per_step}")
     
     final_prompt = prompts_final.create_final_case_prompt(
-        icp_text, guide_text, kb_summary, seniority_level, json_example_str, hr_special_needs, reasoning_steps, language, canonical_skills=canonical_skills, min_skills_per_step=min_skills_per_step, total_skills=total_skills
+        icp_text, guide_text, kb_summary, seniority_level, example_toon_str, hr_special_needs, reasoning_steps, language, canonical_skills=canonical_skills, min_skills_per_step=min_skills_per_step, total_skills=total_skills
     )
 
     print(f"2. Invio della richiesta al modello '{FINAL_MODEL}' per la generazione strutturata...")

@@ -5,6 +5,7 @@ import json
 from recruitment_suite.config import settings
 from interviewer.llm_service import get_llm_response
 from recruitment_suite.app.core.llm_cache import get_prompt_hash, get_cached_llm_response, save_cached_llm_response
+from utils.json_toon_converter import convert_json_to_toon
 
 
 def generate_qualitative_llm_report(candidate_json: dict, market_json: dict, job_offer_text: str, language: str = "it") -> str:
@@ -47,14 +48,14 @@ def generate_qualitative_llm_report(candidate_json: dict, market_json: dict, job
     ```
 
     2. **TREND DI MERCATO (Percorsi di Carriera Passati Aggregati per Durata in Mesi):**
-    Questo JSON mostra le professioni più comuni nei percorsi di carriera di chi oggi ricopre la posizione target.
-    ```json
+    Nei dati strutturati di seguito sono mostrate le professioni più comuni nei percorsi di carriera di chi oggi ricopre la posizione target.
+    ```
     {market_data}
     ```
 
     3. **PERCORSO DI CARRIERA DEL CANDIDATO (Esperienze Passate):**
-    Questo JSON elenca le esperienze passate del candidato, normalizzate con le mansioni ESCO.
-    ```json
+    Nei dati strutturati di seguito sono elencate le esperienze passate del candidato, normalizzate con le mansioni ESCO.
+    ```
     {candidate_data}
     ```
 
@@ -73,7 +74,7 @@ def generate_qualitative_llm_report(candidate_json: dict, market_json: dict, job
     ### Valutazione del Candidato
     Valuta qualitativamente se il percorso del candidato è tradizionale (in linea con il mercato), atipico ma coerente, o con evidenti deviazioni.
 
-    Mantieni un tono professionale, oggettivo e costruttivo. NON ripetere i dati grezzi dei JSON.
+    Mantieni un tono professionale, oggettivo e costruttivo. NON ripetere i dati grezzi strutturati.
     """,
         "en": """
     **AVAILABLE DATA**
@@ -84,14 +85,14 @@ def generate_qualitative_llm_report(candidate_json: dict, market_json: dict, job
     ```
 
     2. **MARKET TRENDS (Past Career Paths Aggregated by Duration in Months):**
-    This JSON shows the most common professions in the career paths of those who currently hold the target position.
-    ```json
+    In the structured data below are shown the most common professions in the career paths of those who currently hold the target position.
+    ```
     {market_data}
     ```
 
     3. **CANDIDATE'S CAREER PATH (Past Experiences):**
-    This JSON lists the candidate's past experiences, normalized with ESCO occupations.
-    ```json
+    In the structured data below are listed the candidate's past experiences, normalized with ESCO occupations.
+    ```
     {candidate_data}
     ```
 
@@ -110,7 +111,7 @@ def generate_qualitative_llm_report(candidate_json: dict, market_json: dict, job
     ### Candidate Evaluation
     Qualitatively assess whether the candidate's path is traditional (in line with the market), atypical but coherent, or with evident deviations.
 
-    Maintain a professional, objective and constructive tone. DO NOT repeat the raw data from the JSONs.
+    Maintain a professional, objective and constructive tone. DO NOT repeat the raw structured data.
     """
     }
     
@@ -125,14 +126,15 @@ def generate_qualitative_llm_report(candidate_json: dict, market_json: dict, job
         print(f"⚠ ERRORE: candidate_json non è un dizionario, è {type(candidate_json)}")
         candidate_json = {}
     
-    # Serializza in JSON per il prompt
+    # Converti a TOON per il prompt
     try:
+        market_data_str = convert_json_to_toon(market_json) if market_json else "{}"
+        candidate_data_str = convert_json_to_toon(candidate_json) if candidate_json else "{}"
+    except Exception as e:
+        print(f"✗ ERRORE durante conversione TOON: {e}")
+        # Fallback a JSON
         market_data_str = json.dumps(market_json, indent=2, ensure_ascii=False) if market_json else "{}"
         candidate_data_str = json.dumps(candidate_json, indent=2, ensure_ascii=False) if candidate_json else "{}"
-    except Exception as e:
-        print(f"✗ ERRORE durante serializzazione JSON: {e}")
-        market_data_str = "{}"
-        candidate_data_str = "{}"
     
     user_prompt = user_prompt_template.format(
         job_offer=job_offer_text,
@@ -211,14 +213,14 @@ async def generate_qualitative_llm_report_async(candidate_json: dict, market_jso
     ```
 
     2. **TREND DI MERCATO (Percorsi di Carriera Passati Aggregati per Durata in Mesi):**
-    Questo JSON mostra le professioni più comuni nei percorsi di carriera di chi oggi ricopre la posizione target.
-    ```json
+    Nei dati strutturati di seguito sono mostrate le professioni più comuni nei percorsi di carriera di chi oggi ricopre la posizione target.
+    ```
     {market_data}
     ```
 
     3. **PERCORSO DI CARRIERA DEL CANDIDATO (Esperienze Passate):**
-    Questo JSON elenca le esperienze passate del candidato, normalizzate con le mansioni ESCO.
-    ```json
+    Nei dati strutturati di seguito sono elencate le esperienze passate del candidato, normalizzate con le mansioni ESCO.
+    ```
     {candidate_data}
     ```
 
@@ -237,7 +239,7 @@ async def generate_qualitative_llm_report_async(candidate_json: dict, market_jso
     ### Valutazione del Candidato
     Valuta qualitativamente se il percorso del candidato è tradizionale (in linea con il mercato), atipico ma coerente, o con evidenti deviazioni.
 
-    Mantieni un tono professionale, oggettivo e costruttivo. NON ripetere i dati grezzi dei JSON.
+    Mantieni un tono professionale, oggettivo e costruttivo. NON ripetere i dati grezzi strutturati.
     """,
         "en": """
     **AVAILABLE DATA**
@@ -248,14 +250,14 @@ async def generate_qualitative_llm_report_async(candidate_json: dict, market_jso
     ```
 
     2. **MARKET TRENDS (Past Career Paths Aggregated by Duration in Months):**
-    This JSON shows the most common professions in the career paths of those who currently hold the target position.
-    ```json
+    In the structured data below are shown the most common professions in the career paths of those who currently hold the target position.
+    ```
     {market_data}
     ```
 
     3. **CANDIDATE'S CAREER PATH (Past Experiences):**
-    This JSON lists the candidate's past experiences, normalized with ESCO occupations.
-    ```json
+    In the structured data below are listed the candidate's past experiences, normalized with ESCO occupations.
+    ```
     {candidate_data}
     ```
 
@@ -274,7 +276,7 @@ async def generate_qualitative_llm_report_async(candidate_json: dict, market_jso
     ### Candidate Evaluation
     Qualitatively assess whether the candidate's path is traditional (in line with the market), atypical but coherent, or with evident deviations.
 
-    Maintain a professional, objective and constructive tone. DO NOT repeat the raw data from the JSONs.
+    Maintain a professional, objective and constructive tone. DO NOT repeat the raw structured data.
     """
     }
     
@@ -289,14 +291,15 @@ async def generate_qualitative_llm_report_async(candidate_json: dict, market_jso
         print(f"⚠ ERRORE (async): candidate_json non è un dizionario, è {type(candidate_json)}")
         candidate_json = {}
     
-    # Serializza in JSON per il prompt
+    # Converti a TOON per il prompt
     try:
+        market_data_str = convert_json_to_toon(market_json) if market_json else "{}"
+        candidate_data_str = convert_json_to_toon(candidate_json) if candidate_json else "{}"
+    except Exception as e:
+        print(f"✗ ERRORE durante conversione TOON (async): {e}")
+        # Fallback a JSON
         market_data_str = json.dumps(market_json, indent=2, ensure_ascii=False) if market_json else "{}"
         candidate_data_str = json.dumps(candidate_json, indent=2, ensure_ascii=False) if candidate_json else "{}"
-    except Exception as e:
-        print(f"✗ ERRORE durante serializzazione JSON (async): {e}")
-        market_data_str = "{}"
-        candidate_data_str = "{}"
     
     # La preparazione del prompt rimane identica, è un'operazione sincrona e veloce
     user_prompt = user_prompt_template.format(

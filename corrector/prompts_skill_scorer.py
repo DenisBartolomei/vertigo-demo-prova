@@ -5,7 +5,7 @@ def create_cv_scoring_prompt(skill_list_json: str, cv_text: str, seniority_level
     Prompt per valutare la rilevanza delle skill nel CV.
     
     Args:
-        skill_list_json: Lista delle skill in formato JSON
+        skill_list_json: Lista delle skill nei dati strutturati
         cv_text: Testo del CV
         seniority_level: Livello di seniority
         language: Lingua del prompt ("it" o "en")
@@ -44,6 +44,7 @@ Regole:
   - notes_cv (frase breve, opzionale, max 30 parole)
 
 [SKILL LIST CANONICA + CRITERIO DI VALUTAZIONE]
+Nei dati strutturati di seguito sono contenute le skill canoniche e i criteri di valutazione:
 {skill_list_json}
 
 [TESTO CV]
@@ -79,6 +80,7 @@ Rules:
   - notes_cv (brief sentence, optional, max 30 words)
 
 [CANONICAL SKILL LIST + EVALUATION CRITERION]
+In the structured data below are contained the canonical skills and evaluation criteria:
 {skill_list_json}
 
 [CV TEXT]
@@ -97,7 +99,7 @@ def create_interview_scoring_prompt(skill_list_json: str, conversation_text: str
     Prompt per valutare la rilevanza delle skill nella conversazione del colloquio.
     
     Args:
-        skill_list_json: Lista delle skill in formato JSON
+        skill_list_json: Lista delle skill nei dati strutturati
         conversation_text: Testo della conversazione del colloquio
         case_map_text: Mappa del case con gli step
         seniority_level: Livello di seniority
@@ -138,6 +140,7 @@ Regole:
   - notes_interview (frase breve, opzionale, max 30 parole)
 
 [SKILL LIST CANONICA + CRITERIO DI VALUTAZIONE]
+Nei dati strutturati di seguito sono contenute le skill canoniche e i criteri di valutazione:
 {skill_list_json}
 
 [MAPPA CASE: STEP E SKILL TESTATE]
@@ -177,6 +180,7 @@ Rules:
   - notes_interview (brief sentence, optional, max 30 words)
 
 [CANONICAL SKILL LIST + EVALUATION CRITERION]
+In the structured data below are contained the canonical skills and evaluation criteria:
 {skill_list_json}
 
 [CASE MAP: STEPS AND TESTED SKILLS]

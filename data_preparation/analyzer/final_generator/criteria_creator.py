@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from interviewer.llm_service import get_structured_llm_response
 from . import prompts_criteria
 from interviewer.llm_service import AZURE_DEPLOYMENT_NAME
+from utils.json_toon_converter import convert_json_to_toon
 
 
 class Criterion(BaseModel):
@@ -24,7 +25,15 @@ def generate_final_criteria(icp_text: str, cases_json_str: str, seniority_level:
     Genera accomplishment criteria per tutti gli step/casi, integrando le Indicazioni HR.
     """
     print("1. Creazione del prompt per la generazione dei criteri...")
-    final_prompt = prompts_criteria.create_criteria_generation_prompt(icp_text, cases_json_str, seniority_level, hr_special_needs, language)
+    
+    # Converti a TOON per il prompt
+    try:
+        cases_toon_str = convert_json_to_toon(cases_json_str)
+    except Exception as e:
+        print(f"⚠ ERRORE durante conversione TOON cases: {e}, uso JSON originale")
+        cases_toon_str = cases_json_str
+    
+    final_prompt = prompts_criteria.create_criteria_generation_prompt(icp_text, cases_toon_str, seniority_level, hr_special_needs, language)
 
     print(f"2. Invio della richiesta al modello '{FINAL_MODEL}' per la generazione dei criteri...")
 

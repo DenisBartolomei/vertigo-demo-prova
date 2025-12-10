@@ -12,6 +12,7 @@ from services.tenant_data_manager import get_session_data_tenant, save_stage_out
 from services.tenant_service import get_tenant_collections
 from .prompts_skill_scorer import create_cv_scoring_prompt, create_interview_scoring_prompt
 from interviewer.llm_service import AZURE_DEPLOYMENT_NAME
+from utils.json_toon_converter import convert_json_to_toon
 
 SKILL_SCORER_MODEL = AZURE_DEPLOYMENT_NAME
 SKILL_SCORING_TEMPERATURE = 0.0
@@ -324,11 +325,15 @@ def _extract_canonical_skills(position_data: dict) -> List[dict]:
 
 def _canonical_skilllist_as_json(canonical_skills: List[dict]) -> str:
     """
-    Prepara un JSON compatto con campi necessari al prompt:
+    Prepara dati strutturati (TOON) con campi necessari al prompt:
     - skill_id, skill_name, criteria_texts[2]
     """
     payload = {"skills": canonical_skills}
-    return json.dumps(payload, ensure_ascii=False, indent=2)
+    try:
+        return convert_json_to_toon(payload)
+    except Exception as e:
+        print(f"⚠ ERRORE durante conversione TOON skill list: {e}, uso JSON originale")
+        return json.dumps(payload, ensure_ascii=False, indent=2)
 
 # ----- Scoring -----
 

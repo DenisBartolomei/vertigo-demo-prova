@@ -11,7 +11,7 @@ def create_criteria_generation_prompt(icp_text: str, cases_json_str: str, senior
     
     Args:
         icp_text: Il testo dell'ICP
-        cases_json_str: JSON con i case generati
+        cases_json_str: Dati strutturati con i case generati
         seniority_level: Livello di seniority richiesto
         hr_special_needs: Indicazioni speciali da parte dell'HR
         language: Lingua del prompt ("it" o "en")
@@ -53,6 +53,7 @@ INPUTS
 {icp_text}
 
 [SET DI DOMANDE (CASES)]
+Nei dati strutturati di seguito sono contenuti i case generati:
 {cases_json_str}
 
 [LIVELLO DI SENIORITY]
@@ -91,6 +92,7 @@ INPUTS
 {icp_text}
 
 [QUESTION SET (CASES)]
+In the structured data below are contained the generated cases:
 {cases_json_str}
 
 [SENIORITY LEVEL]

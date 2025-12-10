@@ -11,9 +11,9 @@ def create_evaluation_criteria_prompt(icp_text: str, cases_json_str: str, senior
     
     Args:
         icp_text: Il testo dell'ICP
-        cases_json_str: JSON con i case generati
+        cases_json_str: Dati strutturati con i case generati
         seniority_level: Livello di seniority richiesto
-        output_schema_example: Esempio della struttura JSON attesa
+        output_schema_example: Esempio della struttura attesa (nei dati strutturati)
         hr_special_needs: Indicazioni speciali da parte dell'HR
         language: Lingua del prompt ("it" o "en")
         canonical_skills: Lista canonica delle skills (UNICA fonte di verità) - se fornita, genera criteri SOLO per queste skills
@@ -159,12 +159,14 @@ Input alla generazione:
 {icp_text}
 
 [SET DI DOMANDE (CASES)]
+Nei dati strutturati di seguito sono contenuti i case generati:
 {cases_json_str}
 
 [LIVELLO DI SENIORITY]
 {seniority_level}
 
-[ESEMPIO STRUTTURA OUTPUT JSON ATTESA]
+[ESEMPIO STRUTTURA OUTPUT ATTESA]
+Nei dati strutturati di seguito è mostrato un esempio della struttura attesa:
 {output_schema_example}
 """,
         "en": """
@@ -269,12 +271,14 @@ Generation input:
 {icp_text}
 
 [QUESTION SET (CASES)]
+In the structured data below are contained the generated cases:
 {cases_json_str}
 
 [SENIORITY LEVEL]
 {seniority_level}
 
-[EXPECTED JSON OUTPUT STRUCTURE EXAMPLE]
+[EXPECTED OUTPUT STRUCTURE EXAMPLE]
+In the structured data below is shown an example of the expected structure:
 {output_schema_example}
 """
     }

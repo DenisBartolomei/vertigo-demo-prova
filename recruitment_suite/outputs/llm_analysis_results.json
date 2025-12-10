@@ -1,287 +1,52 @@
 [
   {
-    "ID": 13,
-    "scartato": true,
-    "motivazione": "Esperienza non IT/Digital Transformation, profilo commerciale."
-  },
-  {
-    "ID": 39,
-    "scartato": true,
-    "motivazione": "Profilo marketing/comunicazione, non project management IT."
-  },
-  {
-    "ID": 55,
-    "scartato": true,
-    "motivazione": "Esperienza marketing, non gestione progetti IT/digitali."
-  },
-  {
     "ID": 38,
     "scartato": true,
-    "motivazione": "Esperienza marketing digitale, non project management IT."
-  },
-  {
-    "ID": 24,
-    "scartato": true,
-    "motivazione": "Profilo junior, non esperienza richiesta in IT/digital project management."
-  },
-  {
-    "ID": 53,
-    "scartato": false,
-    "motivazione": "Esperienza project management IT, contesto internazionale, profilo coerente."
-  },
-  {
-    "ID": 46,
-    "scartato": true,
-    "motivazione": "Esperienza comunicazione digitale, non project management IT."
-  },
-  {
-    "ID": 20,
-    "scartato": true,
-    "motivazione": "Esperienza marketing, non project management IT/digital."
+    "motivazione": "Esperienza solo marketing digitale, manca change management e conoscenza M365/Copilot."
   },
   {
     "ID": 33,
     "scartato": true,
-    "motivazione": "Profilo marketing/web, non project management IT."
+    "motivazione": "Profilo marketing digitale, nessuna esperienza in change management o adozione tecnologica."
   },
   {
-    "ID": 109,
-    "scartato": false,
-    "motivazione": "Senior IT Project Manager, esperienza su progetti complessi, profilo idoneo."
-  },
-  {
-    "ID": 132,
-    "scartato": false,
-    "motivazione": "Digital Project Manager, esperienza coerente con la posizione."
-  },
-  {
-    "ID": 112,
-    "scartato": false,
-    "motivazione": "Project Manager IT, esperienza su progetti tecnologici complessi."
-  },
-  {
-    "ID": 116,
-    "scartato": false,
-    "motivazione": "IT Project Manager, esperienza su progetti IT e finanziari."
-  },
-  {
-    "ID": 128,
-    "scartato": false,
-    "motivazione": "Senior Engineering Project Manager, esperienza gestione progetti complessi."
-  },
-  {
-    "ID": 123,
-    "scartato": false,
-    "motivazione": "Project Manager IT, esperienza su progetti digitali e sicurezza."
-  },
-  {
-    "ID": 127,
-    "scartato": false,
-    "motivazione": "Project Manager IT, esperienza su progetti digitali e sicurezza."
-  },
-  {
-    "ID": 117,
-    "scartato": false,
-    "motivazione": "Product Owner/IT Project Manager, esperienza su progetti digitali complessi."
-  },
-  {
-    "ID": 119,
-    "scartato": false,
-    "motivazione": "Digital Project Manager, esperienza coerente con la posizione."
-  },
-  {
-    "ID": 120,
-    "scartato": false,
-    "motivazione": "Project Manager IT, esperienza su progetti digitali e sicurezza."
+    "ID": 71,
+    "scartato": true,
+    "motivazione": "Esperienza solo in sostenibilità, non in change management o adozione digitale."
   },
   {
     "ID": 122,
     "scartato": false,
-    "motivazione": "Senior IT Project Manager, esperienza in digital transformation."
+    "motivazione": "Esperienza in project management, trasformazione digitale e gestione cambiamento, profilo coerente."
   },
   {
-    "ID": 121,
+    "ID": 62,
+    "scartato": true,
+    "motivazione": "Solo consulenza sostenibilità, manca esperienza in change management digitale."
+  },
+  {
+    "ID": 67,
+    "scartato": true,
+    "motivazione": "Solo consulenza sostenibilità, manca esperienza in change management digitale."
+  },
+  {
+    "ID": 66,
+    "scartato": true,
+    "motivazione": "Solo consulenza sostenibilità, manca esperienza in change management digitale."
+  },
+  {
+    "ID": 91,
+    "scartato": true,
+    "motivazione": "Solo consulenza sostenibilità, manca esperienza in change management digitale."
+  },
+  {
+    "ID": 189,
     "scartato": false,
-    "motivazione": "Team Leader/Senior Analyst, esperienza su progetti IT complessi."
+    "motivazione": "Esperienza in strategie digitali, consulenza e trasformazione, potenzialmente adatto al ruolo."
   },
   {
-    "ID": 113,
-    "scartato": false,
-    "motivazione": "IT Project Manager, esperienza su progetti tecnologici infrastrutturali."
-  },
-  {
-    "ID": 131,
+    "ID": 184,
     "scartato": true,
-    "motivazione": "Profilo di supporto, non seniority richiesta."
-  },
-  {
-    "ID": 115,
-    "scartato": false,
-    "motivazione": "Project/Service Manager IT, esperienza settore energetico."
-  },
-  {
-    "ID": 125,
-    "scartato": false,
-    "motivazione": "IT Project Manager EMEA, esperienza su progetti IT internazionali."
-  },
-  {
-    "ID": 126,
-    "scartato": false,
-    "motivazione": "Technical Project Manager, esperienza su progetti digitali."
-  },
-  {
-    "ID": 110,
-    "scartato": false,
-    "motivazione": "IT Project Manager, esperienza su progetti digitali/media."
-  },
-  {
-    "ID": 134,
-    "scartato": false,
-    "motivazione": "Project Manager, esperienza su progetti complessi e innovazione tecnologica."
-  },
-  {
-    "ID": 135,
-    "scartato": false,
-    "motivazione": "IT Project Manager/Agile Coach, esperienza su progetti cloud e Agile."
-  },
-  {
-    "ID": 86,
-    "scartato": false,
-    "motivazione": "Project Manager, esperienza in progetti complessi e innovazione."
-  },
-  {
-    "ID": 124,
-    "scartato": false,
-    "motivazione": "Project Manager IT, esperienza digital transformation settore energetico."
-  },
-  {
-    "ID": 7324,
-    "scartato": false,
-    "motivazione": "Project/Service Manager IT, esperienza settore energetico."
-  },
-  {
-    "ID": 163,
-    "scartato": true,
-    "motivazione": "Product Manager, non project management IT/digital transformation."
-  },
-  {
-    "ID": 168,
-    "scartato": true,
-    "motivazione": "Product Manager, non project management IT/digital transformation."
-  },
-  {
-    "ID": 152,
-    "scartato": true,
-    "motivazione": "Product Manager, non project management IT/digital transformation."
-  },
-  {
-    "ID": 161,
-    "scartato": true,
-    "motivazione": "Product Manager, non project management IT/digital transformation."
-  },
-  {
-    "ID": 144,
-    "scartato": true,
-    "motivazione": "Product Manager, non project management IT/digital transformation."
-  },
-  {
-    "ID": 160,
-    "scartato": true,
-    "motivazione": "Product Manager, non project management IT/digital transformation."
-  },
-  {
-    "ID": 164,
-    "scartato": true,
-    "motivazione": "Product Manager, non project management IT/digital transformation."
-  },
-  {
-    "ID": 156,
-    "scartato": true,
-    "motivazione": "Product Manager, non project management IT/digital transformation."
-  },
-  {
-    "ID": 139,
-    "scartato": true,
-    "motivazione": "Product Manager, non project management IT/digital transformation."
-  },
-  {
-    "ID": 145,
-    "scartato": true,
-    "motivazione": "Product Manager, non project management IT/digital transformation."
-  },
-  {
-    "ID": 165,
-    "scartato": true,
-    "motivazione": "Senior Product Manager, non project management IT/digital transformation."
-  },
-  {
-    "ID": 137,
-    "scartato": false,
-    "motivazione": "Digital Project Manager, esperienza coerente con la posizione."
-  },
-  {
-    "ID": 118,
-    "scartato": false,
-    "motivazione": "Digital Project Manager, esperienza coerente con la posizione."
-  },
-  {
-    "ID": 42,
-    "scartato": false,
-    "motivazione": "Digital Project Manager, esperienza coerente con la posizione."
-  },
-  {
-    "ID": 38,
-    "scartato": true,
-    "motivazione": "Esperienza marketing digitale, non project management IT."
-  },
-  {
-    "ID": 39,
-    "scartato": true,
-    "motivazione": "Profilo marketing/comunicazione, non project management IT."
-  },
-  {
-    "ID": 147,
-    "scartato": true,
-    "motivazione": "Esperienza solo come Product Manager, manca focus su project management IT e requisiti specifici."
-  },
-  {
-    "ID": 162,
-    "scartato": true,
-    "motivazione": "Esperienza solo come Product Manager, non evidenzia requisiti IT/digital richiesti."
-  },
-  {
-    "ID": 166,
-    "scartato": true,
-    "motivazione": "Esperienza verticale su videocitofonia, non allineato a project management IT richiesto."
-  },
-  {
-    "ID": 133,
-    "scartato": false,
-    "motivazione": "Esperienza in project management IT, gestione progetti digitali e sicurezza, profilo idoneo."
-  },
-  {
-    "ID": 183,
-    "scartato": true,
-    "motivazione": "Esperienza in settori spaziali, non evidenzia requisiti IT/digital transformation richiesti."
-  },
-  {
-    "ID": 151,
-    "scartato": true,
-    "motivazione": "Esperienza in ambito bancario/fintech, manca focus su project management IT richiesto."
-  },
-  {
-    "ID": 159,
-    "scartato": true,
-    "motivazione": "Solo Product Manager, non evidenzia esperienza in project management IT."
-  },
-  {
-    "ID": 234,
-    "scartato": true,
-    "motivazione": "Esperienza marketing, non project management IT/digital transformation richiesto."
-  },
-  {
-    "ID": 225,
-    "scartato": false,
-    "motivazione": "Senior IT Project Manager, esperienza in demand management e progetti digitali, profilo idoneo."
+    "motivazione": "Profilo analitico retention, nessuna esperienza in change management o adozione tecnologica."
   }
 ]
