@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
+import { BarChart3, Search, Mail, Clock, FileText, CheckCircle2, AlertTriangle, AlertCircle, Info, Lock, Download, MessageCircle, Target, TrendingUp, RefreshCw, Rocket, MessageSquare, Send } from 'lucide-react'
 import { SecurityReport } from '../components/SecurityReport'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://vertigo-ai-backend-tbia7kjh7a-oc.a.run.app'
@@ -14,6 +15,9 @@ type Row = {
   downloaded_at?: string;
   downloaded_by?: string;
   downloaded_by_name?: string;
+  whatsapp_status?: string;
+  phone_number?: string;
+  interruption_reason?: string;
 }
 
 function renderStars(rating: number) {
@@ -50,93 +54,148 @@ function formatReport(reportText: string, kind: 'cv' | 'case' | 'conversation') 
 function formatCVAnalysisReport(reportText: string) {
   const lines = reportText.split('\n')
   const sections = []
-  let currentSection = { title: '', content: '', type: 'text' }
+  let currentSection = { title: '', items: [] as string[], type: 'text' }
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
+    if (!line) continue
     
-    // Detect section headers
+    // Detect main sections (numbered like "1. " or "REPORT")
     if (line.match(/^\d+\.?\s+[A-Z]/) || line.includes('Analisi') || line.includes('REPORT')) {
-      if (currentSection.title) {
-        sections.push({ ...currentSection })
+      if (currentSection.title || currentSection.items.length > 0) {
+        sections.push({ ...currentSection, items: [...currentSection.items] })
       }
-      currentSection = { title: line, content: '', type: 'section' }
-    } else if (line.match(/^\d+\.\d+\.?\s+/) || line.includes('Verifica') || line.includes('Requirements')) {
-      if (currentSection.title) {
-        sections.push({ ...currentSection })
+      currentSection = { title: line.replace(/^[\d\.]+\s*/, ''), items: [], type: 'section' }
+    } 
+    // Detect subsections (numbered like "2.1 ")
+    else if (line.match(/^\d+\.\d+\.?\s+/) || (line.includes('Verifica') && line.includes('/'))) {
+      if (currentSection.title || currentSection.items.length > 0) {
+        sections.push({ ...currentSection, items: [...currentSection.items] })
       }
-      currentSection = { title: line, content: '', type: 'subsection' }
-    } else if (line.startsWith('•') || line.startsWith('-') || line.startsWith('o')) {
-      if (currentSection.title) {
-        sections.push({ ...currentSection })
+      currentSection = { title: line.replace(/^[\d\.]+\s*/, ''), items: [], type: 'subsection' }
+    } 
+    // Detect bullet points
+    else if (line.match(/^[-•o]\s+/)) {
+      currentSection.items.push(line.replace(/^[-•o]\s+/, ''))
+    }
+    // Detect header text (like "Requisiti tecnici richiesti:")
+    else if (line.endsWith(':')) {
+      if (currentSection.title || currentSection.items.length > 0) {
+        sections.push({ ...currentSection, items: [...currentSection.items] })
       }
-      currentSection = { title: line, content: '', type: 'bullet' }
-    } else if (line) {
-      currentSection.content += (currentSection.content ? '\n' : '') + line
+      currentSection = { title: line, items: [], type: 'header' }
+    }
+    // Regular text content
+    else {
+      currentSection.items.push(line)
     }
   }
   
-  if (currentSection.title) {
+  if (currentSection.title || currentSection.items.length > 0) {
     sections.push(currentSection)
   }
   
+  // Helper function to highlight important keywords
+  const highlightKeywords = (text: string) => {
+    const keywords = [
+      'soddisfatto', 'non soddisfatto', 'pienamente', 'requisito', 
+      'esperienza', 'competenze', 'certificazioni', 'laurea',
+      'ben documentate', 'non menzionata', 'non esplicita', 'assente'
+    ]
+    
+    let highlighted = text
+    keywords.forEach(keyword => {
+      const regex = new RegExp(`(${keyword})`, 'gi')
+      if (keyword.includes('non') || keyword === 'assente') {
+        highlighted = highlighted.replace(regex, '<strong style="color: #ef4444">$1</strong>')
+      } else if (keyword.includes('soddisfatto') || keyword === 'pienamente' || keyword.includes('ben')) {
+        highlighted = highlighted.replace(regex, '<strong style="color: #10b981">$1</strong>')
+      } else {
+        highlighted = highlighted.replace(regex, '<strong>$1</strong>')
+      }
+    })
+    return highlighted
+  }
+  
   return (
-    <div style={{ lineHeight: '1.6' }}>
+    <div style={{ lineHeight: '1.8', fontSize: '14px' }}>
       {sections.map((section, index) => (
-        <div key={index} style={{ marginBottom: '16px' }}>
+        <div key={index} style={{ marginBottom: '24px' }}>
+          {/* Main Section Header */}
           {section.type === 'section' && (
             <div style={{
-              fontSize: '16px',
+              fontSize: '18px',
               fontWeight: '700',
               color: 'var(--primary-purple)',
-              marginBottom: '8px',
-              paddingBottom: '4px',
-              borderBottom: '2px solid var(--primary-purple)'
+              marginBottom: '16px',
+              paddingBottom: '8px',
+              borderBottom: '3px solid var(--primary-purple)',
+              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(167, 139, 250, 0.05))',
+              padding: '12px 16px',
+              borderRadius: '8px 8px 0 0'
             }}>
-              📋 {section.title}
+              <FileText size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> {section.title}
             </div>
           )}
+          
+          {/* Subsection Header */}
           {section.type === 'subsection' && (
             <div style={{
-              fontSize: '14px',
+              fontSize: '15px',
               fontWeight: '600',
               color: 'var(--text-primary)',
-              marginBottom: '6px',
-              paddingLeft: '12px',
-              borderLeft: '3px solid var(--accent-purple)'
+              marginBottom: '12px',
+              paddingLeft: '16px',
+              paddingTop: '8px',
+              paddingBottom: '8px',
+              borderLeft: '4px solid var(--accent-purple)',
+              background: 'rgba(139, 92, 246, 0.03)',
+              borderRadius: '0 6px 6px 0'
             }}>
               📌 {section.title}
             </div>
           )}
-          {section.type === 'bullet' && (
+          
+          {/* Header Text */}
+          {section.type === 'header' && (
             <div style={{
-              fontSize: '13px',
-              fontWeight: '500',
+              fontSize: '14px',
+              fontWeight: '600',
               color: 'var(--text-primary)',
-              marginBottom: '4px',
-              paddingLeft: '16px',
-              position: 'relative'
+              marginBottom: '10px',
+              marginTop: '12px'
             }}>
-              <span style={{
-                position: 'absolute',
-                left: '0',
-                color: 'var(--primary-purple)',
-                fontWeight: 'bold'
-              }}>•</span>
               {section.title}
             </div>
           )}
-          {section.content && (
+          
+          {/* Content Items */}
+          {section.items.length > 0 && (
             <div style={{
-              fontSize: '13px',
-              color: 'var(--text-secondary)',
-              paddingLeft: section.type === 'section' ? '0' : '16px',
-              marginTop: '4px',
-              lineHeight: '1.5'
+              paddingLeft: section.type === 'section' ? '16px' : section.type === 'subsection' ? '24px' : '0'
             }}>
-              {section.content.split('\n').map((paragraph, pIndex) => (
-                <div key={pIndex} style={{ marginBottom: '8px' }}>
-                  {paragraph}
+              {section.items.map((item, itemIndex) => (
+                <div 
+                  key={itemIndex} 
+                  style={{
+                    marginBottom: '12px',
+                    paddingLeft: '20px',
+                    position: 'relative',
+                    lineHeight: '1.7',
+                    color: 'var(--text-secondary)',
+                    wordWrap: 'break-word',
+                    overflowWrap: 'break-word'
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute',
+                    left: '0',
+                    top: '2px',
+                    color: 'var(--primary-purple)',
+                    fontWeight: 'bold',
+                    fontSize: '16px'
+                  }}>•</span>
+                  <span dangerouslySetInnerHTML={{ __html: highlightKeywords(item) }} />
                 </div>
               ))}
             </div>
@@ -206,7 +265,7 @@ function formatCaseEvaluationReport(reportText: string) {
                 alignItems: 'center',
                 gap: '8px'
               }}>
-                📊 {section.title}
+                <BarChart3 size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> {section.title}
               </div>
               <div style={{
                 fontSize: '13px',
@@ -318,11 +377,47 @@ export function Candidati() {
   const [conversationData, setConversationData] = useState<Record<string, any[]>>({})
   const [selectedPosition, setSelectedPosition] = useState<string>('')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'none'>('none')
+  const [feedbackFilter, setFeedbackFilter] = useState<'all' | 'interrupted' | 'qualified' | 'interviewed' | 'feedback_in_progress' | 'feedback_ready' | 'feedback_downloaded'>('all')
   const [overallMeans, setOverallMeans] = useState<Record<string, number>>({})
   const [reportExpanded, setReportExpanded] = useState<Record<string, boolean>>({})
   const [securityReports, setSecurityReports] = useState<Record<string, any>>({})
   const [showSecurityReport, setShowSecurityReport] = useState<string | null>(null)
+  const [expandedSkills, setExpandedSkills] = useState<Record<string, Set<number>>>({})
+  const [whatsappData, setWhatsappData] = useState<Record<string, { status?: string; phone_number?: string }>>({})
+  const [engaging, setEngaging] = useState<Record<string, boolean>>({})
   const token = localStorage.getItem('hr_jwt')
+  
+  // Cache refs per evitare ricaricamenti
+  const securityReportsCache = useRef<Record<string, any>>({})
+  const overallMeansCache = useRef<Record<string, number>>({})
+  const skillsCache = useRef<Record<string, any[]>>({})
+  const whatsappDataCache = useRef<Record<string, { status?: string; phone_number?: string }>>({})
+  const loadingSecurityReports = useRef<Set<string>>(new Set())
+  const loadingSkills = useRef<Set<string>>(new Set())
+
+  // Toggle skill expansion
+  const toggleSkillExpansion = (sessionId: string, skillIndex: number) => {
+    setExpandedSkills(prev => {
+      const sessionSkills = prev[sessionId] || new Set<number>()
+      const newSet = new Set(sessionSkills)
+      
+      if (newSet.has(skillIndex)) {
+        newSet.delete(skillIndex)
+      } else {
+        newSet.add(skillIndex)
+      }
+      
+      return {
+        ...prev,
+        [sessionId]: newSet
+      }
+    })
+  }
+
+  // Check if skill is expanded
+  const isSkillExpanded = (sessionId: string, skillIndex: number): boolean => {
+    return expandedSkills[sessionId]?.has(skillIndex) || false
+  }
 
   async function load() {
     setLoading(true)
@@ -336,10 +431,16 @@ export function Candidati() {
       }
       if (res.ok) {
         const data = await res.json()
-        setRows(data.items || [])
+        const items = data.items || []
+        setRows(items)
         
-        // Load security reports and overall means for all sessions
-        await loadSecurityReportsAndMeans(data.items || [])
+        // Load WhatsApp data only for candidates that need it (not already processed)
+        await loadWhatsappData(items.filter((session: Row) => {
+          const statusLower = (session.status || '').toLowerCase()
+          return !statusLower.includes('colloquiato') && 
+                 !statusLower.includes('feedback') && 
+                 !statusLower.includes('qualificato')
+        }))
       } else {
         console.error('Failed to load candidates:', res.statusText)
       }
@@ -350,54 +451,248 @@ export function Candidati() {
     }
   }
 
-  async function loadSecurityReportsAndMeans(sessions: Row[]) {
-    const securityReports: Record<string, any> = {}
-    const overallMeans: Record<string, number> = {}
+  async function loadWhatsappData(sessions: Row[]) {
+    if (sessions.length === 0) return
     
-    // Load data for all sessions in parallel
-    const promises = sessions.map(async (session) => {
-      const sessionId = session.session_id
-      
-      // Load security report
-      try {
-        const securityRes = await fetch(`${API_BASE}/sessions/${sessionId}/security-report`, { 
-          headers: { Authorization: `Bearer ${token}` } 
-        })
-        if (securityRes.ok) {
-          const securityData = await securityRes.json()
-          securityReports[sessionId] = securityData
-        }
-      } catch (error) {
-        console.error(`Error loading security report for ${sessionId}:`, error)
-      }
-      
-      // Load skills and calculate overall mean
-      try {
-        const skillsRes = await fetch(`${API_BASE}/sessions/${sessionId}/skills_scaled`, { 
-          headers: { Authorization: `Bearer ${token}` } 
-        })
-        if (skillsRes.ok) {
-          const skillsData = await skillsRes.json()
-          const skillList = skillsData.items || []
-          const mean = calculateOverallMean(skillList)
-          if (mean > 0) {
-            overallMeans[sessionId] = mean
+    const whatsappDataMap: Record<string, { status?: string; phone_number?: string }> = {}
+    
+    const promises = sessions
+      .filter((session: Row) => !whatsappDataCache.current[session.session_id]) // Skip already cached
+      .map(async (session: Row) => {
+        try {
+          const res = await fetch(`${API_BASE}/whatsapp/session/${session.session_id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+          if (res.ok) {
+            const data = await res.json()
+            const whatsappInfo = {
+              status: data.whatsapp_status,
+              phone_number: data.phone_number
+            }
+            whatsappDataMap[session.session_id] = whatsappInfo
+            whatsappDataCache.current[session.session_id] = whatsappInfo
           }
+        } catch (error) {
+          console.error(`Error loading WhatsApp data for ${session.session_id}:`, error)
         }
-      } catch (error) {
-        console.error(`Error loading skills for ${sessionId}:`, error)
-      }
-    })
+      })
     
     await Promise.all(promises)
+    setWhatsappData(prev => ({ ...prev, ...whatsappDataMap, ...whatsappDataCache.current }))
+  }
+
+  async function engageCandidate(sessionId: string, phoneNumber: string) {
+    setEngaging(prev => ({ ...prev, [sessionId]: true }))
+    try {
+      const res = await fetch(`${API_BASE}/whatsapp/engage`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          phone_number: phoneNumber
+        })
+      })
+      
+      if (res.ok) {
+        const data = await res.json()
+        // Aggiorna lo stato locale
+        setWhatsappData(prev => ({
+          ...prev,
+          [sessionId]: {
+            ...prev[sessionId],
+            status: 'sent'
+          }
+        }))
+        alert('Messaggio WhatsApp inviato con successo!')
+      } else {
+        const error = await res.json()
+        alert(`Errore: ${error.detail || 'Errore nell\'invio del messaggio'}`)
+      }
+    } catch (error) {
+      console.error('Error engaging candidate:', error)
+      alert('Errore di connessione')
+    } finally {
+      setEngaging(prev => ({ ...prev, [sessionId]: false }))
+    }
+  }
+
+  // Load security report for a single session (lazy loading)
+  async function loadSecurityReport(sessionId: string) {
+    if (securityReportsCache.current[sessionId]) {
+      setSecurityReports(prev => ({ ...prev, [sessionId]: securityReportsCache.current[sessionId] }))
+      return
+    }
     
-    // Update state with loaded data
-    setSecurityReports(securityReports)
-    setOverallMeans(overallMeans)
+    if (loadingSecurityReports.current.has(sessionId)) {
+      return // Already loading
+    }
+    
+    loadingSecurityReports.current.add(sessionId)
+    
+    try {
+      const securityRes = await fetch(`${API_BASE}/sessions/${sessionId}/security-report`, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      })
+      if (securityRes.ok) {
+        const securityData = await securityRes.json()
+        securityReportsCache.current[sessionId] = securityData
+        setSecurityReports(prev => ({ ...prev, [sessionId]: securityData }))
+      }
+    } catch (error) {
+      console.error(`Error loading security report for ${sessionId}:`, error)
+    } finally {
+      loadingSecurityReports.current.delete(sessionId)
+    }
+  }
+  
+  // Load skills and overall mean for a single session (lazy loading)
+  async function loadSkillsAndMean(sessionId: string) {
+    if (skillsCache.current[sessionId] && overallMeansCache.current[sessionId]) {
+      setSkills(prev => ({ ...prev, [sessionId]: skillsCache.current[sessionId] }))
+      setOverallMeans(prev => ({ ...prev, [sessionId]: overallMeansCache.current[sessionId] }))
+      return
+    }
+    
+    if (loadingSkills.current.has(sessionId)) {
+      return // Already loading
+    }
+    
+    loadingSkills.current.add(sessionId)
+    
+    try {
+      const skillsRes = await fetch(`${API_BASE}/sessions/${sessionId}/skills_scaled`, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      })
+      if (skillsRes.ok) {
+        const skillsData = await skillsRes.json()
+        const skillList = skillsData.items || []
+        const mean = calculateOverallMean(skillList)
+        
+        skillsCache.current[sessionId] = skillList
+        if (mean > 0) {
+          overallMeansCache.current[sessionId] = mean
+        }
+        
+        setSkills(prev => ({ ...prev, [sessionId]: skillList }))
+        if (mean > 0) {
+          setOverallMeans(prev => ({ ...prev, [sessionId]: mean }))
+        }
+      }
+    } catch (error) {
+      console.error(`Error loading skills for ${sessionId}:`, error)
+    } finally {
+      loadingSkills.current.delete(sessionId)
+    }
   }
 
 
   useEffect(() => { load() }, [])
+  
+  // Get unique positions for filter dropdown
+  const uniquePositions = Array.from(new Set(rows.map(r => r.position_name || r.position_id).filter(Boolean)))
+  
+  // Helper function to determine feedback status
+  const getFeedbackStatus = (row: Row): 'in_elaborazione' | 'da_scaricare' | 'scaricati' | null => {
+    // Scaricati: se c'è downloaded_at
+    if (row.downloaded_at) {
+      return 'scaricati'
+    }
+    
+    // In elaborazione: se status indica generazione in corso o batch
+    const statusLower = (row.status || '').toLowerCase()
+    if (row.status === 'Feedback in elaborazione' ||
+        row.status === 'Generazione feedback in corso...' || 
+        row.status?.includes('batch') ||
+        statusLower.includes('feedback in elaborazione') ||
+        statusLower.includes('elaborazione')) {
+      return 'in_elaborazione'
+    }
+    
+    // Da scaricare: se status è "Feedback pronto" o "Feedback ready" e non è stato scaricato
+    if (row.status === 'Feedback pronto' || row.status === 'Feedback ready') {
+      return 'da_scaricare'
+    }
+    
+    return null
+  }
+
+  // Filter and sort rows - calcolato con useMemo per ottimizzazione
+  const filteredAndSortedRows = useMemo(() => {
+    return rows
+      .filter(row => {
+        // Filter by position
+        const positionMatch = !selectedPosition || row.position_name === selectedPosition || row.position_id === selectedPosition
+        
+        // Se nessun filtro, mostra tutto
+        if (feedbackFilter === 'all') {
+          return positionMatch
+        }
+        
+        // Normalizza lo status per il confronto
+        const status = (row.status || '').toLowerCase()
+        
+        // Filtro per stati standardizzati
+        if (feedbackFilter === 'interrupted') {
+          return positionMatch && status.includes('interrotto')
+        }
+        
+        if (feedbackFilter === 'qualified') {
+          return positionMatch && status.includes('qualificato')
+        }
+        
+        if (feedbackFilter === 'interviewed') {
+          return positionMatch && status.includes('colloquiato') && !status.includes('feedback in elaborazione') && !status.includes('elaborazione')
+        }
+        
+        if (feedbackFilter === 'feedback_in_progress') {
+          return positionMatch && (status.includes('feedback in elaborazione') || 
+                                   status.includes('elaborazione') || 
+                                   status.includes('batch') ||
+                                   row.status === 'Generazione feedback in corso...')
+        }
+        
+        if (feedbackFilter === 'feedback_ready') {
+          return positionMatch && status.includes('feedback pronto')
+        }
+        
+        if (feedbackFilter === 'feedback_downloaded') {
+          return positionMatch && status.includes('feedback scaricato')
+        }
+        
+        return positionMatch
+      })
+      .sort((a, b) => {
+        if (sortOrder === 'none') return 0
+        const meanA = overallMeans[a.session_id] || 0
+        const meanB = overallMeans[b.session_id] || 0
+        return sortOrder === 'desc' ? meanB - meanA : meanA - meanB
+      })
+  }, [rows, selectedPosition, feedbackFilter, sortOrder, overallMeans])
+  
+  // Load security reports and overall means for visible candidates (lazy loading)
+  useEffect(() => {
+    const candidatesToLoad = filteredAndSortedRows
+      .filter(r => {
+        const statusLower = (r.status || '').toLowerCase()
+        const hasCompletedInterview = statusLower.includes('colloquiato') ||
+          statusLower.includes('feedback') ||
+          statusLower.includes('batch') ||
+          statusLower.includes('pronto per generare')
+        
+        return hasCompletedInterview && 
+               !securityReportsCache.current[r.session_id] &&
+               !overallMeansCache.current[r.session_id]
+      })
+      .slice(0, 5) // Load only first 5 to avoid too many requests at once
+    
+    candidatesToLoad.forEach(r => {
+      loadSecurityReport(r.session_id)
+      loadSkillsAndMean(r.session_id)
+    })
+  }, [filteredAndSortedRows])
 
   function calculateOverallMean(skillList: any[]): number {
     if (skillList.length === 0) return 0
@@ -407,17 +702,12 @@ export function Candidati() {
   }
 
   async function toggle(id: string) {
-    setExpanded(prev => (prev === id ? null : id))
-    if (!skills[id]) {
-      const r = await fetch(`${API_BASE}/sessions/${id}/skills_scaled`, { headers: { Authorization: `Bearer ${token}` } })
-      if (r.ok) {
-        const d = await r.json()
-        const skillList = d.items || []
-        setSkills(prev => ({ ...prev, [id]: skillList }))
-        // Calculate and store overall mean for this candidate
-        const mean = calculateOverallMean(skillList)
-        setOverallMeans(prev => ({ ...prev, [id]: mean }))
-      }
+    const newExpanded = expanded === id ? null : id
+    setExpanded(newExpanded)
+    
+    // Load skills and mean only when expanding
+    if (newExpanded && !skills[id]) {
+      await loadSkillsAndMean(id)
     }
   }
 
@@ -474,52 +764,68 @@ export function Candidati() {
     }
   }
 
-  async function loadSecurityReport(id: string) {
-    try {
-      const response = await fetch(`${API_BASE}/sessions/${id}/security-report`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      
-      if (response.ok) {
-        const data = await response.json()
-        setSecurityReports(prev => ({ ...prev, [id]: data }))
-      } else {
-        console.error('Failed to load security report')
+
+  async function handleGenerateFeedback(id: string) {
+      // Salva lo stato precedente in caso di errore
+      const originalRows = [...rows];
+      const originalStatus = rows.find(row => row.session_id === id)?.status;
+
+      // Aggiornamento ottimistico dell'UI - usa il nuovo stato standardizzato
+      setRows(prevRows => prevRows.map(row => 
+          row.session_id === id ? { ...row, status: 'Feedback in elaborazione' } : row
+      ));
+
+      try {
+          const res = await fetch(`${API_BASE}/sessions/${id}/generate-feedback`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}` }
+          });
+
+          if (res.ok) {
+              const data = await res.json();
+              // Aggiorna l'UI con lo stato restituito dal backend (dovrebbe essere "Feedback in elaborazione")
+              setRows(prevRows => prevRows.map(row => 
+                  row.session_id === id ? { ...row, status: data.status || 'Feedback in elaborazione' } : row
+              ));
+              // Potresti voler avviare un polling o attendere un WebSocket per l'aggiornamento finale,
+              // ma per ora lasciare che l'utente aggiorni manualmente la pagina è accettabile.
+          } else {
+              // GESTIONE ERRORE MIGLIORATA
+              const errorDetails = await res.text();
+              console.error(`ERRORE DAL SERVER (Status: ${res.status}):`, errorDetails);
+              alert(`Errore dal server (Status: ${res.status}):\n\n${errorDetails}`);
+              
+              // Ripristina lo stato solo per la riga fallita, invece di ricaricare tutto
+              setRows(prevRows => prevRows.map(row =>
+                row.session_id === id ? { ...row, status: originalStatus || 'Errore generazione feedback' } : row
+              ));
+          }
+      } catch (error) {
+          console.error('Error generating feedback:', error);
+          alert('Errore di rete durante la generazione del feedback.');
+          
+          // Ripristina lo stato originale in caso di errore di rete
+          setRows(originalRows);
       }
-    } catch (error) {
-      console.error('Error loading security report:', error)
-    }
   }
 
-  function getSecurityRiskLevel(securityReport: any): { level: string; color: string; icon: string } {
+  function getSecurityRiskLevel(securityReport: any): { level: string; color: string; IconComponent: React.ComponentType<any> } {
     if (!securityReport) {
-      return { level: 'Unknown', color: '#6c757d', icon: '❓' }
+      return { level: 'Unknown', color: '#6c757d', IconComponent: Info }
     }
     
     const riskLevel = securityReport.risk_assessment?.level || 'MINIMAL'
     const color = securityReport.risk_assessment?.color || '#6c757d'
     
-    let icon = '✅'
-    if (riskLevel === 'HIGH') icon = '🚨'
-    else if (riskLevel === 'MEDIUM') icon = '⚠️'
-    else if (riskLevel === 'LOW') icon = 'ℹ️'
+    let IconComponent = CheckCircle2
+    if (riskLevel === 'HIGH') IconComponent = AlertTriangle
+    else if (riskLevel === 'MEDIUM') IconComponent = AlertCircle
+    else if (riskLevel === 'LOW') IconComponent = Info
     
-    return { level: riskLevel, color, icon }
+    return { level: riskLevel, color, IconComponent }
   }
 
 
-  // Get unique positions for filter dropdown
-  const uniquePositions = Array.from(new Set(rows.map(r => r.position_name || r.position_id).filter(Boolean)))
-  
-  // Filter and sort rows
-  const filteredAndSortedRows = rows
-    .filter(row => !selectedPosition || row.position_name === selectedPosition || row.position_id === selectedPosition)
-    .sort((a, b) => {
-      if (sortOrder === 'none') return 0
-      const meanA = overallMeans[a.session_id] || 0
-      const meanB = overallMeans[b.session_id] || 0
-      return sortOrder === 'desc' ? meanB - meanA : meanA - meanB
-    })
 
   return (
     <div className="container" style={{ display: 'grid', gap: 16 }}>
@@ -540,11 +846,11 @@ export function Candidati() {
           fontSize: '16px',
           fontWeight: '600'
         }}>
-          🔍 Filtri e Ordinamento
+          <Search size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Filtri e Ordinamento
         </h4>
         <div style={{ 
           display: 'grid', 
-          gridTemplateColumns: '1fr 1fr auto', 
+          gridTemplateColumns: '1fr 1fr 1fr auto', 
           gap: '12px', 
           alignItems: 'end' 
         }}>
@@ -585,6 +891,46 @@ export function Candidati() {
               color: 'var(--text-secondary)',
               marginBottom: '4px'
             }}>
+              Stato Workflow
+            </label>
+            <select 
+              value={feedbackFilter} 
+              onChange={e => setFeedbackFilter(e.target.value as any)}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-light)',
+                background: 'white',
+                fontSize: '14px'
+              }}
+            >
+              <option value="all">Tutti gli stati</option>
+              <optgroup label="⚠️ Interrotti">
+                <option value="interrupted">✗ Interrotti</option>
+              </optgroup>
+              <optgroup label="✅ Qualificati">
+                <option value="qualified">✓ Qualificati (in attesa colloquio)</option>
+              </optgroup>
+              <optgroup label="🎓 Colloquiati">
+                <option value="interviewed">📝 Colloquiati (feedback da generare)</option>
+              </optgroup>
+              <optgroup label="📄 Feedback">
+                <option value="feedback_in_progress">⏳ Feedback in elaborazione</option>
+                <option value="feedback_ready">📥 Feedback pronto</option>
+                <option value="feedback_downloaded">✓ Feedback scaricato</option>
+              </optgroup>
+            </select>
+          </div>
+          
+          <div>
+            <label style={{ 
+              display: 'block', 
+              fontSize: '12px', 
+              fontWeight: '600', 
+              color: 'var(--text-secondary)',
+              marginBottom: '4px'
+            }}>
               Ordina per Media Generale
             </label>
             <select 
@@ -614,6 +960,7 @@ export function Candidati() {
               onClick={() => {
                 setSelectedPosition('')
                 setSortOrder('none')
+                setFeedbackFilter('all')
               }}
               style={{
                 padding: '8px 12px',
@@ -625,7 +972,7 @@ export function Candidati() {
                 color: 'var(--text-secondary)'
               }}
             >
-              🔄 Reset
+              <RefreshCw size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Reset
             </button>
             <div style={{ 
               fontSize: '11px', 
@@ -639,8 +986,8 @@ export function Candidati() {
       </div>
       {loading ? (
         <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
-          Caricamento report...
+          <Clock size={24} color="#9CA3AF" style={{ marginBottom: '8px' }} />
+          <div style={{ marginTop: '8px' }}>Caricamento report...</div>
         </div>
       ) : rows.length === 0 ? (
         <div style={{ 
@@ -650,7 +997,7 @@ export function Candidati() {
           background: 'var(--bg-secondary)',
           borderRadius: 'var(--radius-lg)'
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
+          <BarChart3 size={48} color="#9CA3AF" style={{ marginBottom: '16px' }} />
           <div style={{ fontSize: '18px', marginBottom: '8px' }}>Nessun report disponibile</div>
           <div>I report appariranno qui quando i candidati completeranno l'intero processo di selezione</div>
         </div>
@@ -662,7 +1009,7 @@ export function Candidati() {
           background: 'var(--bg-secondary)',
           borderRadius: 'var(--radius-lg)'
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
+          <Search size={48} color="#9CA3AF" style={{ marginBottom: '16px' }} />
           <div style={{ fontSize: '18px', marginBottom: '8px' }}>Nessun candidato trovato</div>
           <div>Prova a modificare i filtri per vedere più risultati</div>
         </div>
@@ -671,6 +1018,7 @@ export function Candidati() {
           {filteredAndSortedRows.map((r) => {
             const isExpanded = expanded === r.session_id
             const currentKind = reportKind[r.session_id] || 'cv'
+            const isInterrupted = (r.status || '').toLowerCase().includes('interrotto') || r.interruption_reason
             return (
               <div key={r.session_id} className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -691,7 +1039,7 @@ export function Candidati() {
                         fontWeight: '600',
                         color: overallMeans[r.session_id] !== undefined ? 'var(--primary-purple)' : '#9CA3AF'
                       }}>
-                        <span>📊</span>
+                        <BarChart3 size={14} />
                         <span>
                           {overallMeans[r.session_id] !== undefined 
                             ? `${overallMeans[r.session_id].toFixed(1)}/4` 
@@ -726,7 +1074,10 @@ export function Candidati() {
                                    riskInfo.color === '#28a745' ? '#28A745' :
                                    '#9CA3AF'
                           }}>
-                            <span>{riskInfo.icon}</span>
+                            {(() => {
+                              const Icon = riskInfo.IconComponent
+                              return <Icon size={14} />
+                            })()}
                             <span>{riskInfo.level}</span>
                           </div>
                         )
@@ -742,131 +1093,430 @@ export function Candidati() {
                         gap: '4px',
                         marginTop: '2px'
                       }}>
-                        <span>📧</span>
+                        <Mail size={14} />
                         <span>{r.candidate_email}</span>
                       </div>
                     )}
-                    {r.status && (
-                      <div style={{ 
-                        display: 'inline-block',
-                        padding: '2px 8px',
-                        borderRadius: '12px',
-                        fontSize: '12px',
-                        fontWeight: '500',
-                        marginTop: '4px',
-                        background: r.status === 'Feedback ready' ? '#D1FAE5' : 
-                                   r.status === 'Feedback pending' ? '#FEF3C7' :
-                                   r.status === 'Interview completed' ? '#DBEAFE' :
-                                   r.status === 'Colloquio da completare' ? '#DBEAFE' :
-                                   r.status === 'CV analysis failed' ? '#FEE2E2' : '#F3F4F6',
-                        color: r.status === 'Feedback ready' ? '#065F46' :
-                               r.status === 'Feedback pending' ? '#92400E' :
-                               r.status === 'Interview completed' ? '#1E40AF' :
-                               r.status === 'Colloquio da completare' ? '#1E40AF' :
-                               r.status === 'CV analysis failed' ? '#991B1B' : '#374151'
-                      }}>
-                        {r.status}
-                      </div>
-                    )}
-                    {/* Security Report Button */}
-                    <div style={{
-                      display: 'inline-block',
-                      marginLeft: '8px',
-                      marginTop: '4px'
-                    }}>
-                      <button
-                        onClick={() => {
-                          const securityReport = securityReports[r.session_id]
-                          if (!securityReport) {
-                            loadSecurityReport(r.session_id)
-                          }
-                          setShowSecurityReport(r.session_id)
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '4px 8px',
+                    {/* Workflow Status Badge - mostra lo stato principale del candidato */}
+                    {(() => {
+                      const sessionStatus = (r.status || '').toLowerCase()
+                      
+                      // Determina lo stato del workflow con NUOVA NOMENCLATURA
+                      let workflowStatus = ''
+                      let bgColor = '#F3F4F6'
+                      let textColor = '#374151'
+                      
+                      // FEEDBACK SCARICATO
+                      if (sessionStatus.includes('feedback scaricato')) {
+                        workflowStatus = '✓ Feedback scaricato'
+                        bgColor = '#E0E7FF'
+                        textColor = '#4338CA'
+                      }
+                      // FEEDBACK PRONTO
+                      else if (sessionStatus.includes('feedback pronto')) {
+                        workflowStatus = '📄 Feedback pronto'
+                        bgColor = '#D1FAE5'
+                        textColor = '#065F46'
+                      }
+                      // FEEDBACK IN ELABORAZIONE
+                      else if (sessionStatus.includes('feedback in elaborazione') || 
+                               sessionStatus.includes('elaborazione') ||
+                               r.status === 'Generazione feedback in corso...' ||
+                               sessionStatus.includes('batch')) {
+                        workflowStatus = '⏳ Feedback in elaborazione'
+                        bgColor = '#FEF3C7'
+                        textColor = '#F59E0B'
+                      }
+                      // COLLOQUIATO (feedback da generare)
+                      else if (sessionStatus.includes('colloquiato')) {
+                        workflowStatus = '📝 Colloquiato'
+                        bgColor = '#DBEAFE'
+                        textColor = '#1E40AF'
+                      }
+                      // INTERROTTO
+                      else if (sessionStatus.includes('interrotto')) {
+                        workflowStatus = '✗ Interrotto'
+                        bgColor = '#FEE2E2'
+                        textColor = '#991B1B'
+                      }
+                      // QUALIFICATO
+                      else if (sessionStatus.includes('qualificato')) {
+                        workflowStatus = '✓ Qualificato'
+                        bgColor = '#D1FAE5'
+                        textColor = '#065F46'
+                      }
+                      // ALTRO STATO (fallback)
+                      else if (r.status) {
+                        workflowStatus = r.status
+                      }
+                      
+                      return workflowStatus ? (
+                        <div style={{ 
+                          display: 'inline-block',
+                          padding: '4px 10px',
                           borderRadius: '12px',
                           fontSize: '12px',
-                          fontWeight: '500',
-                          border: '1px solid #6c757d',
-                          background: '#f8f9fa',
-                          color: '#6c757d',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease'
-                        }}
-                        onMouseOver={(e) => {
-                          e.currentTarget.style.transform = 'scale(1.05)'
-                        }}
-                        onMouseOut={(e) => {
-                          e.currentTarget.style.transform = 'scale(1)'
-                        }}
-                      >
-                        <span>🔒</span>
-                        <span>Report Sicurezza</span>
-                        {securityReports[r.session_id]?.security_summary?.total_events > 0 && (
-                          <span style={{
-                            backgroundColor: '#6c757d',
-                            color: 'white',
-                            borderRadius: '50%',
-                            width: '16px',
-                            height: '16px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '10px',
-                            fontWeight: '600'
-                          }}>
-                            {securityReports[r.session_id].security_summary.total_events}
-                          </span>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <select value={currentKind} onChange={e => fetchReport(r.session_id, e.target.value as 'cv' | 'case' | 'conversation')}>
-                      <option value="cv">CV ANALYSIS REPORT</option>
-                      <option value="case">CASE EVALUATION REPORT</option>
-                      <option value="conversation">CONVERSATION</option>
-                    </select>
-                    <button onClick={() => toggle(r.session_id)}>{isExpanded ? 'Hide' : 'Show'} skills</button>
-                    
-                    {/* Feedback Download Button */}
-                    {r.status === 'Feedback ready' && (
-                      <button 
-                        onClick={() => downloadFeedback(r.session_id)}
-                        style={{
-                          padding: '6px 12px',
-                          background: '#10B981',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: 'var(--radius-md)',
-                          fontSize: '12px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}
-                      >
-                        📥 Download Feedback
-                      </button>
-                    )}
-                    
-                    {/* Download Tracking Info */}
-                    {r.downloaded_at && (
+                          fontWeight: '600',
+                          marginTop: '4px',
+                          background: bgColor,
+                          color: textColor
+                        }}>
+                          {workflowStatus}
+                        </div>
+                      ) : null
+                    })()}
+                    {/* Motivo interruzione (inline sotto il badge principale) */}
+                    {isInterrupted && r.interruption_reason && (
                       <div style={{
-                        fontSize: '10px',
-                        color: 'var(--text-secondary)',
-                        background: 'var(--bg-secondary)',
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        border: '1px solid var(--border-light)'
+                        marginLeft: '8px',
+                        marginTop: '4px',
+                        fontSize: '11px',
+                        color: '#991B1B',
+                        fontStyle: 'italic'
                       }}>
-                        📥 Downloaded by {r.downloaded_by_name || r.downloaded_by} on {new Date(r.downloaded_at).toLocaleDateString('it-IT')}
+                        Motivo: {r.interruption_reason === 'mancanza_requisiti' ? 'Mancanza requisiti obbligatori' :
+                                 r.interruption_reason === 'ritiro_candidato' ? 'Ritiro del candidato' :
+                                 r.interruption_reason}
                       </div>
                     )}
+                    {/* WhatsApp Engage Button - Non mostrare per stati avanzati (Colloquiato, Feedback, etc.) */}
+                    {whatsappData[r.session_id]?.status === 'ready' && whatsappData[r.session_id]?.phone_number && 
+                     !((r.status || '').toLowerCase().includes('colloquiato') || 
+                       (r.status || '').toLowerCase().includes('feedback') ||
+                       (r.status || '').toLowerCase().includes('qualificato')) && (
+                      <div style={{
+                        display: 'inline-block',
+                        marginLeft: '8px',
+                        marginTop: '4px'
+                      }}>
+                        <button
+                          onClick={() => engageCandidate(r.session_id, whatsappData[r.session_id].phone_number!)}
+                          disabled={engaging[r.session_id]}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            border: 'none',
+                            background: engaging[r.session_id] ? '#9CA3AF' : 'linear-gradient(135deg, #8B5CF6, #A78BFA)',
+                            color: 'white',
+                            cursor: engaging[r.session_id] ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.2s ease',
+                            opacity: engaging[r.session_id] ? 0.7 : 1
+                          }}
+                        >
+                          <Send size={14} />
+                          <span>{engaging[r.session_id] ? 'Invio...' : 'Ingaggia'}</span>
+                        </button>
+                      </div>
+                    )}
+                    {/* Security Report Button - Solo se colloquio completato */}
+                    {(() => {
+                      // Mostra Report Sicurezza solo se il colloquio AI è stato completato
+                      const hasCompletedInterview = r.status && (
+                        r.status.includes('Colloquio completato') ||
+                        r.status.includes('Feedback') ||
+                        r.status.includes('batch') ||
+                        r.status.includes('Pronto per generare')
+                      )
+                      
+                      if (!hasCompletedInterview) return null
+                      
+                      return (
+                        <div style={{
+                          display: 'inline-block',
+                          marginLeft: '8px',
+                          marginTop: '4px'
+                        }}>
+                          <button
+                            onClick={() => {
+                              const securityReport = securityReports[r.session_id]
+                              if (!securityReport) {
+                                loadSecurityReport(r.session_id)
+                              }
+                              setShowSecurityReport(r.session_id)
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '4px 8px',
+                              borderRadius: '12px',
+                              fontSize: '12px',
+                              fontWeight: '500',
+                              border: '1px solid #6c757d',
+                              background: '#f8f9fa',
+                              color: '#6c757d',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseOver={(e) => {
+                              e.currentTarget.style.transform = 'scale(1.05)'
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)'
+                            }}
+                          >
+                            <Lock size={14} />
+                            <span>Report Sicurezza</span>
+                            {securityReports[r.session_id]?.security_summary?.total_events > 0 && (
+                              <span style={{
+                                backgroundColor: '#6c757d',
+                                color: 'white',
+                                borderRadius: '50%',
+                                width: '16px',
+                                height: '16px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '10px',
+                                fontWeight: '600'
+                              }}>
+                                {securityReports[r.session_id].security_summary.total_events}
+                              </span>
+                            )}
+                          </button>
+                        </div>
+                      )
+                    })()}
                   </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {/* Select e Show skills - Solo se colloquio completato */}
+                    {(() => {
+                      const statusLower = (r.status || '').toLowerCase()
+                      const hasCompletedInterview = r.status && (
+                        r.status.includes('Colloquio completato') ||
+                        r.status.includes('Feedback') ||
+                        r.status.includes('batch') ||
+                        r.status.includes('Pronto per generare') ||
+                        statusLower.includes('colloquiato')
+                      )
+                      
+                      if (!hasCompletedInterview) return null
+                      
+                      return (
+                        <>
+                          <select 
+                            value={currentKind} 
+                            onChange={e => fetchReport(r.session_id, e.target.value as 'cv' | 'case' | 'conversation')}
+                            style={{
+                              width: '240px',
+                              padding: '6px 8px',
+                              fontSize: '12px',
+                              fontWeight: '500',
+                              border: '1px solid rgba(139, 92, 246, 0.3)',
+                              borderRadius: '6px',
+                              background: 'white',
+                              color: 'var(--text-primary)',
+                              cursor: 'pointer',
+                              outline: 'none'
+                            }}
+                          >
+                            <option value="cv">CV ANALYSIS REPORT</option>
+                            <option value="case">CASE EVALUATION REPORT</option>
+                            <option value="conversation">CONVERSATION</option>
+                          </select>
+                          <button 
+                            onClick={() => toggle(r.session_id)}
+                            style={{
+                              width: '70px',
+                              height: '60px',
+                              padding: '8px 6px',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              border: '1px solid rgba(139, 92, 246, 0.3)',
+                              borderRadius: '6px',
+                              background: 'var(--primary-purple)',
+                              color: 'white',
+                              cursor: 'pointer',
+                              lineHeight: '1.3',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              textAlign: 'center',
+                              whiteSpace: 'normal',
+                              wordBreak: 'break-word'
+                            }}
+                          >
+                            {isExpanded ? 'Hide skills' : 'Show skills'}
+                          </button>
+                        </>
+                      )
+                    })()}
+                    
+                                
+                    {/* --- GESTIONE STATI FEEDBACK --- */}
+                    
+                    {/* Candidatura Interrotta o In attesa colloquio - Non mostrare pulsanti feedback */}
+                    {!isInterrupted && (() => {
+                      const statusLower = (r.status || '').toLowerCase()
+                      const hasCompletedInterview = statusLower.includes('colloquiato') ||
+                        statusLower.includes('feedback pronto') ||
+                        statusLower.includes('feedback scaricato')
+                      
+                      // Se non ha completato il colloquio, non mostrare nulla
+                      if (!hasCompletedInterview) return null
+                      
+                      return (
+                        <>
+                    {/* PRIORITÀ 1: Feedback pronto - mostra bottone download */}
+                    {statusLower.includes('feedback pronto') && (
+                        <button 
+                            onClick={() => downloadFeedback(r.session_id)}
+                            style={{ 
+                              width: '85px',
+                              height: '60px',
+                              padding: '8px 6px', 
+                              background: '#10B981', 
+                              color: 'white', 
+                              border: 'none', 
+                              borderRadius: 'var(--radius-md)', 
+                              fontSize: '11px', 
+                              fontWeight: '600',
+                              cursor: 'pointer', 
+                              display: 'flex', 
+                              flexDirection: 'column',
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              gap: '3px',
+                              lineHeight: '1.3',
+                              textAlign: 'center'
+                            }}
+                        >
+                            <Download size={14} />
+                            <span>Download Feedback</span>
+                        </button>
+                    )}
+                    
+                    {/* PRIORITÀ 2.5: Feedback in elaborazione - mostra badge (non cliccabile) */}
+                    {(r.status === 'Feedback in elaborazione' ||
+                      r.status === 'Generazione feedback in corso...' || 
+                      r.status?.includes('batch') || 
+                      r.status?.toLowerCase().includes('elaborazione') ||
+                      statusLower.includes('feedback in elaborazione')) && (
+                        <div style={{ 
+                          width: '120px',
+                          minHeight: '60px',
+                          padding: '8px 6px', 
+                          background: '#FEF3C7', 
+                          border: '2px solid #F59E0B', 
+                          borderRadius: 'var(--radius-md)', 
+                          display: 'flex', 
+                          flexDirection: 'column',
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          gap: '4px',
+                          textAlign: 'center'
+                        }}>
+                            <Clock size={16} color="#F59E0B" />
+                            <span style={{ 
+                              fontSize: '10px', 
+                              fontWeight: '600',
+                              color: '#F59E0B',
+                              lineHeight: '1.2'
+                            }}>
+                              Elaborazione report in corso
+                            </span>
+                        </div>
+                    )}
+                    
+                    {/* PRIORITÀ 3: Colloquiato - in attesa generazione feedback (solo se NON in elaborazione) */}
+                    {statusLower.includes('colloquiato') && 
+                     r.status !== 'Feedback in elaborazione' &&
+                     r.status !== 'Generazione feedback in corso...' && 
+                     !r.status?.includes('batch') && 
+                     !r.status?.toLowerCase().includes('elaborazione') &&
+                     !statusLower.includes('feedback in elaborazione') && (
+                        <button 
+                            onClick={() => handleGenerateFeedback(r.session_id)}
+                            style={{ 
+                              width: '85px',
+                              height: '60px',
+                              padding: '8px 6px', 
+                              background: '#8B5CF6', 
+                              color: 'white', 
+                              border: 'none', 
+                              borderRadius: 'var(--radius-md)', 
+                              fontSize: '11px', 
+                              fontWeight: '600',
+                              cursor: 'pointer', 
+                              display: 'flex', 
+                              flexDirection: 'column',
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              gap: '3px',
+                              lineHeight: '1.3',
+                              textAlign: 'center'
+                            }}
+                        >
+                            <Rocket size={14} />
+                            <span>Genera Feedback</span>
+                        </button>
+                    )}
+                        </>
+                      )
+                    })()}
+                
+                    {/* Stato: Errore */}
+                    {r.status === 'Errore generazione feedback' && (
+                        <div style={{ 
+                          width: '85px',
+                          height: '60px',
+                          display: 'flex', 
+                          flexDirection: 'column',
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          gap: '4px', 
+                          background: '#FEE2E2', 
+                          padding: '8px 6px', 
+                          borderRadius: 'var(--radius-md)',
+                          textAlign: 'center'
+                        }}>
+                            <span style={{ color: '#991B1B', fontSize: '11px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <AlertCircle size={14} /> Errore
+                            </span>
+                            <button 
+                                onClick={() => handleGenerateFeedback(r.session_id)}
+                                style={{ fontSize: '10px', padding: '4px 8px', background: '#DC2626', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '600' }}
+                            >
+                                Riprova
+                            </button>
+                        </div>
+                    )}
+                
+                    {/* Info sul download (se già scaricato) */}
+                    {r.downloaded_at && (
+                      <div style={{ 
+                        width: '95px',
+                        minHeight: '60px',
+                        fontSize: '9px', 
+                        fontWeight: '600',
+                        color: 'var(--text-secondary)', 
+                        background: 'var(--bg-secondary)', 
+                        padding: '8px 6px', 
+                        borderRadius: '6px', 
+                        border: '1px solid var(--border-light)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        textAlign: 'center',
+                        lineHeight: '1.3',
+                        gap: '2px'
+                      }}>
+                        <Download size={12} />
+                        {r.downloaded_by === 'whatsapp_agent' && (
+                          <span style={{ fontWeight: '700', color: 'var(--primary-purple)' }}>Token colloquio</span>
+                        )}
+                        <span>Inviato da</span>
+                        <span style={{ fontWeight: '700' }}>{r.downloaded_by_name || r.downloaded_by}</span>
+                        <span style={{ fontSize: '8px' }}>il {new Date(r.downloaded_at).toLocaleDateString('it-IT')}</span>
+                      </div>
+                    )}
+                </div>
                 </div>
                 {/* Report/Conversation Display */}
                 {(reportText[r.session_id] || conversationData[r.session_id]) && (
@@ -958,7 +1608,7 @@ export function Candidati() {
                           fontSize: '16px',
                           fontWeight: '600'
                         }}>
-                          📊 Valutazione Competenze
+                          <BarChart3 size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Valutazione Competenze
                         </h4>
                         <div style={{
                           background: 'rgba(255, 255, 255, 0.9)',
@@ -968,7 +1618,7 @@ export function Candidati() {
                         }}>
                           <div style={{
                             display: 'grid',
-                            gridTemplateColumns: '1fr 120px 120px',
+                            gridTemplateColumns: '1fr 120px 120px 40px',
                             gap: '12px',
                             padding: '12px 16px',
                             background: 'var(--primary-purple)',
@@ -981,97 +1631,98 @@ export function Candidati() {
                             <div>Competenza</div>
                             <div style={{ textAlign: 'center' }}>CV</div>
                             <div style={{ textAlign: 'center' }}>Colloquio</div>
+                            <div style={{ textAlign: 'center', fontSize: '11px' }}>Info</div>
                           </div>
-                          <div style={{ display: 'grid', gap: '8px' }}>
-                          {(skills[r.session_id] || []).map((s: any, i: number) => (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          {(skills[r.session_id] || []).map((s: any, i: number) => {
+                            const isExpanded = isSkillExpanded(r.session_id, i)
+                            const hasNotes = s.notes_cv || s.notes_interview
+                            
+                            return (
                               <div key={i} style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '8px',
-                                padding: '16px',
                                 background: i % 2 === 0 ? 'rgba(255, 255, 255, 0.8)' : 'rgba(255, 255, 255, 0.6)',
-                                borderRadius: 'var(--radius-lg)',
+                                borderRadius: 'var(--radius-md)',
                                 border: '1px solid rgba(139, 92, 246, 0.1)',
-                                transition: 'all 0.2s ease'
+                                transition: 'all 0.2s ease',
+                                overflow: 'hidden'
                               }}>
-                                {/* Skill Name */}
-                                <div style={{ 
-                                  fontWeight: '600', 
-                                  color: 'var(--text-primary)',
-                                  fontSize: '14px',
-                                  lineHeight: '1.4',
-                                  marginBottom: '8px'
-                                }}>
-                                  {s.skill_name}
-                                </div>
-                                
-                                {/* Ratings Row */}
+                                {/* Compact Header Row */}
                                 <div style={{
                                   display: 'grid',
-                                  gridTemplateColumns: '1fr 120px 120px',
+                                  gridTemplateColumns: '1fr 120px 120px 40px',
                                   gap: '12px',
-                                  alignItems: 'center'
+                                  alignItems: 'center',
+                                  padding: '12px 16px'
                                 }}>
+                                  {/* Skill Name */}
                                   <div style={{ 
-                                    fontSize: '12px', 
-                                    color: 'var(--text-secondary)',
-                                    fontWeight: '500'
+                                    fontWeight: '600', 
+                                    color: 'var(--text-primary)',
+                                    fontSize: '14px',
+                                    lineHeight: '1.3'
                                   }}>
-                                    Valutazione
+                                    {s.skill_name}
                                   </div>
                                   
                                   {/* CV Rating */}
                                   <div style={{ 
                                     display: 'flex', 
-                                    flexDirection: 'column',
+                                    justifyContent: 'center',
                                     alignItems: 'center',
-                                    gap: '6px'
+                                    gap: '2px'
                                   }}>
-                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '2px' }}>
-                                      {renderStars(s.cv_0_4)}
-                                    </div>
-                                    <div style={{
-                                      fontSize: '11px',
-                                      fontWeight: '600',
-                                      color: 'var(--primary-purple)',
-                                      background: 'rgba(139, 92, 246, 0.1)',
-                                      padding: '2px 6px',
-                                      borderRadius: '4px'
-                                    }}>
-                                      CV
-                                    </div>
+                                    {renderStars(s.cv_0_4)}
                                   </div>
                                   
                                   {/* Interview Rating */}
                                   <div style={{ 
                                     display: 'flex', 
-                                    flexDirection: 'column',
+                                    justifyContent: 'center',
                                     alignItems: 'center',
-                                    gap: '6px'
+                                    gap: '2px'
                                   }}>
-                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '2px' }}>
-                                      {renderStars(s.interview_0_4)}
-                                    </div>
-                                    <div style={{
-                                      fontSize: '11px',
-                                      fontWeight: '600',
-                                      color: 'var(--primary-purple)',
-                                      background: 'rgba(139, 92, 246, 0.1)',
-                                      padding: '2px 6px',
-                                      borderRadius: '4px'
-                                    }}>
-                                      Colloquio
-                                    </div>
+                                    {renderStars(s.interview_0_4)}
                                   </div>
+                                  
+                                  {/* Expand/Collapse Button */}
+                                  {hasNotes && (
+                                    <button
+                                      onClick={() => toggleSkillExpansion(r.session_id, i)}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        width: '32px',
+                                        height: '32px',
+                                        border: 'none',
+                                        background: isExpanded ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        fontSize: '16px',
+                                        transition: 'all 0.2s ease',
+                                        color: 'var(--primary-purple)'
+                                      }}
+                                      onMouseOver={(e) => {
+                                        e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)'
+                                      }}
+                                      onMouseOut={(e) => {
+                                        e.currentTarget.style.background = isExpanded ? 'rgba(139, 92, 246, 0.1)' : 'transparent'
+                                      }}
+                                      title={isExpanded ? "Nascondi dettagli" : "Mostra dettagli"}
+                                    >
+                                      {isExpanded ? '▼' : '▶'}
+                                    </button>
+                                  )}
                                 </div>
                                 
-                                {/* Justifications */}
-                                {(s.notes_cv || s.notes_interview) && (
+                                {/* Expanded Justifications */}
+                                {isExpanded && hasNotes && (
                                   <div style={{
                                     display: 'grid',
-                                    gridTemplateColumns: '1fr 1fr',
+                                    gridTemplateColumns: s.notes_cv && s.notes_interview ? '1fr 1fr' : '1fr',
                                     gap: '12px',
-                                    marginTop: '8px'
+                                    padding: '0 16px 12px 16px',
+                                    borderTop: '1px solid rgba(139, 92, 246, 0.1)'
                                   }}>
                                     {/* CV Justification */}
                                     {s.notes_cv && (
@@ -1082,7 +1733,7 @@ export function Candidati() {
                                         border: '1px solid rgba(139, 92, 246, 0.1)'
                                       }}>
                                         <div style={{
-                                          fontSize: '12px',
+                                          fontSize: '11px',
                                           fontWeight: '600',
                                           color: 'var(--primary-purple)',
                                           marginBottom: '6px',
@@ -1090,10 +1741,10 @@ export function Candidati() {
                                           alignItems: 'center',
                                           gap: '4px'
                                         }}>
-                                          📄 CV
+                                          <FileText size={12} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> CV
                                         </div>
                                         <div style={{
-                                          fontSize: '13px',
+                                          fontSize: '12px',
                                           color: 'var(--text-secondary)',
                                           lineHeight: '1.5'
                                         }}>
@@ -1111,7 +1762,7 @@ export function Candidati() {
                                         border: '1px solid rgba(34, 197, 94, 0.1)'
                                       }}>
                                         <div style={{
-                                          fontSize: '12px',
+                                          fontSize: '11px',
                                           fontWeight: '600',
                                           color: '#22c55e',
                                           marginBottom: '6px',
@@ -1119,10 +1770,10 @@ export function Candidati() {
                                           alignItems: 'center',
                                           gap: '4px'
                                         }}>
-                                          💬 Colloquio
+                                          <MessageCircle size={12} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Colloquio
                                         </div>
                                         <div style={{
-                                          fontSize: '13px',
+                                          fontSize: '12px',
                                           color: 'var(--text-secondary)',
                                           lineHeight: '1.5'
                                         }}>
@@ -1133,7 +1784,8 @@ export function Candidati() {
                                   </div>
                                 )}
                               </div>
-                            ))}
+                            )
+                          })}
                           </div>
                           
                           {/* Overall Means Section */}
@@ -1167,7 +1819,7 @@ export function Candidati() {
                                     color: 'var(--primary-purple)',
                                     fontSize: '13px'
                                   }}>
-                                    📈 Media Generale
+                                    <TrendingUp size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Media Generale
                                   </div>
                                   <div style={{ 
                                     display: 'flex', 
@@ -1221,7 +1873,7 @@ export function Candidati() {
                         color: 'var(--text-secondary)',
                         fontSize: '14px'
                       }}>
-                        📊 Nessuna valutazione competenze disponibile
+                        <BarChart3 size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Nessuna valutazione competenze disponibile
                       </div>
                     )}
                   </div>

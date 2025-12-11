@@ -3,11 +3,12 @@ import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { App } from './routes/App'
 import { Positions } from './routes/Positions'
-import { InterviewSetup } from './routes/InterviewSetup'
+import { Dashboard } from './routes/Dashboard'
 import { Candidati } from './routes/Candidati'
 import { NuovaSessione } from './routes/NuovaSessione'
 import { UserManagement } from './routes/UserManagement'
-import { Dashboard } from './routes/Dashboard'
+import { Benchmark } from './routes/Benchmark'
+import { WhatsappSetup } from './routes/WhatsappSetup'
 import { Login } from './routes/Login'
 import { ErrorBoundary } from './components/ErrorBoundary'
 
@@ -17,13 +18,14 @@ const router = createBrowserRouter([
     path: '/app',
     element: <App />,
     children: [
-      { index: true, element: <Dashboard /> }, // Default route for /app
+      { index: true, element: <Positions /> }, // Default route for /app
       { path: 'dashboard', element: <Dashboard /> },
       { path: 'positions', element: <Positions /> },
-      { path: 'setup-colloqui', element: <InterviewSetup /> },
       { path: 'candidati', element: <Candidati /> },
       { path: 'nuova-sessione', element: <NuovaSessione /> },
       { path: 'users', element: <UserManagement /> },
+      { path: 'benchmark', element: <Benchmark /> },
+      { path: 'whatsapp-setup', element: <WhatsappSetup /> },
     ],
   },
   {
@@ -77,7 +79,7 @@ const router = createBrowserRouter([
             onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
             onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
           >
-            🏠 Torna alla Dashboard
+            🏠 Torna alla Home
           </button>
         </div>
       </div>

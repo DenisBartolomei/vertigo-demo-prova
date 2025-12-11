@@ -42,20 +42,21 @@ def _extract_kb_insight_from_response(full_response: str) -> str:
         # la pipeline e permettere un debug manuale.
         return full_response
 
-def summarize_knowledge_base(icp_text: str, kb_documents: list) -> str | None:
+def summarize_knowledge_base(icp_text: str, kb_documents: list, language: str = "it") -> str | None:
     """
     Genera una sintesi della KB contestualizzata sull'ICP e ne estrae la parte rilevante.
     
     Args:
         icp_text: Il testo dell'Ideal Candidate Profile.
         kb_documents: Una lista di dizionari (es. [{'title': '...', 'content': '...'}]) dalla KB.
+        language: Lingua del prompt ("it" o "en")
 
     Returns:
         Il report di sintesi pulito o None in caso di fallimento.
     """
     if not kb_documents:
         print("  - [Agente KB] Nessun documento della Knowledge Base fornito. Salto la sintesi.")
-        return "Nessuna informazione dalla Knowledge Base fornita per questo ruolo."
+        return "Nessuna informazione dalla Knowledge Base fornita per questo ruolo." if language == "it" else "No Knowledge Base information provided for this role."
 
     # Formatta i documenti in un'unica stringa per il prompt
     kb_content = "\n\n".join(
@@ -64,14 +65,14 @@ def summarize_knowledge_base(icp_text: str, kb_documents: list) -> str | None:
     )
 
     print("  - [Agente KB] Creazione del prompt per la sintesi...")
-    synthesis_prompt = prompts_kb.create_kb_synthesis_prompt(icp_text, kb_content)
+    synthesis_prompt = prompts_kb.create_kb_synthesis_prompt(icp_text, kb_content, language)
     
     print(f"  - [Agente KB] Invio della richiesta al modello '{KB_MODEL}' per la sintesi...")
     # La chiamata LLM ora restituisce l'output completo, inclusa la parte di ragionamento
     full_llm_output = get_llm_response(
         prompt=synthesis_prompt,
         model=KB_MODEL,
-        system_prompt=prompts_kb.SYSTEM_PROMPT,
+        system_prompt=prompts_kb.SYSTEM_PROMPT[language],
         temperature=0.2,
         max_tokens=2000
     )

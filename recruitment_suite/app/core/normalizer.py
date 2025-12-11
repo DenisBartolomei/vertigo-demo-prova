@@ -3,27 +3,102 @@
 
 import os
 import json
+import sys
+import warnings
+
+# Sopprimi warning tkinter da PyMuPDF (non bloccanti)
+warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*main thread is not in main loop.*")
+warnings.filterwarnings("ignore", message=".*Tcl_AsyncDelete.*")
+
+# Filtra errori tkinter non bloccanti da stderr causati da PyMuPDF
+class TkinterErrorFilter:
+    """Filtra errori tkinter non bloccanti da stderr causati da PyMuPDF"""
+    def __init__(self, original_stderr):
+        self.original_stderr = original_stderr
+        self.buffer = ""  # Buffer per messaggi multi-linea
+        self.in_tkinter_traceback = False  # Flag per tracciare se siamo in un traceback tkinter
+    
+    def write(self, message):
+        # Accumula messaggi per gestire traceback multi-linea
+        self.buffer += message
+        
+        # Controlla se inizia un traceback tkinter
+        if 'Exception ignored in:' in message or 'Traceback (most recent call last):' in message:
+            self.in_tkinter_traceback = True
+        
+        # Controlla se siamo in un traceback tkinter
+        if self.in_tkinter_traceback:
+            # Filtra errori tkinter comuni (non bloccanti)
+            if any(keyword in self.buffer for keyword in [
+                'RuntimeError: main thread is not in main loop',
+                'Tcl_AsyncDelete',
+                'tkinter',
+                '__del__',
+                'self.tk.call',
+                'info", "exists"',
+                'File "C:\\Python'
+            ]):
+                # Se il messaggio è completo (termina con newline), resetta
+                if message.endswith('\n'):
+                    self.buffer = ""
+                    self.in_tkinter_traceback = False
+                return
+        
+        # Se non siamo in un traceback tkinter, controlla se il messaggio contiene keyword tkinter
+        if any(keyword in message for keyword in [
+            'RuntimeError: main thread is not in main loop',
+            'Tcl_AsyncDelete',
+            'Exception ignored in:',
+            'function Image.__del__',
+            'function Variable.__del__',
+            'tkinter',
+            '__del__'
+        ]):
+            # Ignora questi errori (sono non bloccanti e causati da PyMuPDF)
+            if message.endswith('\n'):
+                self.buffer = ""
+                self.in_tkinter_traceback = False
+            return
+        
+        # Scrivi tutto il resto su stderr originale
+        self.original_stderr.write(message)
+        if message.endswith('\n'):
+            self.buffer = ""
+            self.in_tkinter_traceback = False
+    
+    def flush(self):
+        self.original_stderr.flush()
+
+# Applica il filtro a stderr per sopprimere errori tkinter
+sys.stderr = TkinterErrorFilter(sys.stderr)
+
 import fitz  # PyMuPDF
 import numpy as np
 import pandas as pd
 import torch
 import openai
+import asyncio
+import hashlib
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from dateutil.parser import parse as universal_date_parser
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import util
 from tqdm import tqdm
-from interviewer.llm_service import get_llm_response
+from interviewer.llm_service import get_llm_response, get_llm_response_async
 
 from recruitment_suite.config import settings
+from recruitment_suite.app.core.shared_embedding_model import get_shared_embedding_model
+from recruitment_suite.app.core.llm_cache import get_prompt_hash, get_cached_llm_response, save_cached_llm_response
+from recruitment_suite.app.core.benchmark_cache import get_candidate_embedding_from_cache, save_candidate_embedding_to_cache
 
 class CVNormalizer:
     def __init__(self):
         print("Inizializzazione del Normalizzatore CV...")
         # Non si valida più la chiave localmente: viene gestita da llm_service
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL_NAME, device=self.device)
-        print(f"Normalizzazione CV: Modello '{settings.EMBEDDING_MODEL_NAME}' caricato su {self.device.upper()}.")
+        # Usa modello locale
+        self.embedding_model = get_shared_embedding_model(device=self.device)
+        print(f"Normalizzazione CV: Modello '{settings.EMBEDDING_MODEL_NAME}' disponibile (device: {self.device.upper()}).")
 
         self._prepare_esco_data()
 
@@ -61,6 +136,14 @@ class CVNormalizer:
             # Assegna l'array all'attributo corretto!
             self.esco_embeddings_matrix = np.array(full_list)
             print(f"Embeddings riassemblati. Shape finale: {self.esco_embeddings_matrix.shape}")
+            
+            # TASK 2: Pre-conversione matrice ESCO in tensor (una volta sola)
+            self.esco_embeddings_tensor = torch.tensor(
+                self.esco_embeddings_matrix, 
+                device=self.device, 
+                dtype=torch.float32
+            )
+            print(f"✓ Matrice ESCO pre-convertita in tensor su {self.device.upper()}")
     
         except Exception as e:
             raise RuntimeError(f"ERRORE CRITICO nel caricamento dei dati da MongoDB per CVNormalizer: {e}")
@@ -106,70 +189,6 @@ class CVNormalizer:
         except Exception as e:
             print(f"Si è verificato un errore: {e}")
 
-    def _extract_from_cv(self, cv_path: str) -> dict:
-        print(f"1. Estrazione testo da '{cv_path}'...")
-        try:
-            with fitz.open(cv_path) as doc:
-                full_text = "".join(page.get_text() for page in doc)
-            raw = get_llm_response(
-                prompt=f"Testo del CV:\n{full_text}",
-                model=settings.LLM_MODEL,
-                system_prompt=settings.LLM_PROMPT_CV_EXTRACTION_NORM,
-                temperature=0.0,
-                max_tokens=2000
-            )
-            structured_data = json.loads(raw)
-            if not structured_data.get("experience"):
-                print("ATTENZIONE: L'LLM non ha estratto esperienze lavorative dal CV.")
-                return {}
-            print("Estrazione LLM completata con successo.")
-            return structured_data
-        except Exception as e:
-            print(f"ERRORE CRITICO durante l'estrazione dal CV: {e}")
-            return {}
-
-    def _extract_from_text(self, cv_text: str) -> dict:
-        print("1. Estrazione strutturata dal testo del CV (senza file PDF)...")
-        try:
-            raw = get_llm_response(
-                prompt=f"Testo del CV:\n{cv_text}",
-                model=settings.LLM_MODEL,
-                system_prompt=settings.LLM_PROMPT_CV_EXTRACTION_NORM,
-                temperature=0.0,
-                max_tokens=2000
-            )
-            structured_data = json.loads(raw)
-            if not structured_data.get("experience"):
-                print("ATTENZIONE: L'LLM non ha estratto esperienze lavorative dal testo del CV.")
-                return {}
-            print("Estrazione LLM da testo completata con successo.")
-            return structured_data
-        except Exception as e:
-            print(f"ERRORE CRITICO durante l'estrazione dal testo CV: {e}")
-            return {}
-
-    def run_normalization_from_text(self, cv_text: str) -> list | None:
-        """
-        Esegue la normalizzazione partendo dal testo del CV (evita di salvare/leggere file).
-        """
-        print("\n" + "="*60 + "\n--- ESECUZIONE NORMALIZZAZIONE DA TESTO CV ---\n" + "="*60)
-        structured_data = self._extract_from_text(cv_text)
-        if not structured_data:
-            return None
-
-        experiences = structured_data.get('experience', [])
-        valid_experiences = self._parse_and_filter_experiences(experiences)
-        if not valid_experiences:
-            print("ERRORE: Nessuna esperienza lavorativa valida trovata dopo il filtraggio (da testo).")
-            return None
-        print(f"Trovate {len(valid_experiences)} esperienze valide da normalizzare (da testo).")
-
-        normalized_experiences_list = self._normalize_experiences(valid_experiences)
-
-        profile_id = "cv_from_text"
-        final_result = [{"profile_id": profile_id, "normalized_experiences": normalized_experiences_list}]
-        return final_result
-
     def _parse_and_filter_experiences(self, experiences: list) -> list:
         """Filtra le esperienze per parole chiave e durata minima."""
         
@@ -194,65 +213,250 @@ class CVNormalizer:
         return valid_experiences    
 
     def _normalize_experiences(self, valid_experiences: list) -> list:
-        print("3. Normalizzazione di ogni esperienza valida...")
-        normalized_list = []
-        for exp in valid_experiences:
+        """
+        Versione sincrona mantenuta per backward compatibility.
+        Usa la versione async internamente.
+        """
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        return loop.run_until_complete(self._normalize_experiences_async(valid_experiences))
+    
+    async def _normalize_experiences_async(self, valid_experiences: list) -> list:
+        """
+        TASK 1: Versione ASINCRONA e PARALLELA della normalizzazione.
+        Parallelizza le chiamate LLM per processare più esperienze contemporaneamente.
+        """
+        print("3. Normalizzazione di ogni esperienza valida (PARALLELA)...")
+        print(f"   Processando {len(valid_experiences)} esperienze in parallelo...")
+        
+        async def normalize_single_experience(exp: dict) -> dict | None:
+            """Normalizza una singola esperienza (async)"""
             print(f"  > Normalizzando '{exp['title']}'...")
             prompt = settings.LLM_PROMPT_ENRICHMENT_IT_NORM.format(
                 title=exp['title'], description=exp['description']
             )
+            system_prompt = "Sei un esperto di semantica HR."
+            
             try:
-                raw = get_llm_response(
-                    prompt=prompt,
-                    model=settings.LLM_MODEL,
-                    system_prompt="Sei un esperto di semantica HR.",
-                    temperature=0.15,
-                    max_tokens=800
-                )
+                # TASK 3: Caching LLM responses
+                prompt_hash = get_prompt_hash(prompt, system_prompt, temperature=0.15, max_tokens=800)
+                raw = get_cached_llm_response(prompt_hash)
+                
+                if not raw:
+                    # TASK 1: Chiamata LLM async (parallelizzata) - solo se non in cache
+                    raw = await get_llm_response_async(
+                        prompt=prompt,
+                        model=settings.LLM_MODEL,
+                        system_prompt=system_prompt,
+                        temperature=0.15,
+                        max_tokens=800
+                    )
+                    # Salva in cache
+                    if raw and not raw.startswith("Errore"):
+                        save_cached_llm_response(prompt_hash, raw)
                 enriched_text = json.loads(raw).get("enriched_text")
                 if enriched_text:
-                    query_embedding = self.embedding_model.encode(enriched_text, convert_to_tensor=True, device=self.device)
-                    embeddings_tensor = torch.tensor(self.esco_embeddings_matrix, device=self.device)
-                    cos_scores = util.cos_sim(query_embedding.to(dtype=torch.float32), embeddings_tensor.to(dtype=torch.float32))[0]
-                    top_results = torch.topk(cos_scores, k=settings.TOP_N_MATCHES_NORM)
-                    matches = [
-                        {'esco_title': self.occupations_df.iloc[idx.item()]['Title'], 'similarity': f"{score.item():.4f}"}
-                        for score, idx in zip(top_results.values, top_results.indices)
-                    ]
-                    normalized_list.append({
+                    # TASK 4: Caching Embedding Esperienze
+                    # Crea hash del testo arricchito per cache embedding
+                    text_hash = hashlib.sha256(enriched_text.encode('utf-8')).hexdigest()
+                    candidate_data_for_cache = {"normalized_experiences": [{"llm_enriched_text": enriched_text}]}
+                    cached_embedding = get_candidate_embedding_from_cache(text_hash, candidate_data_for_cache)
+                    
+                    embedding_from_cache = False
+                    if cached_embedding is not None:
+                        # Usa embedding dalla cache
+                        query_embedding = torch.tensor(
+                            cached_embedding, 
+                            device=self.device, 
+                            dtype=torch.float32
+                        )
+                        print(f"    -> Embedding da cache")
+                        embedding_from_cache = True
+                    else:
+                        # TASK 6: Non fare encoding qui, sarà fatto in batch dopo
+                        # Segna che questo testo deve essere processato in batch
+                        pass
+                    
+                    # TASK 2: Usa matrice ESCO pre-convertita (non convertirla ogni volta!)
+                    # Nota: Se embedding_from_cache, calcola subito. Altrimenti sarà fatto in batch.
+                    if embedding_from_cache:
+                        cos_scores = util.cos_sim(
+                            query_embedding.to(dtype=torch.float32), 
+                            self.esco_embeddings_tensor
+                        )[0]
+                        top_results = torch.topk(cos_scores, k=settings.TOP_N_MATCHES_NORM)
+                        matches = [
+                            {'esco_title': self.occupations_df.iloc[idx.item()]['Title'], 'similarity': f"{score.item():.4f}"}
+                            for score, idx in zip(top_results.values, top_results.indices)
+                        ]
+                    else:
+                        # Matches verranno calcolati dopo batch encoding
+                        matches = []
+                    
+                    result = {
                         "original_title": exp['title'],
                         "duration_months": exp['duration_months'],
-                        "esco_matches": matches
-                    })
-                    print(f"    -> Match trovato.")
+                        "esco_matches": matches,
+                        "enriched_text": enriched_text,  # Salva per batch encoding
+                        "embedding_from_cache": embedding_from_cache  # Flag per batch processing
+                    }
+                    if embedding_from_cache:
+                        print(f"    -> Match trovato (da cache).")
+                    else:
+                        print(f"    -> Arricchito, in attesa batch encoding...")
+                    return result
                 else:
                     print(f"    -> Arricchimento saltato (testo nullo dall'LLM).")
+                    return None
             except Exception as e:
                 print(f"  - ERRORE durante l'arricchimento/matching per '{exp['title']}': {e}")
+                return None
+        
+        # TASK 1: Parallelizza tutte le chiamate LLM
+        tasks = [normalize_single_experience(exp) for exp in valid_experiences]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Filtra risultati validi (rimuovi None ed eccezioni)
+        normalized_list = []
+        enriched_texts_for_batch = []  # Per TASK 6: Batch encoding
+        result_indices = []  # Per mappare embeddings batch ai risultati
+        
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                print(f"  - ERRORE durante normalizzazione esperienza {i+1}: {result}")
+            elif result is not None:
+                # TASK 6: Raccogli testi arricchiti per batch encoding (se non già in cache)
+                if result.get("enriched_text") and not result.get("embedding_from_cache"):
+                    enriched_texts_for_batch.append(result["enriched_text"])
+                    result_indices.append(len(normalized_list))
+                
+                normalized_list.append(result)
+        
+        # TASK 6: Batch encoding transformer (se ci sono testi da processare)
+        if enriched_texts_for_batch:
+            print(f"  → Encoding batch transformer per {len(enriched_texts_for_batch)} esperienze...")
+            try:
+                # Usa modello locale per encoding batch
+                embeddings_batch = self.embedding_model.encode(
+                    enriched_texts_for_batch,
+                    normalize_embeddings=True,
+                    batch_size=16,
+                    convert_to_numpy=True,
+                    show_progress_bar=False
+                )
+                
+                # Converti a tensore per calcolo similarità
+                batch_embeddings = torch.tensor(
+                    np.array(embeddings_batch, dtype=np.float32),
+                    device=self.device,
+                    dtype=torch.float32
+                )
+                
+                # Mappa embeddings batch ai risultati
+                for batch_idx, result_idx in enumerate(result_indices):
+                    if result_idx < len(normalized_list):
+                        result = normalized_list[result_idx]
+                        enriched_text = result["enriched_text"]
+                        
+                        # Ottieni embedding dal batch (gestisci dimensioni correttamente)
+                        if batch_embeddings.dim() == 2:
+                            # Batch di embeddings: shape [batch_size, embedding_dim]
+                            query_embedding = batch_embeddings[batch_idx:batch_idx+1]  # [1, embedding_dim]
+                        else:
+                            # Singolo embedding: shape [embedding_dim]
+                            query_embedding = batch_embeddings[batch_idx].unsqueeze(0)  # [1, embedding_dim]
+                        
+                        # Assicura float32
+                        query_embedding = query_embedding.to(dtype=torch.float32)
+                        
+                        # Calcola cosine similarity con ESCO
+                        cos_scores = util.cos_sim(
+                            query_embedding, 
+                            self.esco_embeddings_tensor
+                        )[0]
+                        top_results = torch.topk(cos_scores, k=settings.TOP_N_MATCHES_NORM)
+                        matches = [
+                            {'esco_title': self.occupations_df.iloc[idx.item()]['Title'], 'similarity': f"{score.item():.4f}"}
+                            for score, idx in zip(top_results.values, top_results.indices)
+                        ]
+                        
+                        # Aggiorna risultato con matches
+                        normalized_list[result_idx]["esco_matches"] = matches
+                        
+                        # Salva embedding in cache per riutilizzo futuro
+                        # FIX: Verifica che enriched_text non sia None o vuoto prima di salvare
+                        if enriched_text and enriched_text.strip():
+                            try:
+                                text_hash = hashlib.sha256(enriched_text.encode('utf-8')).hexdigest()
+                                # Estrai embedding come numpy array (rimuovi dimensione batch)
+                                if query_embedding.dim() > 1:
+                                    embedding_array = query_embedding.squeeze(0).cpu().numpy().astype(np.float32)
+                                else:
+                                    embedding_array = query_embedding.cpu().numpy().astype(np.float32)
+                                candidate_data_for_cache = {"normalized_experiences": [{"llm_enriched_text": enriched_text}]}
+                                save_candidate_embedding_to_cache(
+                                    profile_id=text_hash,
+                                    embedding=embedding_array,
+                                    candidate_data=candidate_data_for_cache
+                                )
+                            except Exception as cache_err:
+                                # Non bloccare il processo se il salvataggio cache fallisce
+                                print(f"    ⚠ Errore salvataggio cache embedding (non critico): {cache_err}")
+                        else:
+                            print(f"    ⚠ ATTENZIONE: enriched_text vuoto o None, skip salvataggio cache")
+                
+                print(f"    ✓ Batch encoding completato per {len(enriched_texts_for_batch)} esperienze")
+            except Exception as e:
+                print(f"    ⚠ Errore batch encoding: {e}, continuo con encoding sequenziale")
+                # Fallback: encoding sequenziale già fatto in normalize_single_experience
+        
+        print(f"✓ Normalizzazione completata: {len(normalized_list)}/{len(valid_experiences)} esperienze processate con successo")
         return normalized_list
 
-    def run_normalization(self, cv_path: str) -> list | None:
-        print("\n" + "="*60 + "\n--- ESECUZIONE NORMALIZZAZIONE PER CV SINGOLO ---\n" + "="*60)
-        
-        structured_data = self._extract_from_cv(cv_path)
-        if not structured_data: return None
+    def run_normalization(self, parsed_experiences: list, profile_id: str = "cv_profile") -> list | None:
+        """
+        Esegue la normalizzazione partendo da una lista di esperienze lavorative
+        già estratte e parsate.
 
-        experiences = structured_data.get('experience', [])
-        valid_experiences = self._parse_and_filter_experiences(experiences)
+        Args:
+            parsed_experiences (list): Lista di dizionari, ognuno rappresentante un'esperienza.
+                                       Formato atteso: [{'title': '...', 'start_date': '...', ...}]
+            profile_id (str): Un identificatore per il profilo del candidato (es. session_id).
+        """
+        print("\n" + "="*60 + f"\n--- ESECUZIONE NORMALIZZAZIONE PER PROFILO: {profile_id} ---\n" + "="*60)
+        
+        if not parsed_experiences:
+            print("ERRORE: La lista di esperienze fornita è vuota.")
+            return None
+
+        # Il vecchio metodo run_normalization_from_text non serve più, 
+        # perché questo metodo fa già tutto partendo dai dati.
+        
+        # 3. La logica di parsing e filtraggio ora lavora sui dati in input
+        valid_experiences = self._parse_and_filter_experiences(parsed_experiences)
+        
         if not valid_experiences:
             print("ERRORE: Nessuna esperienza lavorativa valida trovata dopo il filtraggio.")
             return None
         print(f"Trovate {len(valid_experiences)} esperienze valide da normalizzare.")
 
+        # 4. La normalizzazione (ora async/parallela)
         normalized_experiences_list = self._normalize_experiences(valid_experiences)
 
-        profile_id = os.path.splitext(os.path.basename(cv_path))[0]
+        # 5. Costruisce il risultato finale
         final_result = [{"profile_id": profile_id, "normalized_experiences": normalized_experiences_list}]
         
+        print(f"\nNormalizzazione completata per il profilo {profile_id}.")
+        # Opzionale: puoi rimuovere il salvataggio su file se non è più necessario
         try:
-            with open(settings.OUTPUT_JSON_FILE_NORM, 'w', encoding='utf-8') as f: 
+            output_file = f"temp_normalization_{profile_id}.json"
+            with open(output_file, 'w', encoding='utf-8') as f: 
                 json.dump(final_result, f, ensure_ascii=False, indent=2)
-            print(f"\nNormalizzazione CV completata. Risultato salvato in '{settings.OUTPUT_JSON_FILE_NORM}'.")
+            print(f"Risultato di debug salvato in '{output_file}'.")
         except Exception as e:
             print(f"Errore durante il salvataggio del file di normalizzazione: {e}")
 

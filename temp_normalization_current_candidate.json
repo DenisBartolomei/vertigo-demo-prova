@@ -1,0 +1,47 @@
+[
+  {
+    "profile_id": "current_candidate",
+    "normalized_experiences": [
+      {
+        "original_title": "Senior Strategy Consultant",
+        "duration_months": 19,
+        "esco_matches": [
+          {
+            "esco_title": "operatore di prestampa/operatrice di prestampa",
+            "similarity": "0.8133"
+          },
+          {
+            "esco_title": "tecnico di ingegneria clinica",
+            "similarity": "0.7536"
+          },
+          {
+            "esco_title": "consulente in trasferimento di imprese",
+            "similarity": "0.7452"
+          }
+        ],
+        "enriched_text": "Il Senior Strategy Consultant coordina team di lavoro e gestisce direttamente le relazioni con i clienti nell’ambito di progetti di pianificazione strategica, modellizzazione dei costi, business case, fusioni e acquisizioni (conduzione di due diligence tecnologiche) e Project Management Office IT per il settore dei servizi finanziari. Svolge analisi di mercato e normative, benchmarking competitivo e contribuisce alla definizione delle linee guida strategiche, presentando deliverable a interlocutori senior e supportando il top management nei processi decisionali.",
+        "embedding_from_cache": false
+      },
+      {
+        "original_title": "IT Strategy Consultant",
+        "duration_months": 19,
+        "esco_matches": [
+          {
+            "esco_title": "responsabile produzione maglieria",
+            "similarity": "0.8144"
+          },
+          {
+            "esco_title": "assemblatore elettronico/assemblatrice elettronica",
+            "similarity": "0.7965"
+          },
+          {
+            "esco_title": "responsabile della logistica intermodale",
+            "similarity": "0.7854"
+          }
+        ],
+        "enriched_text": "Consulente di strategia IT con esperienza nella fondazione di un osservatorio su GenAI, focalizzato sull’analisi delle tendenze emergenti e sull’impatto strategico per i clienti. Ha collaborato con la direzione IT Strategy & Transformation di una primaria banca italiana per la ristrutturazione del modello di delivery IT e la creazione di un centro di eccellenza per l’internalizzazione di processi IT precedentemente esternalizzati. Ha partecipato a progetti di Tech M&A, revisione di IT Target Operating Model e gestione di progetti complessi per clienti enterprise.",
+        "embedding_from_cache": false
+      }
+    ]
+  }
+]

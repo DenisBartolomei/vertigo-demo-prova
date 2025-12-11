@@ -13,11 +13,21 @@ import base64
 from io import BytesIO
 import re
 
-def create_feedback_pdf(report_content: FinalReportContent, output_path: str, **kwargs):
+def create_feedback_pdf(report_content: FinalReportContent, output_path: str, language: str = "it", **kwargs):
     """
     Crea un file PDF completo, con tutte le sezioni, i grafici Base64
     e la formattazione corretta dei titoli.
+    
+    Args:
+        report_content: Contenuto del report finale
+        output_path: Percorso del file PDF da creare
+        language: Lingua del PDF ("it" o "en"), default "it"
+        **kwargs: Argomenti aggiuntivi (market_benchmark_text, etc.)
     """
+    # Normalizza la lingua
+    if language not in ["it", "en"]:
+        language = "it"
+    
     print(f"Creazione del file PDF completo: {output_path}...")
     doc = SimpleDocTemplate(output_path, rightMargin=inch, leftMargin=inch, topMargin=inch, bottomMargin=inch)
     
@@ -67,12 +77,25 @@ def create_feedback_pdf(report_content: FinalReportContent, output_path: str, **
             story.append(Paragraph(f"<i>Livello: {course.level} | Durata: ~{course.duration_hours} ore | <a href='{course.url}' color='blue'><u>Vai al corso</u></a></i>", body_style))
 
     # --- Sezione 5: Benchmark di Mercato ---
-    story.append(Paragraph("Benchmark di Mercato", h1_style))
+    # Traduzione del titolo in base alla lingua
+    market_benchmark_titles = {
+        "it": "Benchmark di Mercato",
+        "en": "Market Benchmark"
+    }
+    market_benchmark_title = market_benchmark_titles.get(language, market_benchmark_titles["it"])
+    story.append(Paragraph(market_benchmark_title, h1_style))
     
     # Recupera i dati passati come keyword arguments
     benchmark_text_raw = kwargs.get("market_benchmark_text") or ""
     ##chart_cat_base64 = kwargs.get("market_chart_categories_base64")
     ##market_skills_list = kwargs.get("market_skills_list")
+    
+    # Traduzione del messaggio di fallback
+    no_data_messages = {
+        "it": "Dati di benchmark non disponibili.",
+        "en": "Benchmark data not available."
+    }
+    no_data_message = no_data_messages.get(language, no_data_messages["it"])
     
     if benchmark_text_raw:
         cleaned_text = benchmark_text_raw.replace('**', '')
@@ -90,7 +113,7 @@ def create_feedback_pdf(report_content: FinalReportContent, output_path: str, **
                 body_text = part.replace('\n', '<br/>')
                 story.append(Paragraph(body_text, body_style))
     else:
-        story.append(Paragraph("Dati di benchmark non disponibili.", body_style))
+        story.append(Paragraph(no_data_message, body_style))
 
     ##def add_image_from_base64(b64_string, story_list):
     ##    if not b64_string: return

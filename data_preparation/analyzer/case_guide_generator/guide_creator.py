@@ -5,19 +5,19 @@ from . import prompts_guide
 
 GUIDE_MODEL = AZURE_DEPLOYMENT_NAME
 
-def generate_case_guide(icp_text: str, seniority_level: str, hr_special_needs: str = "") -> str | None:
+def generate_case_guide(icp_text: str, seniority_level: str, hr_special_needs: str = "", language: str = "it") -> str | None:
     """
     Genera la guida per la creazione dei casi, integrando le Indicazioni Speciali HR.
     """
     print("  - [Agente Guida] Creazione del prompt...")
-    guide_prompt = prompts_guide.create_case_guide_prompt(icp_text, seniority_level, hr_special_needs)
+    guide_prompt = prompts_guide.create_case_guide_prompt(icp_text, seniority_level, hr_special_needs, language)
 
     print(f"  - [Agente Guida] Invio della richiesta al modello '{GUIDE_MODEL}'...")
 
     case_guide = get_llm_response(
         prompt=guide_prompt,
         model=GUIDE_MODEL,  
-        system_prompt=prompts_guide.SYSTEM_PROMPT,
+        system_prompt=prompts_guide.SYSTEM_PROMPT[language],
         temperature=0.2,
         max_tokens=2000
     )

@@ -41,16 +41,28 @@ export function AutoLogout({ children }: AutoLogoutProps) {
               setTimeLeft(Math.floor(warningTime / 1000))
             }, warningTimeout)
 
-            // Update countdown every second
-            const countdownInterval = setInterval(() => {
+            // Update countdown: ogni 10s normalmente, ogni 1s negli ultimi 60s
+            let countdownInterval: NodeJS.Timeout
+            const updateCountdown = () => {
               const remaining = Math.max(0, Math.floor((expirationTime - Date.now()) / 1000))
               setTimeLeft(remaining)
               
               if (remaining <= 0) {
-                clearInterval(countdownInterval)
+                if (countdownInterval) clearInterval(countdownInterval)
                 setShowWarning(false)
+                return
               }
-            }, 1000)
+              
+              // Se rimangono <= 60 secondi, passa a aggiornamento ogni secondo
+              if (remaining <= 60 && countdownInterval) {
+                clearInterval(countdownInterval)
+                countdownInterval = setInterval(updateCountdown, 1000)
+              }
+            }
+            
+            // Inizia con aggiornamento ogni 10 secondi
+            countdownInterval = setInterval(updateCountdown, 10000)
+            updateCountdown() // Aggiorna immediatamente
 
             return () => {
               clearTimeout(warningTimer)
@@ -61,6 +73,7 @@ export function AutoLogout({ children }: AutoLogoutProps) {
             setShowWarning(true)
             setTimeLeft(Math.floor(timeUntilExpiry / 1000))
             
+            // Negli ultimi 60s, aggiorna ogni secondo
             const countdownInterval = setInterval(() => {
               const remaining = Math.max(0, Math.floor((expirationTime - Date.now()) / 1000))
               setTimeLeft(remaining)

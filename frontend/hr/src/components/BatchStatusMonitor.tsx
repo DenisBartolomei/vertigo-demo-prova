@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 
 interface Batch {
   _id: string
@@ -20,8 +20,10 @@ export function BatchStatusMonitor({ refreshInterval = 30000 }: BatchStatusMonit
   const [batches, setBatches] = useState<Batch[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const fetchBatchesRef = useRef<((sync: boolean) => Promise<void>) | null>(null)
 
-  const fetchBatches = async () => {
+  const fetchBatches = React.useCallback(async (sync: boolean = false) => {
     try {
       setLoading(true)
       setError(null)
@@ -32,7 +34,12 @@ export function BatchStatusMonitor({ refreshInterval = 30000 }: BatchStatusMonit
       }
       
       const API_BASE = import.meta.env.VITE_API_BASE || 'https://vertigo-ai-backend-tbia7kjh7a-oc.a.run.app'
-      const response = await fetch(`${API_BASE}/api/batch/list`, {
+      
+      // Se sync=true (pulsante Aggiorna), chiama endpoint di sincronizzazione
+      // Altrimenti solo lettura veloce dal DB
+      const endpoint = sync ? '/api/batch/sync' : '/api/batch/list'
+      const response = await fetch(`${API_BASE}${endpoint}`, {
+        method: sync ? 'POST' : 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -46,24 +53,65 @@ export function BatchStatusMonitor({ refreshInterval = 30000 }: BatchStatusMonit
       }
       
       const data = await response.json()
-      setBatches(data.batches || [])
+      const newBatches = data.batches || []
+      setBatches(newBatches)
+      
+      // Dopo aver aggiornato i batch, controlla se serve polling (solo se non è una chiamata manuale)
+      if (!sync) {
+        const hasActiveBatches = newBatches.some(b => 
+          b.status === 'in_progress' || 
+          b.status === 'validating' || 
+          b.status === 'finalizing'
+        )
+        
+        const hasFinalizingBatches = newBatches.some(b => b.status === 'finalizing')
+        
+        // Pulisci interval esistente
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current)
+          intervalRef.current = null
+        }
+        
+        // Se ci sono batch attivi, avvia polling usando il ref per evitare dipendenza circolare
+        if (hasActiveBatches && fetchBatchesRef.current) {
+          const intervalTime = hasFinalizingBatches ? 10000 : refreshInterval
+          intervalRef.current = setInterval(() => {
+            if (fetchBatchesRef.current) {
+              fetchBatchesRef.current(false)
+            }
+          }, intervalTime)
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
       setLoading(false)
     }
-  }
+  }, [refreshInterval])
+  
+  // Aggiorna il ref quando fetchBatches cambia
+  useEffect(() => {
+    fetchBatchesRef.current = fetchBatches
+  }, [fetchBatches])
 
   useEffect(() => {
-    fetchBatches()
+    // Fetch iniziale (solo lettura DB, veloce)
+    fetchBatches(false)
     
-    const interval = setInterval(fetchBatches, refreshInterval)
-    return () => clearInterval(interval)
-  }, [refreshInterval])
+    // Cleanup al unmount
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+  }, [fetchBatches])
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return '#10b981'
+      case 'completed':
+      case 'succeeded': // compat per eventuale stato Azure non normalizzato
+        return '#10b981'
       case 'in_progress': return '#3b82f6'
       case 'validating': return '#f59e0b'
       case 'failed': return '#ef4444'
@@ -74,7 +122,9 @@ export function BatchStatusMonitor({ refreshInterval = 30000 }: BatchStatusMonit
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'completed': return '✅'
+      case 'completed':
+      case 'succeeded':
+        return '✅'
       case 'in_progress': return '⏳'
       case 'validating': return '🔍'
       case 'failed': return '❌'
@@ -104,7 +154,7 @@ export function BatchStatusMonitor({ refreshInterval = 30000 }: BatchStatusMonit
         <h3>🔄 Stato Batch Jobs</h3>
         <button 
           className="refresh-btn"
-          onClick={fetchBatches}
+          onClick={() => fetchBatches(true)}
           disabled={loading}
         >
           {loading ? '⏳' : '🔄'} Aggiorna

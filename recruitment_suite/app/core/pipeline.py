@@ -5,23 +5,53 @@ import json
 import time
 import math
 import openai
+import numpy as np
+import torch
 from pydantic import ValidationError
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import util
 from tqdm import tqdm
 from interviewer.llm_service import get_structured_llm_response
 from recruitment_suite.app.models.schemas import EvaluationResponse
 from recruitment_suite.config import settings
+from recruitment_suite.app.core.shared_embedding_model import get_shared_embedding_model
+from recruitment_suite.app.core.cloud_optimizer import log_memory_usage, cleanup_tensors, monitor_memory_usage, get_dynamic_chunk_size, get_memory_usage_percent
+from recruitment_suite.app.core.benchmark_cache import (
+    get_candidate_embedding_from_cache,
+    save_candidate_embedding_to_cache,
+    get_candidate_embeddings_batch_from_cache,
+    bulk_save_candidate_embeddings_to_cache
+)
+
+def profile_ram(stage=""):
+    """Stampa l'utilizzo di RAM attuale del processo in MB."""
+    log_memory_usage(stage)
 
 class RecruitmentPipeline:
     def __init__(self):
         print("Inizializzazione della Recruitment Pipeline...")
         self.offer_embedding = None
-        self.embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL_NAME)
+        # Usa modello locale su CPU
+        self.embedding_model = get_shared_embedding_model(device="cpu")
+        print(f"  - Modello embedding caricato su CPU")
         
     def _calculate_affinity_score(self, candidate_exp_text: str) -> float:
         if self.offer_embedding is None or not candidate_exp_text: return 0.0
-        candidate_embedding = self.embedding_model.encode(candidate_exp_text, convert_to_tensor=True)
-        return util.cos_sim(self.offer_embedding, candidate_embedding).item()
+        
+        # Usa modello locale per generare embedding candidato
+        candidate_embedding_np = self.embedding_model.encode(
+            candidate_exp_text,
+            normalize_embeddings=True,
+            convert_to_numpy=True
+        )
+        candidate_embedding = torch.tensor(candidate_embedding_np, dtype=torch.float32)
+        
+        # Normalizza entrambi a float32 per consistenza dtype
+        if isinstance(self.offer_embedding, np.ndarray):
+            offer_emb = torch.tensor(self.offer_embedding, dtype=torch.float32)
+        else:
+            offer_emb = self.offer_embedding.to(torch.float32) if self.offer_embedding.dtype != torch.float32 else self.offer_embedding
+        
+        return util.cos_sim(offer_emb, candidate_embedding).item()
 
     def _get_llm_evaluation_for_batch(self, offer_title: str, offer_desc: str, batch_dossiers: list[dict]) -> list[dict]:
         profiles_text = "".join([
@@ -57,31 +87,133 @@ class RecruitmentPipeline:
             return []
 
     def run_full_pipeline(self, offer_title: str, offer_desc: str, candidates_data: list[dict]):
+        # --- PROFILING INIZIALE ---
+        profile_ram("Inizio Pipeline")
+
         offer_full_text = f"{offer_title} {offer_desc}".strip()
         print("Creazione embedding per l'offerta di lavoro...")
-        self.offer_embedding = self.embedding_model.encode(offer_full_text, convert_to_tensor=True)
-        
-        #print("\n--- FASE 1: Calcolo affinità ---")
-        #scores = [{'id': p[settings.ID_COLUMN], 'score': self._calculate_affinity_score(p.get('normalized_experiences', [{}])[0].get("llm_enriched_text", "")), 'profile_data': p} for p in tqdm(candidates_data, desc="Calcolo Affinità")]
-        
-        # --- FASE 1 OTTIMIZZATA: Calcolo affinità in batch ---
-        print("\n--- FASE 1: Calcolo affinità (in batch) ---")
-        candidate_texts = [p.get('normalized_experiences', [{}])[0].get("llm_enriched_text", "") for p in candidates_data]
-        
-        candidate_embeddings = self.embedding_model.encode(
-            candidate_texts, convert_to_tensor=True, show_progress_bar=True, batch_size=128 # batch_size per l'encoding
+        # Usa modello locale per generare embedding offerta
+        offer_embedding_np = self.embedding_model.encode(
+            offer_full_text,
+            normalize_embeddings=True,
+            convert_to_numpy=True
         )
-        cos_scores = util.cos_sim(self.offer_embedding, candidate_embeddings)[0]
-        scores = [{'id': p[settings.ID_COLUMN], 'score': score.item(), 'profile_data': p} for p, score in zip(candidates_data, cos_scores)]
+        self.offer_embedding = torch.tensor(offer_embedding_np, dtype=torch.float32)
+
+        profile_ram("Dopo Embedding Offerta")
+
+        # --- FASE 1 OTTIMIZZATA: Calcolo affinità in CHUNK (Cloud Optimized) ---
+        print("\n--- FASE 1: Calcolo affinità (in chunk efficienti in RAM) ---")
+
+        # Usa chunk size dinamico basato su memoria disponibile (ottimizzato per cloud)
+        CHUNK_SIZE = get_dynamic_chunk_size(base_chunk_size=settings.CLOUD_CHUNK_SIZE, max_chunk_size=32)
+        print(f"Chunk size dinamico: {CHUNK_SIZE} (memoria: {get_memory_usage_percent():.1f}%)")
+
+        all_scores = []
+        num_chunks = math.ceil(len(candidates_data) / CHUNK_SIZE)
+        
+        # Pre-carica embedding candidati dalla cache se disponibili
+        profile_ids = [p.get(settings.ID_COLUMN) for p in candidates_data]
+        cached_embeddings = get_candidate_embeddings_batch_from_cache(profile_ids, candidates_data)
+        print(f"Caricati {len(cached_embeddings)} embedding candidati dalla cache")
+
+        # Batch per salvare embedding calcolati in cache
+        embeddings_to_cache = []
+
+        for i in tqdm(range(num_chunks), desc="Calcolo Affinità a Chunk"):
+            # Monitora memoria prima di ogni chunk
+            is_safe, mem_percent = monitor_memory_usage(settings.CLOUD_MEMORY_THRESHOLD)
+            if not is_safe:
+                print(f"ATTENZIONE: Memoria elevata ({mem_percent:.1f}%). Eseguo cleanup...")
+                cleanup_tensors()
+            
+            start_index = i * CHUNK_SIZE
+            end_index = start_index + CHUNK_SIZE
+            chunk_data = candidates_data[start_index:end_index]
+
+            chunk_texts = [p.get('normalized_experiences', [{}])[0].get("llm_enriched_text", "") for p in chunk_data]
+            chunk_profile_ids = [p.get(settings.ID_COLUMN) for p in chunk_data]
+
+            # Carica embedding dalla cache o calcola
+            chunk_embeddings_list = []
+            texts_to_embed = []
+            indices_to_embed = []
+            
+            # Prima passata: identifica quali embeddings servono
+            for j, profile_id in enumerate(chunk_profile_ids):
+                if profile_id in cached_embeddings:
+                    # Usa embedding dalla cache
+                    chunk_embeddings_list.append(cached_embeddings[profile_id])
+                else:
+                    # Raccogli testi da processare in batch
+                    texts_to_embed.append(chunk_texts[j])
+                    indices_to_embed.append((j, profile_id))
+                    # Placeholder per mantenere ordine
+                    chunk_embeddings_list.append(None)
+            
+            # Calcola embeddings in batch se ci sono testi da processare
+            if texts_to_embed:
+                embeddings_batch = self.embedding_model.encode(
+                    texts_to_embed,
+                    normalize_embeddings=True,
+                    batch_size=16,
+                    convert_to_numpy=True,
+                    show_progress_bar=False
+                )
+                
+                # Inserisci embeddings nella posizione corretta
+                for idx, (j, profile_id) in enumerate(indices_to_embed):
+                    candidate_embedding_float32 = np.array(embeddings_batch[idx], dtype=np.float32)
+                    chunk_embeddings_list[j] = candidate_embedding_float32
+                    # Salva per cache
+                    embeddings_to_cache.append((profile_id, candidate_embedding_float32, chunk_data[j]))
+            
+            # Converti lista a tensore per calcolo similarità
+            # Assicurati che tutti gli embedding siano float32 prima di creare il tensore
+            chunk_embeddings_array = np.array(chunk_embeddings_list, dtype=np.float32)
+            chunk_embeddings_tensor = torch.tensor(chunk_embeddings_array, dtype=torch.float32)
+            
+            # Assicurati che offer_embedding sia anche float32 per consistenza
+            if self.offer_embedding.dtype != torch.float32:
+                self.offer_embedding = self.offer_embedding.to(torch.float32)
+            
+            cos_scores = util.cos_sim(self.offer_embedding, chunk_embeddings_tensor)[0]
+
+            chunk_scores = [{'id': p[settings.ID_COLUMN], 'score': score.item(), 'profile_data': p} for p, score in zip(chunk_data, cos_scores)]
+            all_scores.extend(chunk_scores)
+
+            # Salva embedding in cache in batch periodici
+            if len(embeddings_to_cache) >= settings.CLOUD_BATCH_SIZE:
+                bulk_save_candidate_embeddings_to_cache(embeddings_to_cache)
+                embeddings_to_cache = []
+
+            # Cleanup tensori dopo ogni chunk
+            del chunk_embeddings_tensor
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            # Stampa il profilo RAM periodicamente per monitorare
+            if (i % 10 == 0) or (i == num_chunks - 1):
+                 profile_ram(f"Fine Chunk {i+1}/{num_chunks}")
+
+        # Salva eventuali embedding rimanenti in cache
+        if embeddings_to_cache:
+            bulk_save_candidate_embeddings_to_cache(embeddings_to_cache)
+        
+        # Cleanup finale
+        cleanup_tensors()
+
+        scores = all_scores
 
         print(f"\n--- FASE 2: Filtro per soglia di affinità (>{settings.AFFINITY_THRESHOLD}) ---")
         candidates_for_llm = [c for c in scores if c['score'] >= settings.AFFINITY_THRESHOLD]
         print(f"{len(candidates_for_llm)} candidati superano la soglia e saranno inviati all'LLM.")
-        if not candidates_for_llm: return [], [], None
-        
+        if not candidates_for_llm: return [], []
+
         print("\n--- FASE 3: Valutazione LLM in BATCH ---")
+        # Questa parte era già efficiente e rimane invariata
         dossiers_for_llm = [{'id': c['id'], 'score': c['score'], 'current_position': c['profile_data'].get('current_position', 'N/D'), 'enriched_description': c['profile_data']['normalized_experiences'][0].get('llm_enriched_text', ''), 'original_index': i} for i, c in enumerate(candidates_for_llm)]
-        
+
         all_llm_results = []
         num_batches = math.ceil(len(dossiers_for_llm) / settings.BATCH_SIZE)
         for i in range(num_batches):
@@ -92,12 +224,14 @@ class RecruitmentPipeline:
             if batch_results: all_llm_results.extend(batch_results)
             print(f"<-- Batch {i+1} completato. Valutazioni totali finora: {len(all_llm_results)}")
             if i < num_batches - 1: time.sleep(1)
-            
+
         print(f"\nElaborazione LLM completata. Totale valutazioni ricevute: {len(all_llm_results)} su {len(candidates_for_llm)} inviati.")
         if all_llm_results:
             try:
                 with open(settings.OUTPUT_LLM_FILE, 'w', encoding='utf-8') as f: json.dump(all_llm_results, f, indent=2, ensure_ascii=False)
                 print(f"Valutazione LLM salvata in '{settings.OUTPUT_LLM_FILE}'")
             except Exception as e: print(f"Errore durante il salvataggio: {e}")
-            
+
+        profile_ram("Fine Pipeline")
+
         return all_llm_results, candidates_for_llm

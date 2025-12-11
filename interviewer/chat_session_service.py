@@ -67,6 +67,9 @@ def initialize_chatbot_for_session(session_id: str, tenant_id: str = None) -> Op
         max_attempts = 5
         max_questions = 10
     
+    # Retrieve language from position data
+    language = position_data.get("language", "it")
+    
     chatbot = SmartCaseStudyChatbot(
         steps=steps_dict,
         case_title=selected_case.get("question_title", ""),
@@ -74,6 +77,7 @@ def initialize_chatbot_for_session(session_id: str, tenant_id: str = None) -> Op
         case_id=selected_case_id,
         max_attempts=max_attempts,
         max_questions=max_questions,
+        language=language
     )
     _SESSION_CHATBOTS[session_id] = chatbot
 

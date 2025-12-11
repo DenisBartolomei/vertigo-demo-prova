@@ -1,22 +1,52 @@
 [
   {
-    "ID": 94,
+    "ID": 38,
     "scartato": true,
-    "motivazione": "Esperienza IT, non analisi processi o project management organizzativo richiesti."
+    "motivazione": "Esperienza solo marketing digitale, manca change management e conoscenza M365/Copilot."
   },
   {
-    "ID": 99,
+    "ID": 33,
     "scartato": true,
-    "motivazione": "Profilo data/AI, manca esperienza in analisi processi e contesto assicurativo/bancario."
+    "motivazione": "Profilo marketing digitale, nessuna esperienza in change management o adozione tecnologica."
   },
   {
-    "ID": 134,
+    "ID": 71,
+    "scartato": true,
+    "motivazione": "Esperienza solo in sostenibilità, non in change management o adozione digitale."
+  },
+  {
+    "ID": 122,
     "scartato": false,
-    "motivazione": "Esperienza project management, gestione processi e stakeholder, profilo coerente con la posizione."
+    "motivazione": "Esperienza in project management, trasformazione digitale e gestione cambiamento, profilo coerente."
   },
   {
-    "ID": 175,
+    "ID": 62,
     "scartato": true,
-    "motivazione": "Strategia e analisi di mercato, non esperienza in analisi processi o project management organizzativo."
+    "motivazione": "Solo consulenza sostenibilità, manca esperienza in change management digitale."
+  },
+  {
+    "ID": 67,
+    "scartato": true,
+    "motivazione": "Solo consulenza sostenibilità, manca esperienza in change management digitale."
+  },
+  {
+    "ID": 66,
+    "scartato": true,
+    "motivazione": "Solo consulenza sostenibilità, manca esperienza in change management digitale."
+  },
+  {
+    "ID": 91,
+    "scartato": true,
+    "motivazione": "Solo consulenza sostenibilità, manca esperienza in change management digitale."
+  },
+  {
+    "ID": 189,
+    "scartato": false,
+    "motivazione": "Esperienza in strategie digitali, consulenza e trasformazione, potenzialmente adatto al ruolo."
+  },
+  {
+    "ID": 184,
+    "scartato": true,
+    "motivazione": "Profilo analitico retention, nessuna esperienza in change management o adozione tecnologica."
   }
 ]

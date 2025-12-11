@@ -10,6 +10,7 @@ interface CreateSessionPanelProps {
     positionId: string
     candidateName: string
     candidateEmail: string
+    candidatePhone?: string
     cvFile: File
   }) => Promise<void>
   batchUploading: boolean
@@ -33,6 +34,7 @@ export function CreateSessionPanel({
   const [singlePositionId, setSinglePositionId] = useState('')
   const [candidateName, setCandidateName] = useState('')
   const [candidateEmail, setCandidateEmail] = useState('')
+  const [candidatePhone, setCandidatePhone] = useState('')
   const [cvFile, setCvFile] = useState<File | null>(null)
   const [singleUploading, setSingleUploading] = useState(false)
 
@@ -60,11 +62,13 @@ export function CreateSessionPanel({
         positionId: singlePositionId,
         candidateName,
         candidateEmail,
+        candidatePhone: candidatePhone || undefined,
         cvFile
       })
       setSinglePositionId('')
       setCandidateName('')
       setCandidateEmail('')
+      setCandidatePhone('')
       setCvFile(null)
     } finally {
       setSingleUploading(false)
@@ -109,7 +113,7 @@ export function CreateSessionPanel({
             <div className="upload-section">
               <div className="section-header">
                 <h4>Upload Massivo CV</h4>
-                <p>Carica centinaia di CV e processali automaticamente alle 19:00</p>
+                <p>Carica centinaia di CV e processali automaticamente</p>
               </div>
               
               <div className="form-group">
@@ -143,7 +147,7 @@ export function CreateSessionPanel({
               </button>
               
               <div className="info-box">
-                ℹ️ I CV verranno processati automaticamente alle 19:00 di ogni giorno
+                ℹ️ I CV vengono inviati immediatamente a OpenAI Batch API per l'elaborazione
               </div>
             </div>
           )}
@@ -186,6 +190,19 @@ export function CreateSessionPanel({
                   value={candidateEmail} 
                   onChange={e => setCandidateEmail(e.target.value)} 
                 />
+              </div>
+              
+              <div className="form-group">
+                <label>Numero di Telefono (opzionale)</label>
+                <input 
+                  type="tel"
+                  placeholder="+39 123 456 7890" 
+                  value={candidatePhone} 
+                  onChange={e => setCandidatePhone(e.target.value)} 
+                />
+                <small style={{ color: '#666', fontSize: '12px' }}>
+                  Se non inserito, verrà estratto automaticamente dal CV
+                </small>
               </div>
               
               <div className="form-group">

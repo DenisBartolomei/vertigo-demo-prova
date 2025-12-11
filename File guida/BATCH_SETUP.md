@@ -2,7 +2,7 @@
 
 ## Overview
 
-Il sistema di batch processing è stato implementato per processare centinaia di CV automaticamente ogni giorno alle 19:00, utilizzando l'Azure OpenAI Batch API per ridurre i costi e migliorare l'efficienza.
+Il sistema di batch processing è stato implementato per processare centinaia di CV automaticamente, utilizzando l'Azure OpenAI Batch API per ridurre i costi e migliorare l'efficienza. I batch vengono creati e inviati immediatamente quando l'HR carica i CV, e un sistema di monitoraggio controlla ogni 5 minuti se OpenAI ha completato l'elaborazione.
 
 ## Configurazione Variabili d'Ambiente
 
@@ -72,9 +72,9 @@ gcloud run deploy vertigo-ai-backend \
 - **Storage**: Sessioni create con `cv_analysis_status: "pending"`
 
 ### 2. Batch Processing Automatico
-- **Scheduler**: Esecuzione giornaliera alle 19:00
+- **Creazione Batch**: Esecuzione immediata all'upload dei CV tramite `BatchService`
 - **Service**: `BatchService` per gestione Azure OpenAI Batch API
-- **Monitoring**: `BatchProcessor` per controllo automatico completamento
+- **Monitoring**: `BatchProcessor` controlla ogni 5 minuti se OpenAI ha completato l'elaborazione e recupera i risultati automaticamente
 
 ### 3. Frontend HR Aggiornato
 - **Upload Massivo**: Priorità principale con drag & drop
@@ -143,7 +143,6 @@ Il sistema batch è **globale** ma mantiene l'isolamento tenant:
 ### Logs Importanti
 ```bash
 # Startup
-✅ Batch scheduler inizializzato (ore 19:00)
 ✅ Batch processor avviato (controllo ogni 5 minuti)
 
 # Batch Creation
@@ -188,7 +187,7 @@ curl -X POST https://your-backend.com/api/batch/trigger-manual \
 
 ### Batch Non Si Avvia
 - Verifica variabili d'ambiente batch
-- Controlla logs startup per errori scheduler
+- Controlla logs startup per errori batch processor
 - Verifica connessione Azure OpenAI
 
 ### CV Non Processati

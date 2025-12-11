@@ -1,12 +1,108 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Header, Request
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Header, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
 from typing import List
 import os
 import uuid
+import warnings
+import sys
+
+# Sopprimi warning tkinter da PyMuPDF (non bloccanti)
+warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*main thread is not in main loop.*")
+warnings.filterwarnings("ignore", message=".*Tcl_AsyncDelete.*")
+
+# Sopprimi anche gli errori "Exception ignored" per tkinter
+# Questi errori vengono stampati su stderr durante il garbage collection di PyMuPDF
+# ma non sono bloccanti e possono essere ignorati
+import logging
+import sys
+import io
+
+class TkinterErrorFilter:
+    """Filtra errori tkinter non bloccanti da stderr causati da PyMuPDF"""
+    def __init__(self, original_stderr):
+        self.original_stderr = original_stderr
+        self.buffer = ""  # Buffer per messaggi multi-linea
+        self.in_tkinter_traceback = False  # Flag per tracciare se siamo in un traceback tkinter
+    
+    def write(self, message):
+        # Accumula messaggi per gestire traceback multi-linea
+        self.buffer += message
+        
+        # Controlla se inizia un traceback tkinter
+        if 'Exception ignored in:' in message or 'Traceback (most recent call last):' in message:
+            self.in_tkinter_traceback = True
+        
+        # Controlla se siamo in un traceback tkinter
+        if self.in_tkinter_traceback:
+            # Filtra errori tkinter comuni (non bloccanti)
+            if any(keyword in self.buffer for keyword in [
+                'RuntimeError: main thread is not in main loop',
+                'Tcl_AsyncDelete',
+                'tkinter',
+                '__del__',
+                'self.tk.call',
+                'info", "exists"',
+                'File "C:\\Python'
+            ]):
+                # Se il messaggio è completo (termina con newline), resetta
+                if message.endswith('\n'):
+                    self.buffer = ""
+                    self.in_tkinter_traceback = False
+                return
+        
+        # Se non siamo in un traceback tkinter, controlla se il messaggio contiene keyword tkinter
+        if any(keyword in message for keyword in [
+            'RuntimeError: main thread is not in main loop',
+            'Tcl_AsyncDelete',
+            'Exception ignored in:',
+            'function Image.__del__',
+            'function Variable.__del__',
+            'tkinter',
+            '__del__'
+        ]):
+            # Ignora questi errori (sono non bloccanti e causati da PyMuPDF)
+            if message.endswith('\n'):
+                self.buffer = ""
+                self.in_tkinter_traceback = False
+            return
+        
+        # Scrivi tutto il resto su stderr originale
+        self.original_stderr.write(message)
+        if message.endswith('\n'):
+            self.buffer = ""
+            self.in_tkinter_traceback = False
+    
+    def flush(self):
+        self.original_stderr.flush()
+
+# Applica il filtro a stderr per sopprimere errori tkinter
+sys.stderr = TkinterErrorFilter(sys.stderr)
+
+# Configurazione logging centralizzata
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+# Logger principale per l'applicazione
+logger = logging.getLogger(__name__)
+
+# Sopprimi warning tkinter solo per logger specifici
+logging.getLogger().setLevel(logging.ERROR)
+
 import fitz  # PyMuPDF
 from datetime import datetime
+import asyncio
+import json
+import traceback
+from bson import ObjectId
+
+# SEMAFORO: Garantisce che solo 1 feedback venga generato alla volta (coda sequenziale)
+FEEDBACK_GENERATION_LOCK = asyncio.Semaphore(1)
 
 # Reuse existing services and pipelines
 from services.data_manager import (
@@ -54,10 +150,11 @@ from services.tenant_data_manager import (
     list_sessions_tenant,
     list_completed_sessions_tenant,
     list_incomplete_sessions_tenant,
-    get_dashboard_data_tenant
+    get_dashboard_data_tenant,
+    SESSION_STATUS
 )
 from services.batch_service import BatchService
-from services.email_parser import extract_email_from_text
+from services.email_parser import extract_email_from_text, extract_phone_from_text, extract_name_from_text
 from services.interview_config_service import (
     get_interview_config,
     save_interview_config,
@@ -65,6 +162,19 @@ from services.interview_config_service import (
     InterviewConfig,
 )
 from services.email_service import send_interview_link
+from backend.routers.whatsapp import router as whatsapp_router
+
+# Async imports for feedback generation
+from feedback_generator.gap_analyzer.gap_identifier import identify_skill_gaps_async
+from feedback_generator.pathway_architect.architect import create_final_feedback_content_async
+from feedback_generator.market_integration import run_market_benchmark_from_text_async
+# Rimosso: create_query_refinement_prompt (non più necessario, usiamo query dirette)
+from feedback_generator.course_retriever.rag_service import RAGService
+from recruitment_suite.app.core.pipeline import RecruitmentPipeline
+from recruitment_suite.app.core.normalizer import CVNormalizer
+from recruitment_suite.app.core.benchmark_cache import load_offer_benchmark_from_cache
+
+
 
 
 def hr_auth(authorization: str | None = Header(default=None)):
@@ -99,6 +209,13 @@ class PositionPayload(BaseModel):
     seniority_level: str | None = None
     hr_special_needs: str | None = None
     knowledge_base: list[dict] | None = None
+    # WhatsApp/Recruiting specific fields
+    knockout_requirements: list[str] | None = None
+    ral: str | None = None
+    sede: str | None = None
+    smart_working: str | None = None
+    # Workflow type: "full" (WhatsApp + AI Interview) or "whatsapp_only" (solo pre-screening)
+    workflow_type: str = "full"
 
 
 class MessagePayload(BaseModel):
@@ -107,7 +224,6 @@ class MessagePayload(BaseModel):
 
 class EvaluationCriterion(BaseModel):
     evaluation_criteria_1: str
-    evaluation_criteria_2: str
 
 
 class RequirementEvaluation(BaseModel):
@@ -130,6 +246,11 @@ class StartInterviewPayload(BaseModel):
 
 app = FastAPI(title="Vertigo AI Backend", version="0.1.0")
 
+# Global instances for heavy services (initialized once at startup)
+rag_service_instance: RAGService | None = None
+recruitment_pipeline_instance: RecruitmentPipeline | None = None
+cv_normalizer_instance: CVNormalizer | None = None
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Configure per environment
@@ -137,6 +258,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(whatsapp_router)
 
 
 @app.post("/sessions/{session_id}/generate-token")
@@ -438,10 +562,18 @@ def upsert_position(payload: PositionPayload, auth_data=Depends(hr_auth)):
         if not position_id:
             position_id = f"position-{uuid.uuid4().hex[:8]}"
     
-    ok = create_or_update_position_tenant(position_id, payload.model_dump(exclude={"position_id"}), collections["positions"])
+    # Detect language from job description
+    from services.language_detector import detect_language
+    detected_language = detect_language(payload.job_description)
+    
+    # Add language to payload
+    position_data = payload.model_dump(exclude={"position_id"})
+    position_data["language"] = detected_language
+    
+    ok = create_or_update_position_tenant(position_id, position_data, collections["positions"])
     if not ok:
         raise HTTPException(status_code=500, detail="Failed to upsert position")
-    return {"ok": True, "position_id": position_id}
+    return {"ok": True, "position_id": position_id, "language": detected_language}
 
 
 @app.get("/positions")
@@ -459,15 +591,123 @@ def get_position(position_id: str, auth_data=Depends(hr_auth)):
     return doc
 
 
+@app.post("/positions/suggest-knockout")
+def suggest_knockout_requirements(payload: dict, auth_data=Depends(hr_auth)):
+    """
+    Analizza la job description e suggerisce requisiti knockout che sembrano mandatori
+    """
+    job_description = payload.get("job_description", "")
+    if not job_description:
+        return {"suggestions": []}
+    
+    from interviewer.llm_service import get_structured_llm_response
+    
+    system_prompt = """Sei un assistente HR che analizza annunci di lavoro e identifica requisiti obbligatori (knock-out).
+    
+I requisiti obbligatori sono quelli che:
+- Sono esplicitamente indicati come "obbligatorio", "richiesto", "necessario", "indispensabile"
+- Sono prerequisiti legali o normativi (es. patente, permesso di lavoro)
+- Sono fondamentali per svolgere il lavoro (es. laurea specifica, certificazione obbligatoria)
+
+NON includere:
+- Requisiti desiderabili o preferenziali
+- Soft skills generiche
+- Esperienza "preferibile" o "gradita"
+    
+Rispondi con un JSON contenente una lista di requisiti obbligatori estratti dall'annuncio."""
+    
+    prompt = f"""Analizza questo annuncio di lavoro e identifica i requisiti obbligatori (knock-out):
+
+ANNUNCIO:
+{job_description}
+
+Estrai SOLO i requisiti che sono esplicitamente indicati come obbligatori o che sono prerequisiti legali/fondamentali.
+Formatta ogni requisito in modo chiaro e conciso (es. "Possesso della patente B", "Laurea in Ingegneria Informatica", "Permesso di lavoro italiano valido").
+
+Rispondi con JSON nel formato:
+{{
+    "suggestions": ["requisito 1", "requisito 2", ...]
+}}"""
+    
+    try:
+        tool_schema = {
+            "type": "object",
+            "properties": {
+                "suggestions": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Lista di requisiti obbligatori estratti dall'annuncio"
+                }
+            },
+            "required": ["suggestions"]
+        }
+        
+        response_json = get_structured_llm_response(
+            prompt=prompt,
+            model="gpt-4",
+            system_prompt=system_prompt,
+            tool_name="suggest_knockout",
+            tool_schema=tool_schema,
+            temperature=0.3,
+            use_classification_client=True
+        )
+        
+        if response_json:
+            result = json.loads(response_json)
+            return {"suggestions": result.get("suggestions", [])}
+        
+        return {"suggestions": []}
+    except Exception as e:
+        logger.error(f"Errore suggerimento knockout: {e}")
+        return {"suggestions": []}
+
+
+@app.get("/positions/{position_id}/benchmark")
+def get_position_benchmark(position_id: str, auth_data=Depends(hr_auth)):
+    """Recupera i dati di benchmark di mercato per una posizione"""
+    tenant_id = auth_data.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=401, detail="No tenant ID in token")
+    
+    # Carica i dati di benchmark dalla cache
+    benchmark_data = load_offer_benchmark_from_cache(position_id, tenant_id=tenant_id)
+    
+    if not benchmark_data:
+        raise HTTPException(
+            status_code=404, 
+            detail="Benchmark non disponibile per questa posizione. Esegui prima la data preparation."
+        )
+    
+    # Recupera il nome della posizione
+    collections = get_tenant_collections_from_auth(auth_data)
+    position_doc = get_single_position_data_tenant(position_id, collections["positions"])
+    position_name = position_doc.get("position_name", position_id) if position_doc else position_id
+    
+    # Restituisci i dati di benchmark incluso il grafico Sunburst
+    return {
+        "position_id": position_id,
+        "position_name": position_name,
+        "market_json": benchmark_data.get("market_json", {}),
+        "market_skills_list": benchmark_data.get("market_skills_list", []),
+        "chart_cat_base64": benchmark_data.get("chart_cat_base64"),  # Grafico Sunburst
+        "created_at": benchmark_data.get("created_at"),
+        "updated_at": benchmark_data.get("updated_at")
+    }
+
+
 @app.post("/positions/{position_id}/data-prep")
 def run_data_prep(position_id: str, auth_data=Depends(hr_auth)):
     collections = get_tenant_collections_from_auth(auth_data)
     
     # Recupera configurazione intervista per il tenant
-    tenant_id = auth_data["tenant_id"]
+    tenant_id = auth_data.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=401, detail="No tenant ID in token")
+    
     config = get_interview_config_or_default(tenant_id)
     
-    ok = run_full_generation_pipeline(position_id, config.reasoning_steps, collections["positions"])
+    # Passa esplicitamente tenant_id invece di estrarre dalla collection
+    ok = run_full_generation_pipeline(position_id, config.reasoning_steps, collections["positions"], tenant_id=tenant_id)
     if not ok:
         raise HTTPException(status_code=500, detail="Data preparation failed")
     return {"ok": True}
@@ -504,8 +744,7 @@ def update_evaluation_criteria(position_id: str, payload: EvaluationCriteriaUpda
                 {
                     "requirement": req.requirement,
                     "criteria": {
-                        "evaluation_criteria_1": req.criteria.evaluation_criteria_1,
-                        "evaluation_criteria_2": req.criteria.evaluation_criteria_2
+                        "evaluation_criteria_1": req.criteria.evaluation_criteria_1
                     }
                 }
                 for req in payload.evaluation_schema
@@ -564,12 +803,12 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
                 return str(obj)
             return super().default(obj)
     
-    print(f"--- [PIPELINE] Avvio Generazione Feedback per sessione: {session_id} (tenant-aware) ---")
+    logger.info(f"[PIPELINE] Avvio Generazione Feedback per sessione: {session_id} (tenant-aware)")
     
     # Get session data using tenant-aware function
     session_data = get_session_data_tenant(session_id, collection_name)
     if not session_data:
-        print(f"Errore: Dati di sessione non trovati per l'ID: {session_id}")
+        logger.error(f"Dati di sessione non trovati per l'ID: {session_id}")
         return None
     
     candidate_name = session_data.get("candidate_name", "Candidato")
@@ -577,54 +816,61 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
     stages_data = session_data.get("stages", {})
     
     # Import feedback generator modules
-    from feedback_generator.report_consolidator.consolidator import create_consolidated_report
     from feedback_generator.gap_analyzer.gap_identifier import identify_skill_gaps
-    from feedback_generator.course_retriever.prompts_retriever import create_query_refinement_prompt
+    # Rimosso: create_query_refinement_prompt (non più necessario, usiamo query dirette)
     from feedback_generator.pathway_architect.architect import create_final_feedback_content
     from feedback_generator.pathway_architect.pdf_service import create_feedback_pdf
     from feedback_generator.market_integration import run_market_benchmark_from_text
     from interviewer.llm_service import get_llm_response
     
-    # STEP 1: Consolidamento
-    consolidated_report = stages_data.get("consolidated_report")
+    # Verifica che i report necessari siano presenti
     original_cv_report = stages_data.get("cv_analysis_report")
     case_eval_report = stages_data.get("case_evaluation_report")
     
-    if not consolidated_report:
-        print("\n[STEP 1/5] Generazione report consolidato...")
-        if not original_cv_report or not case_eval_report:
-            print("Errore: Report di analisi CV o valutazione del caso mancanti.")
-            return None
-        consolidated_report = create_consolidated_report(original_cv_report, case_eval_report)
-        if not consolidated_report: 
-            return None
-        save_stage_output_tenant(session_id, "consolidated_report", consolidated_report, collection_name)
-    else:
-        print("\n[STEP 1/5] Report consolidato già presente.")
+    if not original_cv_report or not case_eval_report:
+        logger.error("Report di analisi CV o valutazione del caso mancanti.")
+        return None
 
-    # STEP 2: Identificazione Gap
-    print("\n[STEP 2/5] Identificazione gap...")
-    gap_analysis = identify_skill_gaps(consolidated_report)
+    # STEP 1: Identificazione Gap (usa i due report separati)
+    logger.debug("[STEP 1/5] Identificazione gap...")
+    # Recupera language dalla posizione
+    position_data = get_single_position_data_tenant(target_role, collection_name.replace("_sessions", "_positions_data"))
+    language = (position_data or {}).get("language", "it")
+    if language not in ("it", "en"):
+        language = "it"
+    
+    gap_analysis = identify_skill_gaps(original_cv_report, case_eval_report, language)
     if not gap_analysis: 
         return None
     save_stage_output_tenant(session_id, "gap_analysis", gap_analysis.model_dump(), collection_name)
 
-    # STEP 3: Recupero Corsi
-    print("\n[STEP 3/5] Recupero corsi...")
+    # STEP 3: Recupero Corsi OTTIMIZZATO (batch search senza LLM refinement)
+    logger.debug("[STEP 3/5] Recupero corsi (ottimizzato - batch search)...")
     from feedback_generator.course_retriever.rag_service import get_rag_service
     rag_service = get_rag_service()
     
-    enriched_skill_families = []
+    # OTTIMIZZAZIONE: Crea query direttamente dai gap (senza LLM refinement)
+    queries = []
     for family in gap_analysis.skill_families:
-        # Extract skill gaps as list of strings
-        skill_gaps = [gap.skill_gap for gap in family.skill_gaps]
-        refined_query = create_query_refinement_prompt(family.skill_family_gap, skill_gaps)
-        courses = rag_service.search(refined_query, k=3)
-        
+        gap_names = [g.skill_gap for g in family.skill_gaps]
+        query = f"{family.skill_family_gap} {' '.join(gap_names)}"
+        queries.append(query)
+    
+    # OTTIMIZZAZIONE: Batch search (tutte le query in una volta - 1 encoding invece di 4)
+    if len(queries) > 1:
+        all_courses = rag_service.search_batch(queries, k=5)  # Batch: molto più veloce
+    elif len(queries) == 1:
+        all_courses = [rag_service.search(queries[0], k=5)]
+    else:
+        all_courses = []
+    
+    # Costruisci risultati
+    enriched_skill_families = []
+    for idx, family in enumerate(gap_analysis.skill_families):
         enriched_family = {
             "skill_family_gap": family.skill_family_gap,
             "skill_gaps": [gap.model_dump() for gap in family.skill_gaps],
-            "suggested_courses": courses
+            "suggested_courses": all_courses[idx] if idx < len(all_courses) else []
         }
         enriched_skill_families.append(enriched_family)
     
@@ -632,7 +878,7 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
     save_stage_output_tenant(session_id, "enriched_gaps", enriched_gaps_content_str, collection_name)
 
     # STEP 4: Market Benchmark (optional)
-    print("\n[STEP 4/5] Benchmark di mercato...")
+    logger.debug("[STEP 4/5] Benchmark di mercato...")
     qualitative_text = None
     chart_cat_b64 = None
     market_skills_list = None
@@ -645,12 +891,23 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
         # Get CV text from session data
         cv_text_for_market = original_cv_report or ""
         role_title = position_data.get("position_name", target_role) if position_data else target_role
+        language = (position_data or {}).get("language", "it")
+        if language not in ("it", "en"):
+            language = "it"
         
         if jd_text and cv_text_for_market:
+            # Estrai tenant_id dal nome della collection (formato: {tenant_id}_sessions)
+            tenant_id = None
+            if collection_name.endswith("_sessions"):
+                tenant_id = collection_name.replace("_sessions", "")
+            
             qualitative_text, chart_cat_b64, market_skills_list = run_market_benchmark_from_text(
                 job_description_text=jd_text,
-                cv_text=cv_text_for_market,
-                offer_title=role_title
+                parsed_experiences=cv_text_for_market,  # Passa come parsed_experiences
+                offer_title=role_title,
+                position_id=target_role,  # Passa position_id per usare cache pre-calcolata
+                tenant_id=tenant_id,  # Passa tenant_id per multi-tenant
+                job_language=language
             )
             if qualitative_text:
                 save_stage_output_tenant(session_id, "market_benchmark_text", qualitative_text, collection_name)
@@ -659,18 +916,22 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
             if market_skills_list:
                 save_stage_output_tenant(session_id, "market_chart_skills_base64", market_skills_list, collection_name)
         else:
-            print("Avviso: JD o testo CV non disponibili; benchmark di mercato saltato.")
+            logger.warning("JD o testo CV non disponibili; benchmark di mercato saltato.")
     except Exception as e:
-        print(f"Avviso: impossibile recuperare la JD o il titolo dal DB per il benchmark: {e}")
+        logger.warning(f"Impossibile recuperare la JD o il titolo dal DB per il benchmark: {e}")
 
     # STEP 5: Creazione Contenuto Report
-    print("\n[STEP 5/5] Creazione contenuto report PDF...")
+    logger.debug("[STEP 5/5] Creazione contenuto report PDF...")
+    # OTTIMIZZATO: Usa i due report separati invece del report consolidato
+    role_title = position_data.get("position_name", target_role) if position_data else target_role
+    
     final_report_content = create_final_feedback_content(
         cv_analysis_report=original_cv_report,
         case_evaluation_report=case_eval_report,
         enriched_gaps_json_str=enriched_gaps_content_str,
         candidate_name=candidate_name,
-        target_role=target_role
+        target_role=role_title,
+        language=language
     )
     if not final_report_content: 
         return None
@@ -683,7 +944,7 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
             pass
     
     # STEP 6: Generazione PDF
-    print("\n[STEP 6/6] Generazione del file PDF...")
+    logger.debug("[STEP 6/6] Generazione del file PDF...")
     temp_dir = "temp_pdf"
     os.makedirs(temp_dir, exist_ok=True)
     temp_pdf_path = os.path.join(temp_dir, f"{session_id}.pdf")
@@ -691,6 +952,7 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
     create_feedback_pdf(
         report_content=final_report_content,
         output_path=temp_pdf_path,
+        language=language,
         market_benchmark_text=qualitative_text,
         market_chart_categories_base64=chart_cat_b64,
         market_skills_list=market_skills_list 
@@ -704,7 +966,7 @@ def run_feedback_pipeline_tenant(session_id: str, collection_name: str) -> str |
         pdf_path = save_pdf_report_tenant(pdf_bytes, session_id, collection_name)
         os.remove(temp_pdf_path)
         
-    print("--- [PIPELINE] Generazione Feedback completata (tenant-aware). ---")
+    logger.info("[PIPELINE] Generazione Feedback completata (tenant-aware)")
     return pdf_path
 
 def save_pdf_report_tenant(pdf_bytes: bytes, session_id: str, collection_name: str) -> str:
@@ -723,15 +985,178 @@ def save_pdf_report_tenant(pdf_bytes: bytes, session_id: str, collection_name: s
         with open(pdf_path, "wb") as f:
             f.write(pdf_bytes)
         
-        print(f"💾 PDF salvato in: {pdf_path}")
+        logger.debug(f"PDF salvato in: {pdf_path}")
         return pdf_path
     except Exception as e:
-        print(f"Errore durante il salvataggio del PDF: {e}")
+        logger.error(f"Errore durante il salvataggio del PDF: {e}")
         return ""
+
+
+# Async Optimized Feedback Pipeline
+class ObjectIdEncoder(json.JSONEncoder):
+    """Custom JSON encoder to handle ObjectId serialization"""
+    def default(self, obj):
+        if isinstance(obj, ObjectId):
+            return str(obj)
+        return super().default(obj)
+
+
+async def run_feedback_pipeline_tenant_async(session_id: str, collection_name: str) -> str | None:
+    """
+    Versione ASINCRONA e OTTIMIZZATA del pipeline di feedback.
+    Esegue in parallelo l'analisi dei gap e il benchmark di mercato.
+    """
+    #from feedback_generator.report_consolidator.consolidator import create_consolidated_report
+    #from feedback_generator.gap_analyzer.gap_identifier import identify_skill_gaps
+    # Rimosso: create_query_refinement_prompt (non più necessario, usiamo query dirette)
+    #from feedback_generator.pathway_architect.architect import create_final_feedback_content
+    from feedback_generator.pathway_architect.pdf_service import create_feedback_pdf
+    #from feedback_generator.market_integration import run_market_benchmark_from_text
+    #from interviewer.llm_service import get_llm_response
+    logger.info(f"[PIPELINE ASYNC] Avvio Generazione Feedback per sessione: {session_id}")
+    
+    try:
+        session_data = get_session_data_tenant(session_id, collection_name)
+        if not session_data:
+            logger.error(f"Dati di sessione non trovati per l'ID: {session_id}")
+            raise ValueError("Session data not found")
+        
+        candidate_name = session_data.get("candidate_name", "Candidato")
+        target_role_id = session_data.get("position_id", "Ruolo non specificato")
+        stages_data = session_data.get("stages", {})
+        original_cv_report = stages_data.get("cv_analysis_report")
+        case_eval_report = stages_data.get("case_evaluation_report")
+
+        positions_collection_name = collection_name.replace("_sessions", "_positions_data")
+        position_data = get_single_position_data_tenant(target_role_id, positions_collection_name) if target_role_id else None
+        language = (position_data or {}).get("language", "it")
+        if language not in ("it", "en"):
+            logger.warning(f"Lingua posizione non supportata '{language}', defaulto a 'it'")
+            language = "it"
+
+        role_title = (position_data or {}).get("position_name", target_role_id)
+        jd_text = (position_data or {}).get("job_description", "")
+
+        # Verifica che i report necessari siano presenti
+        if not original_cv_report or not case_eval_report:
+            raise ValueError("Report di analisi CV o valutazione del caso mancanti.")
+    
+        # --- INIZIO PARALLELIZZAZIONE PESANTE ---
+        logger.debug("[STEP 1 & 3] Avvio in parallelo di Gap Analysis e Market Benchmark...")
+        gap_task = asyncio.create_task(
+            identify_skill_gaps_async(original_cv_report, case_eval_report, language=language)
+        )
+        parsed_experiences = stages_data.get("parsed_experience", [])
+        if not parsed_experiences:
+            logger.warning("Esperienze parsate non trovate. Il benchmark di mercato potrebbe essere incompleto.")
+            # Continuiamo comunque, ma il report qualitativo non avrà i dati del candidato
+        
+        # Estrai tenant_id dal nome della collection (formato: {tenant_id}_sessions)
+        tenant_id = None
+        if collection_name.endswith("_sessions"):
+            tenant_id = collection_name.replace("_sessions", "")
+        
+        market_task = asyncio.create_task(
+            run_market_benchmark_from_text_async(
+                job_description_text=jd_text,
+                parsed_experiences=parsed_experiences,
+                offer_title=role_title,
+                db=db,
+                position_id=target_role_id,  # Passa position_id per usare cache pre-calcolata
+                tenant_id=tenant_id,  # Passa tenant_id per multi-tenant
+                job_language=language
+            )
+        )
+
+        results = await asyncio.gather(gap_task, market_task, return_exceptions=True)
+        
+        gap_analysis = results[0]
+        if isinstance(gap_analysis, Exception) or not gap_analysis:
+            raise ValueError(f"Errore critico durante l'analisi dei gap: {gap_analysis}")
+        save_stage_output_tenant(session_id, "gap_analysis", gap_analysis.model_dump(), collection_name)
+        logger.debug("[STEP 1/5] Analisi gap completata.")
+
+        market_results = results[1]
+        qualitative_text, chart_cat_b64, market_skills_list = None, None, None
+        if isinstance(market_results, Exception):
+            logger.warning(f"Benchmark di mercato fallito: {market_results}")
+        elif market_results:
+            qualitative_text, chart_cat_b64, market_skills_list = market_results
+            if qualitative_text: save_stage_output_tenant(session_id, "market_benchmark_text", qualitative_text, collection_name)
+            if chart_cat_b64: save_stage_output_tenant(session_id, "market_chart_categories_base64", chart_cat_b64, collection_name)
+            if market_skills_list: save_stage_output_tenant(session_id, "market_chart_skills_base64", market_skills_list, collection_name)
+        logger.debug("[STEP 3/5] Benchmark di mercato completato.")
+
+        # STEP 2: Recupero Corsi OTTIMIZZATO (batch search senza LLM refinement)
+        logger.debug("[STEP 2/5] Recupero corsi in batch (ottimizzato)...")
+        rag_service = rag_service_instance 
+
+        if not rag_service:
+            raise RuntimeError("Errore Critico: RAG Service non è stato inizializzato.")
+
+        # OTTIMIZZAZIONE: Crea query direttamente dai gap (senza LLM refinement)
+        queries = []
+        for family in gap_analysis.skill_families:
+            gap_names = [g.skill_gap for g in family.skill_gaps]
+            query = f"{family.skill_family_gap} {' '.join(gap_names)}"
+            queries.append(query)
+        
+        # OTTIMIZZAZIONE: Batch search async (tutte le query insieme - 1 encoding invece di 4)
+        all_courses = await rag_service.search_batch_async(queries, k=5)
+        
+        # Costruisci risultati
+        enriched_skill_families = []
+        for idx, family in enumerate(gap_analysis.skill_families):
+            enriched_skill_families.append({
+                "skill_family_gap": family.skill_family_gap,
+                "skill_gaps": [gap.model_dump() for gap in family.skill_gaps],
+                "suggested_courses": all_courses[idx] if idx < len(all_courses) else []
+            })
+
+        enriched_gaps_content_str = json.dumps(enriched_skill_families, ensure_ascii=False, indent=2, cls=ObjectIdEncoder)
+        save_stage_output_tenant(session_id, "enriched_gaps", enriched_gaps_content_str, collection_name)
+        logger.debug("[STEP 2/5] Recupero corsi completato.")
+
+        # STEP 4: Creazione Contenuto Report (ora in batch, non qui)
+        # I dati sono pronti: gap_analysis, enriched_gaps, cv_report, case_report
+        # Il report finale verrà generato in batch processing
+        logger.debug("[STEP 4/5] Dati pronti per generazione report finale in batch...")
+        logger.info(f"[PIPELINE ASYNC] Preparazione dati completata per {session_id}. Report finale sarà generato in batch.")
+        return None  # Non generiamo più il PDF qui, sarà fatto in batch
+
+    except Exception as e:
+        logger.error(f"ERRORE NEL PIPELINE ASINCRONO per sessione {session_id}: {e}")
+        traceback.print_exc()
+        raise
+
+
+async def run_and_update_feedback_status(session_id: str, collection_name: str):
+    """
+    Funzione wrapper per eseguire il pipeline in background e aggiornare lo stato 
+    della sessione in modo sicuro (successo o fallimento).
+    
+    Ora esegue solo GAP analysis e RAG corsi in real-time, poi marca la sessione come
+    FEEDBACK_PENDING per la generazione del report finale in batch.
+    """
+    logger.info(f"[FEEDBACK PIPELINE] Avvio preparazione dati per sessione {session_id}")
+    
+    try:
+        # Esegue GAP analysis e RAG corsi (real-time)
+        result = await run_feedback_pipeline_tenant_async(session_id, collection_name)
+        
+        # Se il pipeline completa con successo (ritorna None), i dati sono pronti
+        # Marca la sessione come FEEDBACK_BATCH_PENDING per la generazione batch
+        save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_BATCH_PENDING"], collection_name)
+        logger.info(f"Dati preparati con successo per sessione {session_id}. Sessione marcata come FEEDBACK_BATCH_PENDING per batch processing.")
+    except Exception as e:
+        logger.error(f"[ERRORE] Preparazione dati fallita per sessione {session_id}: {e}")
+        traceback.print_exc()
+        save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_GENERATION_FAILED"], collection_name)
+        save_stage_output_tenant(session_id, "feedback_error", str(e), collection_name)
 
 # Sessions (HR)
 @app.post("/sessions")
-async def create_session(position_id: str = Form(...), cv_file: UploadFile = File(...), candidate_email: str = Form(None), frontend_base_url: str = Form("") , auth_data=Depends(hr_auth)):
+async def create_session(position_id: str = Form(...), cv_file: UploadFile = File(...), candidate_email: str = Form(None), candidate_phone: str = Form(None), frontend_base_url: str = Form("") , auth_data=Depends(hr_auth)):
     collections = get_tenant_collections_from_auth(auth_data)
     session_id = str(uuid.uuid4())
     created = create_new_session_tenant(session_id, position_id, None, collections["sessions"], candidate_email)
@@ -754,6 +1179,35 @@ async def create_session(position_id: str = Form(...), cv_file: UploadFile = Fil
             raise HTTPException(status_code=400, detail="Unsupported CV format; provide PDF or UTF-8 text")
 
     save_stage_output_tenant(session_id, "uploaded_cv_text", cv_text, collections["sessions"])
+
+    # Estrai nome candidato dal CV (best effort - verrà sovrascritto da LLM durante analisi)
+    candidate_name = extract_name_from_text(cv_text)
+    if candidate_name and db is not None:
+        db[collections["sessions"]].update_one(
+            {"_id": session_id},
+            {"$set": {"candidate_name": candidate_name}}
+        )
+        logger.debug(f"Nome candidato estratto (regex): {candidate_name}")
+
+    # Estrai telefono: usa quello fornito manualmente, altrimenti estrai dal CV
+    if not candidate_phone:
+        candidate_phone = extract_phone_from_text(cv_text)
+    
+    # Aggiorna sessione con telefono e stato WhatsApp se presente
+    if candidate_phone and db is not None:
+        tenant_id = auth_data.get("tenant_id")
+        sessions_collection = db[collections["sessions"]]
+        update_data = {
+            "candidate_contact": {
+                "phone_number": candidate_phone,
+                "phone_valid": True
+            },
+            "whatsapp_status": "ready"
+        }
+        sessions_collection.update_one(
+            {"_id": session_id},
+            {"$set": update_data}
+        )
 
     # Issue interview token/link (not yet initialized chatbot)
     token = issue_interview_token(session_id, collections["interview_links"])
@@ -793,16 +1247,21 @@ def list_completed_sessions(auth_data=Depends(hr_auth)):
 
 
 @app.post("/sessions/{session_id}/generate-feedback")
-def generate_feedback(session_id: str, auth_data=Depends(hr_auth)):
-    """Generate final feedback report for a completed session"""
+async def generate_feedback(session_id: str, background_tasks: BackgroundTasks, auth_data=Depends(hr_auth)):
+    """
+    Avvia la generazione del feedback report in background e restituisce una risposta immediata.
+    """
     collections = get_tenant_collections_from_auth(auth_data)
+    collection_name = collections["sessions"]
     
-    # Check if session exists and is completed
-    session_data = get_session_data_tenant(session_id, collections["sessions"])
+    # 1. Verifica che la sessione esista e non sia già in elaborazione
+    session_data = get_session_data_tenant(session_id, collection_name)
     if not session_data:
         raise HTTPException(status_code=404, detail="Session not found")
     
     stages = session_data.get("stages", {})
+    
+    # Check if session is ready for feedback generation
     if not (stages.get("cv_analysis_report") and stages.get("case_evaluation_report") and stages.get("skill_relevance")):
         raise HTTPException(status_code=400, detail="Session not ready for feedback generation")
     
@@ -810,19 +1269,27 @@ def generate_feedback(session_id: str, auth_data=Depends(hr_auth)):
     if stages.get("feedback_pdf_path"):
         return {"ok": True, "message": "Feedback already generated", "pdf_path": stages.get("feedback_pdf_path")}
     
-    try:
-        # Import and run tenant-aware feedback pipeline GENERAZIONE FEEDBACK DISABILITATA
-#        pdf_path = run_feedback_pipeline_tenant(session_id, collections["sessions"])
-        
-        if pdf_path:
-            # Save the PDF path to the session
-            save_stage_output_tenant(session_id, "feedback_pdf_path", pdf_path, collections["sessions"])
-            return {"ok": True, "pdf_path": pdf_path}
-        else:
-            raise HTTPException(status_code=500, detail="Feedback generation failed")
-    except Exception as e:
-        print(f"Error generating feedback for session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Feedback generation failed: {str(e)}")
+    # Check if already in progress (previene duplicati per la stessa sessione)
+    current_status = stages.get("status")
+    if (current_status == SESSION_STATUS["FEEDBACK_IN_PROGRESS"] or 
+        current_status == SESSION_STATUS["FEEDBACK_GENERATION_IN_PROGRESS"]):
+        raise HTTPException(
+            status_code=409, 
+            detail="Feedback generation is already in progress for this session. Please wait for it to complete."
+        )
+
+    # 2. Imposta lo stato su "Feedback in elaborazione" per dare un feedback immediato all'UI
+    save_stage_output_tenant(session_id, "status", SESSION_STATUS["FEEDBACK_IN_PROGRESS"], collection_name)
+    
+    # 3. Aggiungi il compito pesante al background
+    background_tasks.add_task(run_and_update_feedback_status, session_id, collection_name)
+    
+    # 4. Restituisci una risposta immediata
+    return {
+        "ok": True, 
+        "message": "Feedback generation started. The process will run in the background.",
+        "status": SESSION_STATUS["FEEDBACK_IN_PROGRESS"]
+    }
 
 
 @app.get("/sessions/{session_id}/feedback-pdf")
@@ -830,7 +1297,6 @@ def download_feedback_pdf(session_id: str, auth_data=Depends(hr_auth)):
     """Download the feedback PDF for a completed session"""
     collections = get_tenant_collections_from_auth(auth_data)
     
-    # Check if session exists
     session_data = get_session_data_tenant(session_id, collections["sessions"])
     if not session_data:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -839,24 +1305,25 @@ def download_feedback_pdf(session_id: str, auth_data=Depends(hr_auth)):
     pdf_path = stages.get("feedback_pdf_path")
     
     if not pdf_path:
-        raise HTTPException(status_code=404, detail="Feedback PDF not found")
+        raise HTTPException(status_code=404, detail="Feedback PDF not found for this session")
+        
+    normalized_path = pdf_path.replace("\\", "/")
     
     try:
         import os
-        if not os.path.exists(pdf_path):
-            raise HTTPException(status_code=404, detail="PDF file not found on disk")
+        if not os.path.exists(normalized_path):
+            logger.error(f"PDF NOT FOUND AT PATH: {normalized_path}. Current working directory: {os.getcwd()}")
+            raise HTTPException(status_code=404, detail=f"PDF file not found on disk.")
         
-        with open(pdf_path, "rb") as pdf_file:
+        with open(normalized_path, "rb") as pdf_file:
             pdf_content = pdf_file.read()
         
-        # Track download information
         download_info = {
             "downloaded_at": datetime.utcnow().isoformat(),
-            "downloaded_by": auth_data.get("sub"),  # User email
+            "downloaded_by": auth_data.get("sub"),
             "downloaded_by_name": auth_data.get("name", auth_data.get("sub", "Unknown"))
         }
         
-        # Update session with download tracking
         save_stage_output_tenant(session_id, "feedback_download", download_info, collections["sessions"])
         
         candidate_name = session_data.get("candidate_name", "Candidate")
@@ -866,11 +1333,12 @@ def download_feedback_pdf(session_id: str, auth_data=Depends(hr_auth)):
         return Response(
             content=pdf_content,
             media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
+            headers={"Content-Disposition": f"attachment; filename=\"{filename}\""}
         )
     except Exception as e:
-        print(f"Error downloading feedback PDF for session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error downloading PDF: {str(e)}")
+        logger.error(f"Error downloading feedback PDF for session {session_id}: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal server error while reading the PDF file.")
 
 
 @app.get("/sessions/{session_id}")
@@ -977,9 +1445,14 @@ def get_user_info(auth_data=Depends(hr_auth)):
 def get_dashboard_data(
     timeRange: str = "30d",
     positionFilter: str = "all",
+    workflowFilter: str = None,
     auth_data=Depends(hr_auth)
 ):
-    """Get comprehensive dashboard data for HR analytics with real recruitment indicators"""
+    """Get comprehensive dashboard data for HR analytics with real recruitment indicators
+    
+    Args:
+        workflowFilter: "full" per iter completo, "whatsapp_only" per solo screening WhatsApp
+    """
     tenant_id = auth_data.get("tenant_id")
     
     if not tenant_id:
@@ -994,7 +1467,11 @@ def get_dashboard_data(
     if positionFilter not in ["all"] and not positionFilter:
         positionFilter = "all"
     
-    dashboard_data = get_dashboard_data_tenant(tenant_id, timeRange, positionFilter)
+    # Validate workflow filter
+    if workflowFilter and workflowFilter not in ["full", "whatsapp_only"]:
+        workflowFilter = None
+    
+    dashboard_data = get_dashboard_data_tenant(tenant_id, timeRange, positionFilter, workflowFilter)
     
     if not dashboard_data:
         raise HTTPException(status_code=500, detail="Failed to retrieve dashboard data")
@@ -1090,8 +1567,8 @@ def resolve_interview(token: str):
 def save_candidate_name(token: str, payload: StartInterviewPayload):
     """Salva solo nome e cognome del candidato, NON avvia l'intervista"""
     try:
-        print(f"Salvataggio nome candidato con token: {token}")
-        print(f"Payload ricevuto: name='{payload.name}', surname='{payload.surname}'")
+        logger.debug(f"Salvataggio nome candidato con token: {token}")
+        logger.debug(f"Payload ricevuto: name='{payload.name}', surname='{payload.surname}'")
     
         # Validate required fields
         if not payload.name or not payload.name.strip():
@@ -1104,7 +1581,7 @@ def save_candidate_name(token: str, payload: StartInterviewPayload):
             raise HTTPException(status_code=404, detail="Invalid or expired link")
         
         session_id, tenant_id = result
-        print(f"✅ Token risolto: session_id={session_id}, tenant_id={tenant_id}")
+        logger.debug(f"Token risolto: session_id={session_id}, tenant_id={tenant_id}")
         
         # Check if evaluation is completed
         collections = get_tenant_collections(tenant_id)
@@ -1130,13 +1607,13 @@ def save_candidate_name(token: str, payload: StartInterviewPayload):
                 }}
             )
         
-        print(f"✅ Nome candidato salvato: {full_name}")
+        logger.info(f"Nome candidato salvato: {full_name}")
         return {"message": "Candidate name saved successfully", "candidate_name": full_name}
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Errore salvataggio nome: {e}")
+        logger.error(f"Errore salvataggio nome: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
@@ -1144,15 +1621,15 @@ def save_candidate_name(token: str, payload: StartInterviewPayload):
 def start_interview(token: str):
     """Avvia l'intervista - NON salva nome (deve essere già salvato)"""
     try:
-        print(f"Tentativo di avvio colloquio con token: {token}")
+        logger.debug(f"Tentativo di avvio colloquio con token: {token}")
         
         result = resolve_token_global(token)
         if not result:
-            print(f"Token non valido o scaduto: {token}")
+            logger.warning(f"Token non valido o scaduto: {token}")
             raise HTTPException(status_code=404, detail="Invalid or expired link")
         
         session_id, tenant_id = result
-        print(f"✅ Token risolto: session_id={session_id}, tenant_id={tenant_id}")
+        logger.debug(f"Token risolto: session_id={session_id}, tenant_id={tenant_id}")
         
         # Check if evaluation is completed
         collections = get_tenant_collections(tenant_id)
@@ -1160,21 +1637,21 @@ def start_interview(token: str):
         stages = sess.get("stages", {})
         skill_relevance = stages.get("skill_relevance")
         if skill_relevance:
-            print(f"❌ Colloquio già completato per session_id={session_id}")
+            logger.warning(f"Colloquio già completato per session_id={session_id}")
             raise HTTPException(status_code=410, detail="Interview completed and evaluation finished. Access no longer available.")
         
         # Check if interview has already been started (single-use token)
         if sess.get("interview_started"):
-            print(f"❌ Colloquio già avviato per session_id={session_id}")
+            logger.warning(f"Colloquio già avviato per session_id={session_id}")
             raise HTTPException(status_code=409, detail="Interview has already been started. Token can only be used once.")
         
         # Check if candidate name is saved
         candidate_name = sess.get("candidate_name")
         if not candidate_name:
-            print(f"❌ Nome candidato non salvato per session_id={session_id}")
+            logger.warning(f"Nome candidato non salvato per session_id={session_id}")
             raise HTTPException(status_code=400, detail="Candidate name must be saved before starting interview")
         
-        print(f"✅ Controlli superati, procedo con l'avvio del colloquio per {candidate_name}")
+        logger.info(f"Controlli superati, procedo con l'avvio del colloquio per {candidate_name}")
         
         # Marca intervista come avviata PRIMA di start_interview_for_session per single-use
         if db is not None:
@@ -1189,14 +1666,14 @@ def start_interview(token: str):
         
         message = start_interview_for_session(session_id, tenant_id)
         
-        print(f"Interview started for session {session_id} - token marked as used")
+        logger.info(f"Interview started for session {session_id} - token marked as used")
         
         return {"message": message}
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Errore inaspettato in start_interview: {e}")
+        logger.error(f"Errore inaspettato in start_interview: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
@@ -1298,7 +1775,7 @@ def report_security_event(token: str, event_data: dict):
             security_events_collection = db[f"security_events_{tenant_id}"]
             try:
                 security_events_collection.insert_one(security_event)
-                print(f"Security event saved: {event_id}")
+                logger.debug(f"Security event saved: {event_id}")
             except Exception as duplicate_error:
                 if "duplicate key" in str(duplicate_error).lower():
                     # Generate new ID and retry once
@@ -1306,65 +1783,92 @@ def report_security_event(token: str, event_data: dict):
                     new_event_id = f"{session_id}_{timestamp_ms}_{new_random_suffix}"
                     security_event["_id"] = new_event_id
                     security_events_collection.insert_one(security_event)
-                    print(f"Security event saved with new ID: {new_event_id}")
+                    logger.debug(f"Security event saved with new ID: {new_event_id}")
                 else:
                     raise duplicate_error
         
-        # Update session with security summary
-        collections = get_tenant_collections(tenant_id)
-        sess = get_session_data_tenant(session_id, collections["sessions"]) or {}
-        
-        if "security_summary" not in sess:
-            sess["security_summary"] = {
-                "total_events": 0,
-                "high_severity_events": 0,
-                "medium_severity_events": 0,
-                "low_severity_events": 0,
-                "cheating_score": 0,
-                "events_by_type": {},
-                "last_updated": datetime.utcnow().isoformat()
-            }
-        
-        # Update security summary
-        summary = sess["security_summary"]
-        summary["total_events"] += 1
-        summary["last_updated"] = datetime.utcnow().isoformat()
-        
-        severity = event_data.get("severity", "low")
-        if severity == "high":
-            summary["high_severity_events"] += 1
-            summary["cheating_score"] += 10
-        elif severity == "medium":
-            summary["medium_severity_events"] += 1
-            summary["cheating_score"] += 5
-        else:
-            summary["low_severity_events"] += 1
-            summary["cheating_score"] += 1
-        
-        # Normalize cheating score to 0-100 range
-        summary["cheating_score"] = normalize_cheating_score(summary["cheating_score"])
-        
-        event_type = event_data.get("type", "unknown")
-        summary["events_by_type"][event_type] = summary["events_by_type"].get(event_type, 0) + 1
-        
-        # Save updated session to database
+        # Update session with security summary using atomic MongoDB operations
+        # This avoids read-modify-write pattern and uses direct increments
         if db is not None:
             try:
-                sessions_collection = db[f"sessions_{tenant_id}"]
+                sessions_collection = db[f"{tenant_id}_sessions"]
+                severity = event_data.get("severity", "low")
+                event_type = event_data.get("type", "unknown")
+                
+                # Calculate score increment based on severity
+                score_increment = 10 if severity == "high" else (5 if severity == "medium" else 1)
+                
+                # Use atomic update with $inc for counters and $set for last_updated
+                # Initialize summary if it doesn't exist, otherwise increment
+                update_op = {
+                    "$inc": {
+                        "security_summary.total_events": 1,
+                        f"security_summary.events_by_type.{event_type}": 1
+                    },
+                    "$set": {
+                        "security_summary.last_updated": datetime.utcnow().isoformat()
+                    }
+                }
+                
+                # Add severity-specific increments
+                if severity == "high":
+                    update_op["$inc"]["security_summary.high_severity_events"] = 1
+                    update_op["$inc"]["security_summary.cheating_score"] = 10
+                elif severity == "medium":
+                    update_op["$inc"]["security_summary.medium_severity_events"] = 1
+                    update_op["$inc"]["security_summary.cheating_score"] = 5
+                else:
+                    update_op["$inc"]["security_summary.low_severity_events"] = 1
+                    update_op["$inc"]["security_summary.cheating_score"] = 1
+                
+                # Initialize summary structure if it doesn't exist
                 sessions_collection.update_one(
-                    {"_id": session_id}, 
-                    {"$set": {"security_summary": summary}}, 
+                    {"_id": session_id},
+                    {
+                        "$setOnInsert": {
+                            "security_summary": {
+                                "total_events": 0,
+                                "high_severity_events": 0,
+                                "medium_severity_events": 0,
+                                "low_severity_events": 0,
+                                "cheating_score": 0,
+                                "events_by_type": {},
+                                "last_updated": datetime.utcnow().isoformat()
+                            }
+                        }
+                    },
                     upsert=False
                 )
-                print(f"Security summary updated for session: {session_id}")
+                
+                # Apply the increment update
+                sessions_collection.update_one(
+                    {"_id": session_id},
+                    update_op,
+                    upsert=False
+                )
+                
+                # Normalize cheating score after update (read, normalize, write)
+                # This is done separately to avoid complex aggregation in update
+                sess = sessions_collection.find_one({"_id": session_id})
+                if sess and sess.get("security_summary"):
+                    current_score = sess["security_summary"].get("cheating_score", 0)
+                    normalized_score = normalize_cheating_score(current_score)
+                    if normalized_score != current_score:
+                        sessions_collection.update_one(
+                            {"_id": session_id},
+                            {"$set": {"security_summary.cheating_score": normalized_score}},
+                            upsert=False
+                        )
+                
+                logger.debug(f"Security summary updated for session: {session_id}")
             except Exception as update_error:
-                print(f"Warning: Failed to update security summary: {update_error}")
+                logger.warning(f"Failed to update security summary: {update_error}")
                 # Continue - the event was still recorded
         
         return {"status": "success", "event_id": event_id}
         
     except Exception as e:
-        print(f"Error storing security event: {e}")
+        logger.error(f"Error storing security event: {e}")
         raise HTTPException(status_code=500, detail="Failed to store security event")
 
 
@@ -1391,9 +1895,9 @@ def get_security_report(session_id: str, auth_data=Depends(hr_auth)):
                 security_events_collection = db[f"security_events_{tenant_id}"]
                 events_cursor = security_events_collection.find({"session_id": session_id})
                 security_events = list(events_cursor)
-                print(f"🔍 Found {len(security_events)} security events for session {session_id}")
+                logger.debug(f"Found {len(security_events)} security events for session {session_id}")
             except Exception as e:
-                print(f"Error retrieving security events: {e}")
+                logger.error(f"Error retrieving security events: {e}")
         
         # Get security summary from session
         security_summary = sess.get("security_summary", {
@@ -1408,7 +1912,7 @@ def get_security_report(session_id: str, auth_data=Depends(hr_auth)):
         
         # If we have events but no summary, calculate it from events
         if security_events and security_summary.get("total_events", 0) == 0:
-            print(f"🔧 Recalculating security summary from {len(security_events)} events")
+            logger.debug(f"Recalculating security summary from {len(security_events)} events")
             security_summary = {
                 "total_events": len(security_events),
                 "high_severity_events": sum(1 for e in security_events if e.get("severity") == "high"),
@@ -1468,7 +1972,7 @@ def get_security_report(session_id: str, auth_data=Depends(hr_auth)):
         }
         
     except Exception as e:
-        print(f"Error retrieving security report: {e}")
+        logger.error(f"Error retrieving security report: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve security report")
 
 
@@ -1493,7 +1997,7 @@ def fix_existing_cheating_scores():
     This should be run once to fix historical data.
     """
     if db is None:
-        print("Database not available for score normalization")
+        logger.warning("Database not available for score normalization")
         return False
     
     try:
@@ -1519,14 +2023,14 @@ def fix_existing_cheating_scores():
                     {"$set": {"security_summary.cheating_score": new_score}}
                 )
                 
-                print(f"Fixed session {session['_id']}: {old_score} -> {new_score}")
+                logger.debug(f"Fixed session {session['_id']}: {old_score} -> {new_score}")
                 fixed_count += 1
         
-        print(f"Fixed {fixed_count} sessions with scores > 100")
+        logger.info(f"Fixed {fixed_count} sessions with scores > 100")
         return True
         
     except Exception as e:
-        print(f"Error fixing cheating scores: {e}")
+        logger.error(f"Error fixing cheating scores: {e}")
         return False
 
 def get_security_recommendation(cheating_score: int) -> str:
@@ -1558,6 +2062,71 @@ def fix_cheating_scores_admin(auth_data=Depends(hr_auth)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fixing scores: {str(e)}")
 
+
+@app.post("/admin/recompute-course-embeddings", dependencies=[Depends(hr_auth)])
+def recompute_course_embeddings_admin(auth_data=Depends(hr_auth)):
+    """
+    Ricalcola gli embeddings per tutti i corsi e reinizializza il RAG Service.
+    Da utilizzare quando si aggiungono o modificano corsi.
+    (Admin only)
+    """
+    # Check if user is admin
+    if auth_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        # Import necessary modules
+        from sentence_transformers import SentenceTransformer
+        from services.data_manager import db
+        
+        EMBEDDING_MODEL_NAME = 'all-MiniLM-L6-v2'
+        COURSES_COLLECTION_NAME = "courses"
+        
+        if db is None:
+            raise HTTPException(status_code=500, detail="Database connection not available")
+        
+        collection = db[COURSES_COLLECTION_NAME]
+        courses = list(collection.find({}))
+        
+        if not courses:
+            raise HTTPException(status_code=404, detail="No courses found in database")
+        
+        # Load model and compute embeddings
+        model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+        
+        updated_count = 0
+        for course in courses:
+            course_id = course.get('_id')
+            description = f"{course.get('Course Name', '')}. {course.get('Description', '')}"
+            
+            # Calculate embedding
+            embedding = model.encode(description, convert_to_tensor=False)
+            
+            # Save to database
+            collection.update_one(
+                {"_id": course_id},
+                {"$set": {"embedding": embedding.tolist()}}
+            )
+            updated_count += 1
+        
+        # Reinitialize RAG service with new embeddings
+        global rag_service_instance
+        logger.info("Reinizializzazione RAG Service con nuovi embeddings...")
+        rag_service_instance = RAGService()
+        logger.info("RAG Service reinizializzato con successo")
+        
+        return {
+            "message": f"Embeddings recomputed successfully for {updated_count} courses",
+            "status": "success",
+            "courses_updated": updated_count
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error recomputing embeddings: {str(e)}")
+
+
 # Evaluation and feedback (HR)
 @app.post("/sessions/{session_id}/evaluate")
 def evaluate_session(session_id: str, _=Depends(hr_auth)):
@@ -1567,15 +2136,6 @@ def evaluate_session(session_id: str, _=Depends(hr_auth)):
     # Skill relevance
     _ = compute_and_save_skill_relevance(session_id=session_id)
     return {"ok": True}
-
-#GENERAZIONE FEEDBACK DISABILITATA
-@app.post("/sessions/{session_id}/feedback")
-def generate_feedback(session_id: str, _=Depends(hr_auth)):
-#    pdf_path = run_feedback_pipeline(session_id=session_id)
-    if not pdf_path:
-        raise HTTPException(status_code=500, detail="Feedback generation failed")
-    return {"pdf_path": pdf_path}
-
 
 @app.get("/sessions/{session_id}/feedback")
 def download_feedback(session_id: str, auth_data=Depends(hr_auth)):
@@ -1742,20 +2302,21 @@ async def bulk_upload_cvs(
                 with fitz.open(stream=cv_bytes, filetype="pdf") as doc:
                     cv_text = "".join(page.get_text() for page in doc)
             except Exception as e:
-                print(f"⚠️ Errore lettura PDF {file.filename}: {e}")
+                logger.error(f"Errore lettura PDF {file.filename}: {e}")
                 continue
             
             # Validazione dimensione file
             if len(cv_bytes) > 10 * 1024 * 1024:  # 10MB limit
-                print(f"⚠️ File {file.filename} troppo grande (>10MB), saltato")
+                logger.warning(f"File {file.filename} troppo grande (>10MB), saltato")
                 continue
             
-            # 2. Estrai email con regex
+            # 2. Estrai email e telefono con regex
             candidate_email = extract_email_from_text(cv_text)
+            candidate_phone = extract_phone_from_text(cv_text)
+            candidate_name = extract_name_from_text(cv_text)
             
             # 3. Crea sessione
             session_id = str(uuid.uuid4())
-            candidate_name = file.filename.replace(".pdf", "").replace("_", " ")
             
             create_new_session_tenant(
                 session_id,  # positional
@@ -1780,18 +2341,33 @@ async def bulk_upload_cvs(
                 collection_name=collections["sessions"]
             )
             
-            # 5. Aggiungi metadata batch
+            # 5. Aggiungi metadata batch e info WhatsApp
             if db is not None:
                 sessions_collection = db[collections["sessions"]]
-                sessions_collection.update_one(
-                    {"_id": session_id},
-                    {"$set": {
+                update_data = {
                         "tenant_id": tenant_id,  # CRITICO: Aggiungi tenant_id
                         "batch_id": batch_id,
                         "batch_date": batch_date,
                         "is_new_batch": True,
-                        "candidate_surname": ""  # Nuovo campo
-                    }}
+                    "candidate_surname": "",  # Nuovo campo
+                    "whatsapp_status": "ready" if candidate_phone else None
+                }
+                
+                # Aggiungi nome candidato se estratto
+                if candidate_name:
+                    update_data["candidate_name"] = candidate_name
+                    logger.debug(f"Nome candidato estratto (regex): {candidate_name}")
+                
+                # Aggiungi telefono se trovato
+                if candidate_phone:
+                    update_data["candidate_contact"] = {
+                        "phone_number": candidate_phone,
+                        "phone_valid": True
+                    }
+                
+                sessions_collection.update_one(
+                    {"_id": session_id},
+                    {"$set": update_data}
                 )
             
             uploaded_sessions.append({
@@ -1801,16 +2377,16 @@ async def bulk_upload_cvs(
             })
             
         except Exception as e:
-            print(f"❌ Errore processing file {file.filename}: {e}")
+            logger.error(f"Errore processing file {file.filename}: {e}")
             continue
     
     # Crea automaticamente un batch job per i CV caricati
-    print(f"[BATCH] Creazione batch job per {len(uploaded_sessions)} CV...")
+    logger.info(f"[BATCH] Creazione batch job per {len(uploaded_sessions)} CV...")
     batch_service = BatchService()
     batch_job_id = batch_service.create_cv_analysis_batch()
     
     if batch_job_id:
-        print(f"[OK] Batch job creato: {batch_job_id}")
+        logger.info(f"[OK] Batch job creato: {batch_job_id}")
         return {
             "message": f"{len(uploaded_sessions)} CV caricati e batch job creato con successo",
             "sessions": uploaded_sessions,
@@ -1820,7 +2396,7 @@ async def bulk_upload_cvs(
             "note": "I CV verranno processati tramite Azure OpenAI Batch API"
         }
     else:
-        print(f"[WARN] Nessun batch job creato - nessun CV da processare")
+        logger.warning(f"[WARN] Nessun batch job creato - nessun CV da processare")
         return {
             "message": f"{len(uploaded_sessions)} CV caricati con successo",
             "sessions": uploaded_sessions,
@@ -1874,48 +2450,78 @@ async def retrieve_batch_results(batch_id: str):
 
 @app.get("/api/batch/list", dependencies=[Depends(hr_auth)])
 async def list_batches(auth_data: dict = Depends(hr_auth)):
-    """Lista tutti i batch jobs"""
+    """Lista tutti i batch jobs (solo lettura dal DB, senza sincronizzazione Azure).
+    
+    Per sincronizzare manualmente, usa POST /api/batch/sync
+    """
     try:
-        print(f"🔍 Tentativo di listare batch jobs per tenant: {auth_data.get('tenant_id')}")
-        
         batch_service = BatchService()
-        print(f"✅ BatchService inizializzato")
-        
         batches = batch_service.list_batches(limit=20)
-        print(f"✅ Batch jobs recuperati: {len(batches)} items")
-        
         return {"batches": batches}
     except Exception as e:
-        import traceback
-        print(f"❌ Errore in list_batches endpoint: {e}")
-        print(f"❌ Traceback completo: {traceback.format_exc()}")
+        logger.error(f"Errore in list_batches endpoint: {e}")
         return {"batches": [], "error": str(e)}
 
-@app.get("/health")
-def health_check():
-    """Health check endpoint for Cloud Run"""
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+@app.post("/api/batch/sync", dependencies=[Depends(hr_auth)])
+async def sync_batch_status(auth_data: dict = Depends(hr_auth)):
+    """Sincronizza manualmente lo stato dei batch attivi con Azure (chiamato dal pulsante Aggiorna)"""
+    try:
+        batch_service = BatchService()
+        
+        # Trova batch attivi nel DB
+        if batch_service.batch_collection is None:
+            return {"batches": [], "synced": 0}
+        
+        active_batches = list(batch_service.batch_collection.find({
+            "status": {"$in": ["validating", "in_progress", "finalizing"]}
+        }))
+        
+        synced_count = 0
+        for batch in active_batches:
+            batch_id = batch["_id"]
+            try:
+                # Sincronizza stato con Azure
+                new_status = batch_service.check_batch_status(batch_id)
+                if new_status != "error":
+                    synced_count += 1
+            except Exception as e:
+                logger.warning(f"Errore sincronizzazione batch {batch_id}: {e}")
+        
+        # Ritorna lista aggiornata
+        batches = batch_service.list_batches(limit=20)
+        return {"batches": batches, "synced": synced_count}
+    except Exception as e:
+        logger.error(f"Errore in sync_batch_status endpoint: {e}")
+        return {"batches": [], "synced": 0, "error": str(e)}
 
-# Startup events per scheduler e batch processor
+# Startup events per batch processor
 @app.on_event("startup")
 async def startup_event():
-    """Inizializzazione app con scheduler e batch processor"""
+    """Inizializzazione app con batch processor e servizi pesanti"""
+    global rag_service_instance, recruitment_pipeline_instance, cv_normalizer_instance
+    
     try:
-        # Avvia scheduler per batch giornalieri
-        from services.scheduler_service import get_scheduler
-        scheduler = get_scheduler()
-        scheduler.schedule_daily_cv_batch(hour="19:00")
-        scheduler.start()
-        print("✅ Batch scheduler inizializzato (ore 19:00)")
+        # Initialize heavy services once at startup
+        logger.info("[STARTUP] Inizializzazione RAGService...")
+        rag_service_instance = RAGService()
+        logger.info("[STARTUP] RAGService pronto.")
+        
+        logger.info("[STARTUP] Inizializzazione RecruitmentPipeline...")
+        recruitment_pipeline_instance = RecruitmentPipeline() 
+        logger.info("[STARTUP] RecruitmentPipeline pronto.")
+        
+        logger.info("[STARTUP] Inizializzazione CVNormalizer (potrebbe essere lento)...")
+        cv_normalizer_instance = CVNormalizer()
+        logger.info("[STARTUP] CVNormalizer pronto.")
         
         # Avvia batch processor per monitoring automatico
         from services.batch_processor import get_processor
         processor = get_processor()
         processor.start_monitoring(check_interval_seconds=300)  # 5 minuti
-        print("✅ Batch processor avviato (controllo ogni 5 minuti)")
+        logger.info("Batch processor avviato (controllo ogni 5 minuti)")
         
     except Exception as e:
-        print(f"❌ Errore inizializzazione batch services: {e}")
+        logger.error(f"Errore inizializzazione servizi: {e}")
         import traceback
         traceback.print_exc()
 
@@ -1923,22 +2529,18 @@ async def startup_event():
 async def shutdown_event():
     """Cleanup al shutdown"""
     try:
-        from services.scheduler_service import get_scheduler
         from services.batch_processor import get_processor
-        
-        scheduler = get_scheduler()
-        scheduler.stop()
         
         processor = get_processor()
         processor.stop_monitoring()
         
-        print("✅ Batch services fermati")
+        logger.info("Batch processor fermato")
     except Exception as e:
-        print(f"⚠️ Errore durante shutdown: {e}")
+        logger.error(f"Errore durante shutdown: {e}")
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8000))
+    port = int(os.getenv("PORT", 8001))
     uvicorn.run("backend.app:app", host="0.0.0.0", port=port, reload=False)
 
 

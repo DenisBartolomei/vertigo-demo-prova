@@ -1,7 +1,7 @@
 import json
 from typing import List, Literal
 from pydantic import BaseModel, Field
-from interviewer.llm_service import get_structured_llm_response
+from interviewer.llm_service import get_structured_llm_response, AZURE_DEPLOYMENT_NAME
 from . import prompts_gap
 
 # --- 1. Definizione dello Schema Dati con Pydantic ---
@@ -21,21 +21,29 @@ class GapAnalysisReport(BaseModel):
 
 # --- 2. Logica di Generazione ---
 
-GAP_ANALYZER_MODEL = "gpt-4.1-2025-04-14"
+GAP_ANALYZER_MODEL = AZURE_DEPLOYMENT_NAME #"gpt-4.1-2025-04-14"
 
-def identify_skill_gaps(report_text: str) -> GapAnalysisReport | None:
+def identify_skill_gaps(cv_analysis_report: str, case_evaluation_report: str, language: str = "it") -> GapAnalysisReport | None:
     """
-    Estrae e raggruppa le carenze di skill da un report di analisi.
+    Estrae e raggruppa le carenze di skill analizzando entrambi i report (CV e colloquio).
+    
+    Args:
+        cv_analysis_report: Report di analisi del CV
+        case_evaluation_report: Report di valutazione del colloquio
+        language: Lingua del prompt ("it" o "en")
+    
+    Returns:
+        Oggetto GapAnalysisReport validato o None
     """
     print("1. Creazione del prompt per l'analisi dei gap...")
-    prompt = prompts_gap.create_gap_analysis_prompt(report_text)
+    prompt = prompts_gap.create_gap_analysis_prompt(cv_analysis_report, case_evaluation_report, language)
     
     print(f"2. Invio della richiesta al modello '{GAP_ANALYZER_MODEL}' per l'analisi dei gap...")
     
     structured_response_str = get_structured_llm_response(
         prompt=prompt,
         model=GAP_ANALYZER_MODEL,
-        system_prompt=prompts_gap.SYSTEM_PROMPT,
+        system_prompt=prompts_gap.SYSTEM_PROMPT[language],
         tool_name="save_skill_gaps",
         tool_schema=GapAnalysisReport.model_json_schema()
     )
@@ -49,6 +57,58 @@ def identify_skill_gaps(report_text: str) -> GapAnalysisReport | None:
         parsed_json = json.loads(structured_response_str)
         validated_data = GapAnalysisReport.model_validate(parsed_json)
         print("4. Analisi dei gap validata con successo.")
+        return validated_data
+    except Exception as e:
+        print(f"Errore critico durante la validazione dell'analisi dei gap: {e}")
+        return None
+    
+from interviewer.llm_service import get_structured_llm_response_async
+
+async def identify_skill_gaps_async(cv_analysis_report: str, case_evaluation_report: str, language: str = "it") -> GapAnalysisReport | None:
+    """Versione ASINCRONA: Estrae e raggruppa le carenze di skill analizzando entrambi i report."""
+    print("1. [Gap Analysis] Creazione del prompt...")
+    prompt = prompts_gap.create_gap_analysis_prompt(cv_analysis_report, case_evaluation_report, language)
+    system_prompt = prompts_gap.SYSTEM_PROMPT[language]
+    
+    # TASK 5: Caching LLM responses per Gap Analysis
+    try:
+        from recruitment_suite.app.core.llm_cache import get_prompt_hash, get_cached_llm_response, save_cached_llm_response
+        prompt_hash = get_prompt_hash(prompt, system_prompt, temperature=None, max_tokens=None)
+        cached_response = get_cached_llm_response(prompt_hash)
+        
+        if cached_response:
+            print(f"✓ [Gap Analysis] Cache HIT - riuso risposta cached")
+            structured_response_str = cached_response
+        else:
+            print(f"2. [Gap Analysis] Invio richiesta a '{GAP_ANALYZER_MODEL}'...")
+            structured_response_str = await get_structured_llm_response_async(
+                prompt=prompt,
+                model=GAP_ANALYZER_MODEL,
+                system_prompt=system_prompt,
+                tool_name="save_skill_gaps",
+                tool_schema=GapAnalysisReport.model_json_schema()
+            )
+            # Salva in cache
+            if structured_response_str:
+                save_cached_llm_response(prompt_hash, structured_response_str)
+    except Exception as e:
+        print(f"⚠ Errore caching Gap Analysis: {e}, continuo senza cache")
+        structured_response_str = await get_structured_llm_response_async(
+            prompt=prompt,
+            model=GAP_ANALYZER_MODEL,
+            system_prompt=system_prompt,
+            tool_name="save_skill_gaps",
+            tool_schema=GapAnalysisReport.model_json_schema()
+        )
+
+    if not structured_response_str:
+        print("❌ ERRORE CRITICO: la chiamata LLM per l'analisi dei gap non ha restituito dati.")
+        print(f"   Verifica che il deployment '{GAP_ANALYZER_MODEL}' sia configurato correttamente in Azure OpenAI.")
+        return None
+
+    try:
+        validated_data = GapAnalysisReport.model_validate_json(structured_response_str)
+        print("4. [Gap Analysis] Analisi validata con successo.")
         return validated_data
     except Exception as e:
         print(f"Errore critico durante la validazione dell'analisi dei gap: {e}")

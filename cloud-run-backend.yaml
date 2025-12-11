@@ -15,7 +15,7 @@ spec:
         run.googleapis.com/execution-environment: gen2
     spec:
       containerConcurrency: 100
-      timeoutSeconds: 300
+      timeoutSeconds: 900
       containers:
       - image: gcr.io/poetic-orb-474016-q7/vertigo-ai-backend:latest
         ports:
@@ -39,14 +39,22 @@ spec:
           value: "AZURE_OPENAI_BATCH_API_KEY_PLACEHOLDER"
         - name: AZURE_OPENAI_BATCH_API_VERSION
           value: "AZURE_OPENAI_BATCH_API_VERSION_PLACEHOLDER"
+        - name: AZURE_OPENAI_CLASSIFICATION_ENDPOINT
+          value: "AZURE_OPENAI_CLASSIFICATION_ENDPOINT_PLACEHOLDER"
+        - name: AZURE_OPENAI_CLASSIFICATION_API_KEY
+          value: "AZURE_OPENAI_CLASSIFICATION_API_KEY_PLACEHOLDER"
+        - name: AZURE_OPENAI_CLASSIFICATION_DEPLOYMENT_NAME
+          value: "gpt-4.1-mini"
+        - name: AZURE_OPENAI_CLASSIFICATION_API_VERSION
+          value: "AZURE_OPENAI_CLASSIFICATION_API_VERSION_PLACEHOLDER"
         - name: JWT_SECRET
           value: "JWT_SECRET_PLACEHOLDER"
         - name: PYTHON_ENV
           value: "production"
         resources:
           limits:
-            cpu: "1"
-            memory: "2Gi"
+            cpu: "4"
+            memory: "14Gi"
           requests:
-            cpu: "0.5"
-            memory: "1Gi"
+            cpu: "4"
+            memory: "14Gi"
